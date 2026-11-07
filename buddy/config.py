@@ -71,3 +71,6 @@ TTS_LANG = "b"                # Kokoro language code: b = British English
 TTS_SPEED = 0.92              # a little slower than default: clearer for older players
 WAKE_WORDS = ("buddy", "buddie", "budy", "bodie", "body")   # Whisper's spellings of "Buddy"
 UI_PORT = int(os.environ.get("UI_PORT", "8860"))
+
+# ---------------------------------------------------------------- teaching a new game (buddy/agent/teach.py)
+TEACH_MODEL = os.environ.get("TEACH_MODEL", "gemma4")   # Gemma 4 E4B: reliable rule extraction; gemma3:4b guesses

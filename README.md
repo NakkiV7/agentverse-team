@@ -21,6 +21,8 @@ ollama serve &                                    # or open the Ollama app
 .venv/bin/python tools/dry_run.py        # a whole scripted game, no audio, with a hand reaching in and a sheet slide
 .venv/bin/python -m pytest -q tests      # 6 checks, about 50 s
 .venv/bin/python tools/train_marks.py    # regenerate the training images and retrain the mark classifier (~4 min)
+.venv/bin/python tools/teach_dry_run.py  # teach Buddy a new grid game in two sentences, then watch it play (needs gemma4)
+.venv/bin/python tools/teach_eval.py     # how well each local model turns an explanation into rules
 ```
 
 The first `-m buddy` run downloads the Kokoro voice (about 330 MB). Run it from Terminal and allow microphone access.
@@ -33,6 +35,7 @@ The first `-m buddy` run downloads the Kokoro voice (about 330 MB). Run it from 
 | Understand | Gemma 3 4B (Ollama) turns every utterance into a schema-checked intent: play, yes, no, rules, side, a spoken move with its square ("put mine in the top left"), done, stop… One running conversation, so only the new sentence is processed | `buddy/agent/llm.py` |
 | Decide | a state machine runs the session and the game; the language model never chooses actions or moves | `buddy/agent/brain.py` |
 | See | overhead camera (noise and blur added): finds the A4 sheet, tracks it even while the arm covers part of it, straightens it, and a small CNN reads every square as empty / X / O with a confidence | `buddy/perception/` |
+| Learn | the player explains a new grid game; Gemma 4 fills a rule description and asks about anything missing; the solver works out the strategy and plays it from move one (`tools/teach_dry_run.py`) | `buddy/agent/teach.py`, `buddy/game/rules.py`, `buddy/game/solver.py` |
 | Play | full minimax over the game tree; adaptive difficulty: Buddy plays the best move with probability *s*, otherwise a friendly move that doesn't hand you an instant win; *s* drops when you lose, rises when you win | `buddy/game/tictactoe.py` |
 | Act | pen-tip IK (pen upright), strokes planned on the sheet and placed with the latest camera pose; travel → feel for the paper → draw → lift → home | `buddy/motion/` |
 | Sense | spring-loaded felt tip + touch sensor: finds the real paper height, holds 0.8 N while drawing | `buddy/sim/world.py`, `motion/controller.py` |

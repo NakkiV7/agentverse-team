@@ -14,6 +14,17 @@ Verified on Nakkiv's Mac (M5, Homebrew Ollama 0.40): all 6 tests pass (52 s); th
 completes (one Buddy win in 78 s wall, one draw in 92 s); Gemma 3 4B intents in 0.9 to 1.5 s; structured
 output (`format`) works with `gemma3:4b`. Not verified on a second machine: microphone in, Kokoro out.
 
+**Teach-a-game (added 7 Nov, late evening):** Buddy can now learn a grid game from a spoken explanation and
+play it from the first move. `buddy/game/rules.py` describes the family the hardware supports (3x3 or 4x4,
+X and O, marks anywhere or next to the last mark, ending by k in a row wins / loses or "can't move, you
+lose"); `buddy/game/solver.py` solves any of them completely in milliseconds (4x4 four-in-a-row falls back
+to a pruned lookahead); `buddy/agent/teach.py` runs the interview with Gemma 4 (asks when a rule is missing,
+reads the rules back). Measured: Gemma 4 extracted 7 of 8 explanations first time and completed both
+two-turn interviews, 0.6 to 1.0 s a turn (`tools/teach_eval.py`); Gemma 3 4B guesses missing rules, so it
+stays on the in-game intents. Solver results match the Footsteps sheet (`docs/games/footsteps.pdf`).
+Try `tools/teach_dry_run.py`. **Not yet wired into `brain.py`**: the next step is a TEACH state before
+SETUP that uses `Teacher`, then `analyse(spec)` and `solver.choose` in place of the tic-tac-toe calls.
+
 **Claim your role here** (edit this file on GitHub or open a PR):
 
 | Role | Owns | Name |
@@ -54,7 +65,7 @@ code base. The milestones, rules and integration checkpoints still apply.
 **Status (7 Nov, evening):** hours 1 to 9 are done in Hakim's build: grid drawn and checked, boards read by
 a small CNN trained on simulator images, a full typed game on the demo page, sheet moved / hand in area /
 unclear mark / wrong symbol all handled. Hour 11 (voice in and out) exists in code and is unverified on a
-second machine. Left: the voice check, polish, the pitch, and whichever stretch goal the team picks.
+second machine. Left: the voice check, wiring teach-a-game into the brain and the demo page, polish, and the pitch.
 
 ---
 
