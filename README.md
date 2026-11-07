@@ -2,7 +2,7 @@
 
 An SO-101 arm in MuJoCo that you talk to and play noughts and crosses (tic-tac-toe) with, on a real sheet of paper. Say "Buddy, let's play a game?". It finds the blank A4 sheet with its overhead camera, draws the board while explaining the rules, reads your moves from the paper with a neural network, answers with its own, and draws the winning line at the end. It stops when a hand comes over the paper, and re-plans when someone slides the sheet while it draws. Everything runs on one laptop, offline.
 
-Agentverse 2026, Robotics track. Architecture: [docs/architecture.md](docs/architecture.md). Presenting it: [docs/DEMO.md](docs/DEMO.md).
+Agentverse 2026, Robotics track. Architecture: [docs/architecture.md](docs/architecture.md). Presenting it: [docs/DEMO.md](docs/DEMO.md). Who does what, milestones and the role sign-up: [docs/TASKS.md](docs/TASKS.md).
 
 ## Quick start (macOS, Apple Silicon)
 
