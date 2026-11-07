@@ -1,46 +1,30 @@
 # Buddy: who does what
 
-Source of truth for the design: [buddy-architecture.pdf](buddy-architecture.pdf). This file turns it
+Source of truth for the design: [architecture.pdf](architecture.pdf). This file turns it
 into four equal workstreams and the order to do things in. Shared rules first.
 
-## Read this first (7 Nov, evening)
+## Code base (decided 7 Nov, evening)
 
-**Two codebases exist right now.** They share file paths and conflict in seven files, so they must not be
-merged automatically. Pick one at kickoff (10 minutes), then port the missing pieces across.
+**Hakim's build is the code base.** Two builds existed for a few hours (the `main` scaffold from PR #1 and
+`hakim/sim-setup`); this merge put Hakim's on `main` and removed the scaffold's modules. What the scaffold
+still contributes is this plan. Run things as the README says: `.venv/bin/python -m buddy`,
+`tools/dry_run.py`, `python -m pytest -q tests`.
 
-| | `main` (PR #1, Nakkiv) | `hakim/sim-setup` (Hakim, 10 commits) |
-|---|---|---|
-| Sim | scene XML, ink texture, pen + touch sensor, mocap hand, reflex freeze | world built in code (MjSpec), ink texture, pen + touch sensor |
-| Arm | pen IK (sub-mm over the grid), no stroke planner yet | pen IK, **stroke controller: feel for the paper, draw at 0.8 N, lift**, grid planned on the sheet |
-| Vision | stub (depth hand flag only) | **sheet finder (<1 mm, 0.1°), blank check, line check with redraw** |
-| Brain | **tic-tac-toe minimax, cheat check, adaptive difficulty, tests**; agent stub | setup conversation to READY (no game play yet); phrase rules + Gemma 3 4B |
-| LLM | Gemma 4 E4B, `think:false`, JSON fallback when Ollama has no grammar support | Gemma 3 4B with `format` (returns 501 on current Homebrew Ollama builds) |
-| Voice | stub | **whisper.cpp + Silero VAD in, Kokoro out, wake word** |
-| Stage | stub | **demo page (port 8860) with scene buttons and a decision timeline, dry run** |
-| Safety | depth hand flag + freeze every tick (stub flag) | pause hook in the controller, no hand detection |
-| Shared | `contracts.py`, `bus.py`, this plan, uv `pyproject.toml` | `config.py` with provenance, pip `requirements.txt` |
-| Verified | tests pass, touch test and full process run (Nakkiv's Mac) | its 2 tests pass (Nakkiv's Mac); README numbers from Hakim's M4 |
+Verified on Nakkiv's Mac (M5, Homebrew Ollama 0.40): all 6 tests pass (52 s); the scripted whole game
+completes (one Buddy win in 78 s wall, one draw in 92 s); Gemma 3 4B intents in 0.9 to 1.5 s; structured
+output (`format`) works with `gemma3:4b`. Not verified on a second machine: microphone in, Kokoro out.
 
-**Recommendation:** take `hakim/sim-setup` as the code base. It covers the demo path end to end and its author
-knows it. Port from `main`, in this order: this file; `buddy/game/tictactoe.py` + `tests/test_tictactoe.py`
-(the game play Hakim's brain stops short of); the `think: false` and JSON-fallback handling from
-`buddy/agent/llm.py` (and consider `gemma4`, which has image input for unclear marks); the depth hand flag
-and per-tick freeze from `buddy/sim/world.py` + `buddy/perception/perceive.py`; `contracts.py` as the agreed
-shapes between modules. One person does the port (an hour); the other three read the winning codebase meanwhile.
-
-**Roles are the same whichever base wins.** Claim yours here (edit this file on GitHub or open a PR):
+**Claim your role here** (edit this file on GitHub or open a PR):
 
 | Role | Owns | Name |
 |---|---|---|
-| Arm | sim, ink, motion | |
-| Vision | perception, overlay, hand flag | |
-| Brain | game, agent, Gemma | |
-| Voice and stage | voice, ui, pitch | |
+| Arm | `buddy/sim/world.py`, `buddy/motion/` (ik, controller, drawing) | |
+| Vision | `buddy/perception/` (sheet, board, marknet, safety), `tools/train_marks.py` | |
+| Brain | `buddy/game/` (tictactoe, marks), `buddy/agent/` (brain, llm) | |
+| Voice and stage | `buddy/voice/` (stt, tts), `buddy/ui/`, `docs/DEMO.md`, pitch | |
 
-File names in the role sections below refer to `main`. On Hakim's base the equivalents are:
-`sim/world.py` ↔ `sim/world.py`; `motion/planner.py` ↔ `motion/controller.py` + `motion/drawing.py`;
-`perception/perceive.py` ↔ `perception/sheet.py`; `agent/agent.py` ↔ `agent/brain.py` + `agent/rules.py`;
-`voice/voice.py` ↔ `voice/stt.py` + `voice/tts.py`; `ui/server.py` ↔ `ui/server.py` + `ui/index.html`.
+The role sections below were written for the scaffold's file names; the table above gives the files in this
+code base. The milestones, rules and integration checkpoints still apply.
 
 ---
 
@@ -67,10 +51,10 @@ File names in the role sections below refer to `main`. On Hakim's base the equiv
 | 11 | voice in and out | Stage |
 | after | polish, pitch, technical summary | all |
 
-**Already done in this repo:** scene (`scenes/buddy.xml`), ink painting (`buddy/sim/ink.py`), the world loop
-with the reflex freeze (`buddy/sim/world.py`), pen IK (`buddy/motion/ik.py`), contracts, bus, tic-tac-toe
-minimax with adaptive difficulty and tests, the Gemma client with JSON-schema intents, module stubs with
-TODOs, and the check scripts. Run `uv run python scripts/check_env.py` first.
+**Status (7 Nov, evening):** hours 1 to 9 are done in Hakim's build: grid drawn and checked, boards read by
+a small CNN trained on simulator images, a full typed game on the demo page, sheet moved / hand in area /
+unclear mark / wrong symbol all handled. Hour 11 (voice in and out) exists in code and is unverified on a
+second machine. Left: the voice check, polish, the pitch, and whichever stretch goal the team picks.
 
 ---
 
@@ -119,13 +103,11 @@ Files: `buddy/perception/*`, `tests/test_perception.py`, calibration numbers in 
 
 Owns the game and the conversation. The minimax and the Gemma client exist; the state machine is a stub.
 
-- [x] **Hour 1:** `ollama pull gemma4` done; `scripts/llm_smoke.py` gives correct intents in 0.3 to 0.6 s and
-      spoken lines in 0.3 to 0.5 s on the M5 (nothing else running). If it gets slow with the sim up, try
-      `gemma4:e2b` or shorter prompts. Tune the prompts in `buddy/agent/llm.py`.
-      Two things we learned: Gemma 4 *thinks* by default (seconds, and `content` comes back empty), so the
-      client sends `think: false`; and the Homebrew Ollama build on Apple silicon has no grammar library, so
-      JSON-schema `format` answers 501 and the client falls back to asking for JSON in the prompt and
-      validating it itself. The official Ollama app may restore constrained decoding; not required.
+- [x] **Hour 1:** the code base uses `gemma3:4b` via Ollama with JSON-schema `format` (works: llama.cpp
+      backend). `gemma4` is also pulled on Nakkiv's Mac; it adds image input for unclear marks, but Ollama
+      runs it on the MLX backend without grammar support (`format` answers 501) and it thinks by default
+      (`think: false` needed). The scaffold branch's `buddy/agent/llm.py` has the prompt-JSON fallback if
+      the team ever switches.
 - [ ] **Hour 5:** `Agent.run()`: the full state machine (IDLE → GREET → CHOOSE_GAME → SETUP → PLAYER_TURN ↔
       ROBOT_TURN → GAME_OVER). Player's mark from `bus.percept` via `Game.check_player`; robot's move via
       `Game.robot_move`; `MotionCommand(draw=x_strokes(cell))`; results via `Game.result()`; difficulty via
