@@ -32,6 +32,9 @@
   .paper img { background: #fff; }
   .paper canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; border-radius: 6px; }
   .hint { color: var(--muted); font-size: 12.5px; margin-top: 6px; }
+  .hint.warn { color: #f0b429; }
+  .cells button.off { opacity: .35; cursor: not-allowed; }
+  .cells button.legal { border-color: #3fb950; }
   .cells { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 8px; }
   .cells button { padding: 6px 4px; font-size: 12px; }
   #chat { height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
@@ -57,7 +60,7 @@
 </head>
 <body>
 <header>
-  <h1>Buddy · noughts and crosses</h1>
+  <h1>Buddy · <span id="gamename">noughts and crosses</span></h1>
   <span class="chip">state <b id="state">…</b></span>
   <span class="chip">you <b id="you">-</b> · Buddy <b id="robot">-</b></span>
   <span class="chip">Buddy's strength <b id="strength">-</b></span>
@@ -78,11 +81,13 @@
       <div class="paper"><img id="sheetimg" alt="the sheet seen from above"><canvas id="pad"></canvas></div>
       <div class="hint">Draw your mark here with the mouse: your hand in the simulation draws it on the real sheet. Or pick a square:</div>
       <div class="cells" id="cells"></div>
+      <div class="hint" id="turnhint"></div>
     </div>
     <div class="card">
       <h2>Conversation</h2>
       <div id="chat"></div>
       <form id="say"><input type="text" id="text" placeholder="Speak, or type: Buddy, let's play a game" autocomplete="off"><button class="primary">Say</button></form>
+      <div class="hint" id="nexthint">Type <b>buddy</b> to wake it up.</div>
       <div style="margin-top:8px"><button id="micbtn" type="button">Mute mic</button></div>
     </div>
   </div>
@@ -119,10 +124,42 @@ document.getElementById("legend").innerHTML = Object.entries(STAGES).map(([k, v]
   `<span><i class="badge" style="background:${color(k)}">${k.toUpperCase()}</i>${v}</span>`).join("");
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const post = (url, body) => fetch(url, { method: "POST", body: JSON.stringify(body) });
-let nTrace = -1, nChat = -1, micOn = true;
+let nTrace = -1, nChat = -1, micOn = true, S = null;
+const NEXT = {
+  IDLE: "Type <b>buddy</b> to wake it up.",
+  CHAT: "Type <b>let's play a game</b>, or <b>let me teach you a game</b>.",
+  CHOOSE_GAME: "Type <b>yes</b> to play noughts and crosses, or <b>let me teach you a game</b>.",
+  TEACH: "Explain your game, a sentence or two at a time. It will ask about anything you leave out.",
+  OFFER_TAUGHT: "Type <b>yes</b> to play the game you taught, or <b>no</b>.",
+  SETUP: "Buddy is looking at the paper and drawing the board. Watch the arm.",
+  WAIT_SHEET: "Buddy needs the paper: use the scene buttons (New blank sheet, Put it back).",
+  ASK_SIDE: "Type <b>crosses</b> or <b>noughts</b>.",
+  PLAYER_TURN: "Your move: click a square, draw your mark on the paper, or type <b>put mine in the top left</b>.",
+  CONFIRM_MARK: "Buddy asked about a mark: type <b>yes</b> or <b>no</b>.",
+  ROBOT_TURN: "Buddy's move: watch it plan, draw and read its own mark back. Try <b>Reach over the paper</b> while it draws.",
+  GAME_OVER: "Type <b>yes</b> for another game (press <b>New blank sheet</b> first), or <b>let me teach you a game</b>.",
+};
+const myTurn = () => S && S.state === "PLAYER_TURN";
+function notNow() {
+  const el = document.getElementById("turnhint");
+  el.className = "hint warn";
+  el.textContent = !S ? "" : S.state === "ROBOT_TURN" ? "It's Buddy's turn, wait for it to finish." :
+    S.state === "CONFIRM_MARK" ? "Answer Buddy's question first (yes or no)." :
+    "There's no game on yet: say buddy, then yes, or teach it a game. Buddy draws the board before you mark it.";
+  setTimeout(() => { el.className = "hint"; el.textContent = ""; }, 4000);
+}
 
 document.getElementById("cells").innerHTML = NAMES.map((n, i) => `<button data-cell="${i}">${n}</button>`).join("");
-document.querySelectorAll("[data-cell]").forEach(b => b.addEventListener("click", () => post("scene", { action: "player_mark", arg: +b.dataset.cell })));
+document.querySelectorAll("[data-cell]").forEach(b => b.addEventListener("click", () => {
+  if (!myTurn()) return notNow();
+  const legal = (S.game && S.game.legal) || [];
+  if (legal.length && !legal.includes(+b.dataset.cell)) {
+    const el = document.getElementById("turnhint"); el.className = "hint warn";
+    el.textContent = "In this game your mark has to go next to the last one: use a green square.";
+    setTimeout(() => { el.className = "hint"; el.textContent = ""; }, 4000); return;
+  }
+  post("scene", { action: "player_mark", arg: +b.dataset.cell });
+}));
 
 function refreshImg(id, url) {
   const im = new Image();
@@ -141,7 +178,7 @@ function toMM(e) {
 }
 function resizePad() { const r = pad.getBoundingClientRect(); pad.width = r.width; pad.height = r.height; }
 new ResizeObserver(resizePad).observe(pad);
-pad.addEventListener("pointerdown", e => { clearTimeout(sendTimer); cur = [toMM(e)]; pad.setPointerCapture(e.pointerId); });
+pad.addEventListener("pointerdown", e => { if (!myTurn()) return notNow(); clearTimeout(sendTimer); cur = [toMM(e)]; pad.setPointerCapture(e.pointerId); });
 pad.addEventListener("pointermove", e => {
   if (!cur) return; const p = toMM(e), q = cur[cur.length - 1];
   if (Math.hypot(p[2] - q[2], p[3] - q[3]) < 3) return;
@@ -160,7 +197,16 @@ pad.addEventListener("pointerup", () => {
 async function tick() {
   let s;
   try { s = await (await fetch("state.json", { cache: "no-store" })).json(); } catch (e) { return; }
+  S = s;
   document.getElementById("state").textContent = s.state;
+  if (s.game) document.getElementById("gamename").textContent = s.game.name;
+  document.getElementById("nexthint").innerHTML = NEXT[s.state] || "";
+  const legal = (s.game && s.game.legal) || [], turn = s.state === "PLAYER_TURN";
+  document.querySelectorAll("[data-cell]").forEach(b => {
+    const c = +b.dataset.cell, taken = s.board && s.board[c];
+    b.classList.toggle("off", !turn || !!taken || (legal.length > 0 && !legal.includes(c)));
+    b.classList.toggle("legal", turn && legal.length > 0 && legal.includes(c) && !taken);
+  });
   document.getElementById("you").textContent = s.player || "-";
   document.getElementById("robot").textContent = s.robot || "-";
   document.getElementById("strength").textContent = Math.round(100 * s.strength) + "%";

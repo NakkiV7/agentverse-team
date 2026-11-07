@@ -292,6 +292,9 @@ class App:
             w.slide_sheet(DEFAULT_SHEET[0] - x, DEFAULT_SHEET[1] - y, DEFAULT_SHEET[2] - yaw)
         elif action == "reach":
             w.reach_in(4.0)
+        elif action in ("player_mark", "strokes") and self.brain.state != "PLAYER_TURN":
+            self.trace("system", f"ignored a mark from the page: it is not the player's turn (state {self.brain.state})")
+            return
         elif action == "player_mark" and arg is not None:
             sym = self.brain.player_sym or "X"
             w.hand_strokes(M.hand_mark(sym, int(arg), np.random.default_rng()))
