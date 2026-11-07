@@ -128,7 +128,8 @@ let nTrace = -1, nChat = -1, micOn = true, S = null;
 const NEXT = {
   IDLE: "Type <b>buddy</b> to wake it up.",
   CHAT: "Type <b>let's play a game</b>, or <b>let me teach you a game</b>.",
-  CHOOSE_GAME: "Type <b>yes</b> to play noughts and crosses, or <b>let me teach you a game</b>.",
+  CHOOSE_GAME: "Name a game Buddy knows (see the header), or type <b>let me teach you a game</b>. Any time: <b>go easy on me</b>, <b>play your best</b>.",
+  NAME_GAME: "Type a name for the game you just taught.",
   TEACH: "Explain your game, a sentence or two at a time. It will ask about anything you leave out.",
   OFFER_TAUGHT: "Type <b>yes</b> to play the game you taught, or <b>no</b>.",
   SETUP: "Buddy is looking at the paper and drawing the board. Watch the arm.",
@@ -199,7 +200,8 @@ async function tick() {
   try { s = await (await fetch("state.json", { cache: "no-store" })).json(); } catch (e) { return; }
   S = s;
   document.getElementById("state").textContent = s.state;
-  if (s.game) document.getElementById("gamename").textContent = s.game.name;
+  if (s.game) document.getElementById("gamename").textContent = s.game.name + (s.game.level && s.game.level !== "adaptive" ? ` · ${s.game.level}` : "");
+  if (s.game && s.game.known) document.getElementById("gamename").title = "Buddy knows: " + s.game.known.join(", ");
   document.getElementById("nexthint").innerHTML = NEXT[s.state] || "";
   const legal = (s.game && s.game.legal) || [], turn = s.state === "PLAYER_TURN";
   document.querySelectorAll("[data-cell]").forEach(b => {

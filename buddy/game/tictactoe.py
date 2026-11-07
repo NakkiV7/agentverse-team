@@ -72,17 +72,36 @@ class Choice:
     reason: str
 
 
+LEVELS = {"easy": 0.3, "medium": 0.6, "hard": 0.85, "impossible": 1.0}
+LEVEL_WORDS = {"easy": "easy, I'll make plenty of mistakes", "medium": "medium", "hard": "hard",
+               "impossible": "impossible: I'll play perfectly, so the best you can hope for is a draw",
+               "adaptive": "adapting to you: harder when you win, gentler when you lose"}
+
+
 @dataclass
 class Difficulty:
+    """How well Buddy plays. `level` is a fixed setting (easy / medium / hard / impossible) or "adaptive",
+    where `strength` moves after each game so games stay close."""
     strength: float = 0.75
+    level: str = "adaptive"
     history: list = field(default_factory=list)
+
+    def set_level(self, level: str) -> str:
+        if level not in LEVELS and level != "adaptive":
+            raise ValueError(level)
+        self.level = level
+        if level in LEVELS:
+            self.strength = LEVELS[level]
+        return LEVEL_WORDS[level]
 
     def update(self, result: str) -> str:
         """result from the PLAYER's side: 'win' / 'loss' / 'draw'."""
+        self.history.append(result)
+        if self.level != "adaptive":
+            return f"player {result}: level {self.level}, strength stays {100 * self.strength:.0f}%"
         old = self.strength
         delta = {"win": +0.15, "loss": -0.2, "draw": +0.05}[result]
         self.strength = min(1.0, max(0.3, self.strength + delta))
-        self.history.append(result)
         return f"player {result}: strength {100 * old:.0f}% -> {100 * self.strength:.0f}%"
 
 

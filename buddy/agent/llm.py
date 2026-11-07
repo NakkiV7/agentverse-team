@@ -15,9 +15,10 @@ from dataclasses import dataclass
 from .. import config as C
 
 INTENTS = ["play_game", "choose_game", "yes", "no", "explain_rules", "repeat", "stop", "smalltalk", "choose_side",
-           "move", "done", "new_game", "teach_game", "unclear"]
+           "move", "done", "new_game", "teach_game", "choose_difficulty", "list_games", "unclear"]
 GAMES = ["tic_tac_toe", "other", "none"]
 SIDES = ["crosses", "noughts", "none"]
+LEVELS = ["easy", "medium", "hard", "impossible", "adaptive", "none"]
 CELLS = ["top_left", "top_middle", "top_right", "middle_left", "centre", "middle_right", "bottom_left",
          "bottom_middle", "bottom_right", "none"]
 
@@ -28,15 +29,20 @@ SCHEMA = {
         "game": {"type": "string", "enum": GAMES},
         "side": {"type": "string", "enum": SIDES},
         "cell": {"type": "string", "enum": CELLS},
+        "game_name": {"type": "string"},
+        "level": {"type": "string", "enum": LEVELS},
     },
-    "required": ["intent", "game", "side", "cell"],
+    "required": ["intent", "game", "side", "cell", "game_name", "level"],
 }
 
 SYSTEM = """You are the language understanding of Buddy, a friendly robot arm that plays noughts and crosses \
 (tic-tac-toe) on paper with older adults. Read what the player said, in the situation given, and return JSON.
 
 intent:
-- play_game: wants to play a game. choose_game: names a game (set game). new_game: wants another game.
+- play_game: wants to play a game. choose_game: names a game (set game, and copy the game's name into game_name). \
+new_game: wants another game. list_games: asks which games Buddy knows.
+- choose_difficulty: asks Buddy to play easier or harder, or names a level (set level: easy, medium, hard, impossible, \
+or adaptive for "adjust to me"). "go easy on me" is easy, "play your best" / "don't hold back" is impossible.
 - teach_game: wants to teach Buddy a game of their own, or starts explaining the rules of a game ("let me teach you \
 one", "I know a different game", "here's how mine works", "we take turns putting...").
 - yes / no: agrees or declines what Buddy just asked.
@@ -46,21 +52,28 @@ one", "I know a different game", "here's how mine works", "we take turns putting
 - done: says they have finished their turn ("your turn", "done", "go on").
 - smalltalk: anything social. unclear: cannot tell.
 game: tic_tac_toe for noughts and crosses / tic-tac-toe / X's and O's; other for any other game; else none.
+game_name: the game's name as the player said it (e.g. "footsteps", "the trail game"), else "". The situation lists \
+the games Buddy knows; a known game is still intent choose_game with game "other" and its name in game_name.
+level: only with choose_difficulty, else none.
 side: crosses or noughts only with choose_side, else none.
 cell: the square as the player sees the paper: top/middle/bottom row, left/middle/right column; the very middle \
 is centre. "top" alone is top_middle, "left" alone is middle_left. none unless intent is move.
 
 Examples:
-"how does it work again" -> {"intent":"explain_rules","game":"none","side":"none","cell":"none"}
-"go on then" -> {"intent":"yes","game":"none","side":"none","cell":"none"}
-"I'll be noughts" -> {"intent":"choose_side","game":"none","side":"noughts","cell":"none"}
-"put mine in the top left please" -> {"intent":"move","game":"none","side":"none","cell":"top_left"}
-"the middle one" -> {"intent":"move","game":"none","side":"none","cell":"centre"}
-"your go" -> {"intent":"done","game":"none","side":"none","cell":"none"}
-"can we play chess" -> {"intent":"choose_game","game":"other","side":"none","cell":"none"}
-"let me teach you a game my dad taught me" -> {"intent":"teach_game","game":"other","side":"none","cell":"none"}
-"it's a different one, you put each mark next to the last" -> {"intent":"teach_game","game":"other","side":"none","cell":"none"}
-"how are you today" -> {"intent":"smalltalk","game":"none","side":"none","cell":"none"}"""
+"how does it work again" -> {"intent":"explain_rules","game":"none","side":"none","cell":"none","game_name":"","level":"none"}
+"go on then" -> {"intent":"yes","game":"none","side":"none","cell":"none","game_name":"","level":"none"}
+"I'll be noughts" -> {"intent":"choose_side","game":"none","side":"noughts","cell":"none","game_name":"","level":"none"}
+"put mine in the top left please" -> {"intent":"move","game":"none","side":"none","cell":"top_left","game_name":"","level":"none"}
+"the middle one" -> {"intent":"move","game":"none","side":"none","cell":"centre","game_name":"","level":"none"}
+"your go" -> {"intent":"done","game":"none","side":"none","cell":"none","game_name":"","level":"none"}
+"can we play chess" -> {"intent":"choose_game","game":"other","side":"none","cell":"none","game_name":"","level":"none"}
+"let me teach you a game my dad taught me" -> {"intent":"teach_game","game":"other","side":"none","cell":"none","game_name":"","level":"none"}
+"it's a different one, you put each mark next to the last" -> {"intent":"teach_game","game":"other","side":"none","cell":"none","game_name":"","level":"none"}
+"how are you today" -> {"intent":"smalltalk","game":"none","side":"none","cell":"none","game_name":"","level":"none"}
+"let's play footsteps" -> {"intent":"choose_game","game":"other","side":"none","cell":"none","game_name":"footsteps","level":"none"}
+"what games do you know" -> {"intent":"list_games","game":"none","side":"none","cell":"none","game_name":"","level":"none"}
+"go easy on me" -> {"intent":"choose_difficulty","game":"none","side":"none","cell":"none","game_name":"","level":"easy"}
+"play your best, no holding back" -> {"intent":"choose_difficulty","game":"none","side":"none","cell":"none","game_name":"","level":"impossible"}"""
 
 
 REPLY_SYSTEM = """You are Buddy, a friendly robot arm that plays noughts and crosses on paper with older adults. \
@@ -75,6 +88,8 @@ class Understanding:
     side: str
     cell: int | None          # 0..8 row by row from the player's top-left
     seconds: float
+    game_name: str = ""
+    level: str = "none"
 
 
 def _chat(body: dict) -> str:
@@ -107,7 +122,8 @@ class Conversation:
         d = json.loads(content)
         cell = d.get("cell", "none")
         return Understanding(d.get("intent", "unclear"), d.get("game", "none"), d.get("side", "none"),
-                             CELLS.index(cell) if cell in CELLS[:9] else None, time.time() - t0)
+                             CELLS.index(cell) if cell in CELLS[:9] else None, time.time() - t0,
+                             str(d.get("game_name") or "").strip(), d.get("level") or "none")
 
 
 def reply(utterance: str, situation: str) -> tuple[str, float]:

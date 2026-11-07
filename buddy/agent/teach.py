@@ -30,8 +30,9 @@ SCHEMA = {
         "k": {"type": "integer", "enum": [0, 3, 4]},
         "first_player": {"type": "string", "enum": ["player", "robot", "unspecified"]},
         "question": {"type": "string"},
+        "name": {"type": "string"},
     },
-    "required": ["rows", "cols", "placement", "end", "k", "first_player", "question"],
+    "required": ["rows", "cols", "placement", "end", "k", "first_player", "question", "name"],
 }
 
 SYSTEM = """You help Buddy, a robot that plays pen-and-paper games on a 3x3 or 4x4 grid where two players take turns writing X or O.
@@ -44,6 +45,7 @@ Fields:
 - k: the line length for k_in_a_row rules, else 0.
 - first_player: who starts, if said; else "unspecified".
 - question: ONE short, friendly clarifying question, or "" if nothing is needed.
+- name: the game's name if the player said one ("it's called Footsteps", "we call it Trails"), else "".
 
 Rules for filling it in:
 1. If the player did not say how the game ENDS, end = "unspecified" and ask about it.
@@ -63,6 +65,7 @@ class Draft:
     k: int = 0
     first_player: str = "unspecified"
     question: str = ""
+    name: str = ""
 
     @property
     def unsupported(self) -> bool:
@@ -118,7 +121,8 @@ class Teacher:
         end = d.get("end") if d.get("end") in ENDS or d.get("end") == "unsupported" else "unspecified"
         first = d.get("first_player") if d.get("first_player") in ("player", "robot") else "unspecified"
         return Draft(num(d.get("rows"), (3, 4), 3), num(d.get("cols"), (3, 4), 3), placement, end,
-                     num(d.get("k"), (0, 3, 4), 0), first, str(d.get("question") or "").strip())
+                     num(d.get("k"), (0, 3, 4), 0), first, str(d.get("question") or "").strip(),
+                     str(d.get("name") or "").strip()[:40])
 
     def hear(self, text: str, name: str = "") -> TeachTurn:
         t0 = time.perf_counter()
@@ -135,7 +139,7 @@ class Teacher:
             q = self.draft.question or "I can only play games where we take turns writing X and O on a grid."
             return TeachTurn(self.draft, q, True, None, dt)
         if self.draft.complete:
-            spec = self.draft.to_spec(name)
+            spec = self.draft.to_spec(name or self.draft.name)
             return TeachTurn(self.draft, "Let me make sure I have it. " + spec.describe(), True, spec, dt)
         if self.questions >= MAX_QUESTIONS:
             return TeachTurn(self.draft, "I'm sorry, I haven't quite understood that one. Shall we play noughts and crosses instead?", True, None, dt)

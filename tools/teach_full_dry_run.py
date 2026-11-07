@@ -3,6 +3,7 @@ paper. Scripted, no audio, simulation as fast as it goes. Prints every pipeline 
 
     .venv/bin/python tools/teach_full_dry_run.py            # Footsteps, taught in two sentences; exits 0 at GAME_OVER
     .venv/bin/python tools/teach_full_dry_run.py --misere   # "three in a row and you lose"
+    .venv/bin/python tools/teach_full_dry_run.py --new      # a game Buddy has never seen: it asks for a name and remembers it
 
 The scripted player wakes Buddy, asks to teach a game, explains it (answering Buddy's question), says yes, picks
 crosses, then plays legal moves drawn by the simulated hand; one move is asked for by voice. Buddy learns the
@@ -10,12 +11,15 @@ rules with Gemma 4, solves the game, draws the grid, and plays with the generic 
 gemma3:4b (intents) and gemma4 (teaching).
 """
 import argparse
+import os
 import random
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
 
+os.environ.setdefault("BUDDY_GAMES_FILE", os.path.join(tempfile.mkdtemp(), "games.json"))   # do not touch runtime/games.json
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from buddy.app import App                                              # noqa: E402
@@ -23,11 +27,17 @@ from buddy.game.rules import cell_name, result                         # noqa: E
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--misere", action="store_true")
+ap.add_argument("--new", action="store_true", help="a game not in the library, so Buddy asks for its name")
 args = ap.parse_args()
 
-LESSON = (["It's a different game. Each mark has to go next to the last mark that was played, up, down or sideways.",
-           "If you can't go anywhere, you lose."] if not args.misere else
-          ["It's like noughts and crosses but backwards: if you make three in a row, you lose.", "Anywhere on the grid."])
+if args.misere:
+    LESSON = ["It's like noughts and crosses but backwards: if you make three in a row, you lose.", "Anywhere on the grid."]
+elif args.new:
+    LESSON = ["Each mark has to touch the last mark played, up, down or sideways, and three in a row wins."]
+else:
+    LESSON = ["It's a different game. Each mark has to go next to the last mark that was played, up, down or sideways.",
+              "If you can't go anywhere, you lose."]
+NAME = "Let's call it Chains"
 
 app = App(voice=False, mic=False)
 b = app.brain
@@ -56,9 +66,12 @@ def player():
     wait(lambda: b.state == "TEACH", "the invitation")
     for line in LESSON:
         say(line)
-        if b.state == "OFFER_TAUGHT":
+        if b.state in ("OFFER_TAUGHT", "NAME_GAME"):
             break
-    wait(lambda: b.state == "OFFER_TAUGHT", "Buddy to learn the game")
+    wait(lambda: b.state in ("OFFER_TAUGHT", "NAME_GAME"), "Buddy to learn the game")
+    if b.state == "NAME_GAME":
+        say(NAME)
+        wait(lambda: b.state == "OFFER_TAUGHT", "Buddy to remember the game")
     say("Yes please.")
     wait(lambda: b.state == "ASK_SIDE", "the board")
     say("Crosses please.")
@@ -106,6 +119,6 @@ print("\nfinal board (as read from the paper):")
 for r in range(3):
     print("   " + " | ".join(b.board[3 * r + c] or " " for c in range(3)))
 res = result(b.spec, b.gstate) if (b.spec and b.gstate) else None
-print(f"game: {b.game_name} | rules: {b.rules_text()}")
+print(f"game: {b.game_name} | rules: {b.rules_text()} | library: {b.library.names()} ({b.library.path})")
 print(f"result: {res} | {time.time() - t0:.0f} s wall, {app.sim_time:.0f} s simulated | difficulty now {100 * b.difficulty.strength:.0f}%")
 sys.exit(0 if outcome["ok"] else 1)
