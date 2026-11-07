@@ -1,0 +1,12 @@
+# simulation + vision
+mujoco>=3.3,<4        # the SO-101 twin is tested on 3.x
+numpy
+opencv-python-headless<5
+# speech
+kokoro>=0.9          # text to speech (Kokoro-82M, Apache 2.0)
+silero-vad           # voice activity detection (MIT)
+sounddevice
+soundfile
+# tests
+pytest
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl  # English model Kokoro uses

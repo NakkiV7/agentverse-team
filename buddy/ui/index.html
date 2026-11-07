@@ -3,532 +3,201 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Buddy · Live Stage & Stream</title>
+<title>Buddy demo</title>
 <style>
   :root {
-    --bg: #0e1117;
-    --card: #161b22;
-    --card-border: #30363d;
-    --text: #e6edf3;
-    --text-muted: #8b949e;
-    --accent: #58a6ff;
-    --accent-hover: #79b8ff;
-    --green: #3fb950;
-    --red: #f85149;
-    --yellow: #d29922;
-    --purple: #bc8cff;
+    --bg: #f4f3ef; --card: #ffffff; --fg: #1c1c1a; --muted: #6a6a64; --line: #e3e1da; --accent: #2f5fd0;
+    --hear: #2f6fd6; --understand: #8248c9; --decide: #d07a12; --see: #2a8f4b; --plan: #128a8a; --act: #cf3f2f;
+    --sense: #c2387f; --check: #2f7d32; --say: #55554f; --adapt: #b8860b; --safety: #e0152f; --system: #8a8a84;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    line-height: 1.5;
-    padding: 16px;
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151514; --card: #1f1f1d; --fg: #ecebe6; --muted: #9b9a93; --line: #33322e; --accent: #7aa2ff; }
   }
-  header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-bottom: 14px;
-    border-bottom: 1px solid var(--card-border);
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-  .title-group { display: flex; align-items: center; gap: 12px; }
-  h1 { font-size: 20px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }
-  .badge {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 3px 8px;
-    border-radius: 12px;
-    background: #21262d;
-    border: 1px solid var(--card-border);
-    color: var(--text-muted);
-  }
-  .badge.state { background: rgba(88, 166, 255, 0.15); color: var(--accent); border-color: rgba(88, 166, 255, 0.3); }
-  .badge.urgent { background: rgba(248, 81, 73, 0.15); color: var(--red); border-color: rgba(248, 81, 73, 0.3); }
-  .badge.live { background: rgba(63, 185, 80, 0.15); color: var(--green); border-color: rgba(63, 185, 80, 0.3); }
-
-  .telemetry-bar {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-  .stat-chip {
-    background: var(--card);
-    border: 1px solid var(--card-border);
-    border-radius: 6px;
-    padding: 4px 10px;
-    font-size: 12px;
-    display: flex;
-    gap: 6px;
-    align-items: center;
-  }
-  .stat-chip b { color: #fff; font-family: monospace; }
-
-  main {
-    display: grid;
-    grid-template-columns: minmax(420px, 1.4fr) minmax(360px, 1fr);
-    gap: 16px;
-  }
-  @media (max-width: 960px) {
-    main { grid-template-columns: 1fr; }
-  }
-
-  .panel {
-    background: var(--card);
-    border: 1px solid var(--card-border);
-    border-radius: 8px;
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    position: relative;
-  }
-  .panel-title {
-    font-size: 13px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-muted);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  /* Video stream */
-  .stream-container {
-    width: 100%;
-    aspect-ratio: 4/3;
-    background: #000;
-    border-radius: 6px;
-    overflow: hidden;
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .stream-container img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    display: block;
-  }
-  .warning-banner {
-    display: none;
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    right: 10px;
-    background: rgba(248, 81, 73, 0.9);
-    color: #fff;
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-weight: 700;
-    font-size: 13px;
-    text-align: center;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-    animation: pulse 1s infinite alternate;
-  }
-  @keyframes pulse { from { opacity: 0.8; } to { opacity: 1; } }
-
-  /* Why this move */
-  .why-box {
-    background: rgba(88, 166, 255, 0.08);
-    border: 1px solid rgba(88, 166, 255, 0.25);
-    border-radius: 6px;
-    padding: 10px 14px;
-    font-size: 13px;
-    color: #e6edf3;
-  }
-  .why-box b { color: var(--accent); }
-
-  /* Chat / Transcript */
-  .transcript-box {
-    height: 220px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding-right: 4px;
-    font-size: 13px;
-  }
-  .chat-msg {
-    max-width: 88%;
-    padding: 6px 12px;
-    border-radius: 12px;
-    word-wrap: break-word;
-  }
-  .chat-msg.buddy {
-    background: #1f2937;
-    border: 1px solid #374151;
-    align-self: flex-start;
-    color: #93c5fd;
-  }
-  .chat-msg.player {
-    background: #064e3b;
-    border: 1px solid #047857;
-    align-self: flex-end;
-    color: #a7f3d0;
-  }
-  .chat-msg.system {
-    background: #27272a;
-    border: 1px solid #3f3f46;
-    align-self: center;
-    font-size: 11.5px;
-    color: var(--text-muted);
-  }
-
-  /* Typed input */
-  .input-form {
-    display: flex;
-    gap: 8px;
-    margin-top: 4px;
-  }
-  input[type=text] {
-    flex: 1;
-    background: #0d1117;
-    border: 1px solid var(--card-border);
-    color: var(--text);
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-size: 13px;
-    outline: none;
-  }
-  input[type=text]:focus { border-color: var(--accent); }
-  button {
-    background: #21262d;
-    color: var(--text);
-    border: 1px solid var(--card-border);
-    padding: 6px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 500;
-    transition: all 0.15s ease;
-  }
-  button:hover { background: #30363d; border-color: var(--text-muted); }
-  button.primary {
-    background: #238636;
-    border-color: rgba(240, 246, 252, 0.1);
-    color: #fff;
-  }
-  button.primary:hover { background: #2ea043; }
-  button.warn { background: rgba(248, 81, 73, 0.2); border-color: var(--red); color: var(--red); }
-  button.warn:hover { background: rgba(248, 81, 73, 0.35); }
-
-  /* Scene controls */
-  .button-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .grid-3x3 {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-    max-width: 180px;
-  }
-  .grid-3x3 button {
-    height: 38px;
-    font-size: 14px;
-    font-weight: 700;
-  }
-
-  /* Game events */
-  .events-box {
-    height: 140px;
-    overflow-y: auto;
-    font-family: monospace;
-    font-size: 11.5px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    background: #0d1117;
-    border: 1px solid var(--card-border);
-    border-radius: 6px;
-    padding: 6px 10px;
-  }
-  .event-row { color: var(--text-muted); }
-  .event-row b { color: var(--purple); }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 18px; margin: 0 10px 0 0; }
+  .chip { padding: 3px 10px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+  .chip b { color: var(--fg); }
+  .chip.on { border-color: var(--accent); color: var(--accent); }
+  .chip.alarm { border-color: var(--safety); color: #fff; background: var(--safety); }
+  main { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 14px; padding: 14px 18px; }
+  @media (max-width: 1300px) { main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  @media (max-width: 850px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; min-width: 0; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+  .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  img { width: 100%; height: auto; display: block; border-radius: 6px; background: #000; }
+  .paper { position: relative; }
+  .paper img { background: #fff; }
+  .paper canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; border-radius: 6px; }
+  .hint { color: var(--muted); font-size: 12.5px; margin-top: 6px; }
+  .cells { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 8px; }
+  .cells button { padding: 6px 4px; font-size: 12px; }
+  #chat { height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+  .msg { max-width: 88%; padding: 7px 11px; border-radius: 12px; }
+  .msg.Buddy { background: color-mix(in srgb, var(--accent) 14%, var(--card)); align-self: flex-start; }
+  .msg.Player { background: color-mix(in srgb, var(--fg) 8%, var(--card)); align-self: flex-end; }
+  .msg small { display: block; color: var(--muted); font-size: 11px; }
+  form { display: flex; gap: 8px; margin-top: 10px; }
+  input[type=text] { flex: 1; min-width: 0; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: inherit; }
+  button { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  #trace { height: 420px; overflow-y: auto; font-size: 12.8px; }
+  .row { display: grid; grid-template-columns: 44px 92px 1fr; gap: 6px; padding: 3px 0; border-bottom: 1px solid var(--line); }
+  .row .t { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .badge { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; color: #fff; border-radius: 4px; padding: 1px 6px; height: fit-content; text-align: center; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .legend span { display: inline-flex; gap: 5px; align-items: center; }
+  .scene { display: flex; flex-wrap: wrap; gap: 8px; }
+  .meter { display: inline-block; width: 60px; height: 6px; background: var(--line); border-radius: 3px; vertical-align: middle; overflow: hidden; }
+  .meter i { display: block; height: 100%; width: 0; background: var(--hear); }
 </style>
 </head>
 <body>
-
 <header>
-  <div class="title-group">
-    <h1>🤖 Buddy <span style="font-weight:400; font-size:15px; color:var(--text-muted);">· Stage & Stream</span></h1>
-    <span class="badge state" id="badge-state">STATE: IDLE</span>
-    <span class="badge live" id="badge-reflex">REFLEX: ARMED</span>
-  </div>
-
-  <div class="telemetry-bar">
-    <div class="stat-chip">Perception: <b id="stat-fps">0</b> FPS (<b id="stat-perc-ms">0</b> ms)</div>
-    <div class="stat-chip">Gemma: <b id="stat-gemma-s">0.0</b> s</div>
-    <div class="stat-chip">Touch: <b id="stat-touch">0.00</b> N</div>
-    <div class="stat-chip">Sheet: <b id="stat-sheet">--</b></div>
-  </div>
+  <h1>Buddy · noughts and crosses</h1>
+  <span class="chip">state <b id="state">…</b></span>
+  <span class="chip">you <b id="you">-</b> · Buddy <b id="robot">-</b></span>
+  <span class="chip">Buddy's strength <b id="strength">-</b></span>
+  <span class="chip" id="safety">safety: clear</span>
+  <span class="chip" id="speak">voice idle</span>
+  <span class="chip" id="mic">mic …</span>
+  <span class="chip">arm <b id="arm">…</b> · pen <b id="touch">0</b> N</span>
+  <span class="chip">sheet <b id="sheet">…</b></span>
 </header>
-
 <main>
-  <!-- LEFT COLUMN: CAMERA OVERLAY & WHY THIS MOVE -->
-  <div style="display:flex; flex-direction:column; gap:16px;">
-    <div class="panel">
-      <div class="panel-title">
-        <span>Live Overhead Camera · OpenCV Perception Overlay</span>
-        <span class="badge" id="stream-status">STREAMING</span>
-      </div>
-      <div class="stream-container">
-        <img id="cam-stream" src="/stream" alt="Overhead camera overlay stream">
-        <div class="warning-banner" id="hand-warning">⚠️ HAND IN AREA — REFLEX LAYER FROZEN</div>
-      </div>
+  <div class="col">
+    <div class="card"><h2>What Buddy sees: overhead camera + perception</h2><img id="overhead" alt="overhead camera with perception overlay"></div>
+    <div class="card"><h2>The arm (MuJoCo simulation)</h2><img id="scene" alt="3/4 view of the SO-101 arm"></div>
+  </div>
+  <div class="col">
+    <div class="card">
+      <h2>The paper, straightened · the mark classifier's reading</h2>
+      <div class="paper"><img id="sheetimg" alt="the sheet seen from above"><canvas id="pad"></canvas></div>
+      <div class="hint">Draw your mark here with the mouse: your hand in the simulation draws it on the real sheet. Or pick a square:</div>
+      <div class="cells" id="cells"></div>
     </div>
-
-    <!-- WHY THIS MOVE PANEL (Hour 7) -->
-    <div class="panel">
-      <div class="panel-title">💡 Why this move (Minimax Reasoning)</div>
-      <div class="why-box" id="why-box">
-        Waiting for initial robot move or evaluation...
-      </div>
-    </div>
-
-    <!-- GAME EVENTS LOG (Hour 7) -->
-    <div class="panel">
-      <div class="panel-title">🎮 Game Events</div>
-      <div class="events-box" id="events-log">
-        <div class="event-row">[system] Game subsystem initialized.</div>
-      </div>
+    <div class="card">
+      <h2>Conversation</h2>
+      <div id="chat"></div>
+      <form id="say"><input type="text" id="text" placeholder="Speak, or type: Buddy, let's play a game" autocomplete="off"><button class="primary">Say</button></form>
+      <div style="margin-top:8px"><button id="micbtn" type="button">Mute mic</button></div>
     </div>
   </div>
-
-  <!-- RIGHT COLUMN: TRANSCRIPT, TYPED FALLBACK, SCENE BUTTONS -->
-  <div style="display:flex; flex-direction:column; gap:16px;">
-    <!-- TRANSCRIPT & TYPED INPUT (Hour 1) -->
-    <div class="panel">
-      <div class="panel-title">💬 Conversation & Voice Transcript</div>
-      <div class="transcript-box" id="transcript-box">
-        <div class="chat-msg system">Buddy system ready. Speak "Buddy" or type below.</div>
-      </div>
-      <form class="input-form" id="typed-form">
-        <input type="text" id="typed-input" placeholder="Type what to say (e.g. 'let's play', 'cell 4', 'stop')..." autocomplete="off">
-        <button type="submit" class="primary">Send</button>
-      </form>
-      <div style="display:flex; gap:6px; align-items:center; margin-top:4px;">
-        <button type="button" id="btn-ptt" style="flex:1;">🎙️ Push-to-Talk (Hold Space)</button>
-        <span style="font-size:11px; color:var(--text-muted);">Noisy room fallback: active</span>
+  <div class="col">
+    <div class="card">
+      <h2>How Buddy decided: every step, in order</h2>
+      <div id="trace"></div>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div class="card">
+      <h2>Change the scene (live)</h2>
+      <div class="scene">
+        <button data-a="reach">Reach over the paper</button>
+        <button data-a="slide">Slide the sheet</button>
+        <button data-a="rotate">Rotate the sheet</button>
+        <button data-a="new_sheet">New blank sheet</button>
+        <button data-a="far">Push it out of reach</button>
+        <button data-a="remove">Take the sheet away</button>
+        <button data-a="back">Put it back</button>
       </div>
     </div>
-
-    <!-- SCENE BUTTONS (Hour 3) -->
-    <div class="panel">
-      <div class="panel-title">🎬 Scene Controls (Live Demo Actions)</div>
-
-      <div style="display:flex; flex-direction:column; gap:10px;">
-        <!-- Sheet Translations & Rotations -->
-        <div>
-          <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">Move / Rotate Sheet:</div>
-          <div class="button-group">
-            <button onclick="postScene('sheet_left')">← Left</button>
-            <button onclick="postScene('sheet_right')">→ Right</button>
-            <button onclick="postScene('sheet_forward')">↑ Forward</button>
-            <button onclick="postScene('sheet_back')">↓ Back</button>
-            <button onclick="postScene('sheet_ccw')">↺ Rot CCW</button>
-            <button onclick="postScene('sheet_cw')">↻ Rot CW</button>
-            <button onclick="postScene('sheet_reset')">Reset Sheet</button>
-          </div>
-        </div>
-
-        <!-- Hand Reflex Freeze Controls -->
-        <div>
-          <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">Safety & Reflex Trigger:</div>
-          <div class="button-group">
-            <button class="warn" onclick="postScene('hand_over')">✋ Place Hand Over Sheet</button>
-            <button onclick="postScene('hand_away')">👋 Remove Hand</button>
-          </div>
-        </div>
-
-        <!-- Add Human Mark O on Cell (0..8) -->
-        <div>
-          <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">Add Player Mark 'O' (Simulate drawing):</div>
-          <div style="display:flex; gap:16px; align-items:center;">
-            <div class="grid-3x3">
-              <button onclick="postScene('mark_0')">0</button>
-              <button onclick="postScene('mark_1')">1</button>
-              <button onclick="postScene('mark_2')">2</button>
-              <button onclick="postScene('mark_3')">3</button>
-              <button onclick="postScene('mark_4')">4</button>
-              <button onclick="postScene('mark_5')">5</button>
-              <button onclick="postScene('mark_6')">6</button>
-              <button onclick="postScene('mark_7')">7</button>
-              <button onclick="postScene('mark_8')">8</button>
-            </div>
-            <div style="font-size:11px; color:var(--text-muted); line-height:1.4;">
-              Click a cell to draw an <b>O</b> into the paper texture. Perception will detect it on the next frame!
-            </div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-
   </div>
 </main>
-
 <script>
-async function postScene(action) {
-  try {
-    await fetch('/scene', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({action: action})
-    });
-  } catch(e) {
-    console.error('Scene command failed:', e);
+const STAGES = {
+  hear: "microphone → Silero VAD → Whisper, or keyboard", understand: "Gemma 3 4B, structured output",
+  decide: "state machine", see: "overhead camera + OpenCV + mark CNN", plan: "reach checks, minimax solver",
+  act: "arm controller", sense: "pen-tip touch sensor", check: "camera verifies the ink",
+  adapt: "re-plan when the scene changes", safety: "reflex: depth camera, arm freezes", say: "Kokoro voice",
+  system: "start-up and scene changes" };
+const NAMES = ["top left", "top middle", "top right", "middle left", "centre", "middle right", "bottom left", "bottom middle", "bottom right"];
+const color = s => getComputedStyle(document.documentElement).getPropertyValue("--" + s).trim() || "#888";
+document.getElementById("legend").innerHTML = Object.entries(STAGES).map(([k, v]) =>
+  `<span><i class="badge" style="background:${color(k)}">${k.toUpperCase()}</i>${v}</span>`).join("");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const post = (url, body) => fetch(url, { method: "POST", body: JSON.stringify(body) });
+let nTrace = -1, nChat = -1, micOn = true;
+
+document.getElementById("cells").innerHTML = NAMES.map((n, i) => `<button data-cell="${i}">${n}</button>`).join("");
+document.querySelectorAll("[data-cell]").forEach(b => b.addEventListener("click", () => post("scene", { action: "player_mark", arg: +b.dataset.cell })));
+
+function refreshImg(id, url) {
+  const im = new Image();
+  im.onload = () => { document.getElementById(id).src = im.src; };
+  im.src = url + "?t=" + Date.now();
+}
+setInterval(() => { refreshImg("overhead", "overhead.jpg"); refreshImg("scene", "scene.jpg"); refreshImg("sheetimg", "sheet.jpg"); }, 300);
+
+// drawing pad over the straightened sheet (891 x 630 px = 297 x 210 mm, 3 px per mm)
+const pad = document.getElementById("pad"), ctx = pad.getContext("2d");
+let strokes = [], cur = null, sendTimer = null;
+function toMM(e) {
+  const r = pad.getBoundingClientRect();
+  const u = (e.clientX - r.left) / r.width, v = (e.clientY - r.top) / r.height;
+  return [u * 297 - 148.5, 105 - v * 210, e.clientX - r.left, e.clientY - r.top];
+}
+function resizePad() { const r = pad.getBoundingClientRect(); pad.width = r.width; pad.height = r.height; }
+new ResizeObserver(resizePad).observe(pad);
+pad.addEventListener("pointerdown", e => { clearTimeout(sendTimer); cur = [toMM(e)]; pad.setPointerCapture(e.pointerId); });
+pad.addEventListener("pointermove", e => {
+  if (!cur) return; const p = toMM(e), q = cur[cur.length - 1];
+  if (Math.hypot(p[2] - q[2], p[3] - q[3]) < 3) return;
+  ctx.strokeStyle = "rgba(220,40,40,.8)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(q[2], q[3]); ctx.lineTo(p[2], p[3]); ctx.stroke();
+  cur.push(p);
+});
+pad.addEventListener("pointerup", () => {
+  if (cur && cur.length > 1) strokes.push(cur.map(p => [p[0], p[1]]));
+  cur = null;
+  sendTimer = setTimeout(() => {                 // send the whole mark (e.g. both strokes of an X) together
+    if (strokes.length) post("draw", { strokes }); strokes = [];
+    setTimeout(() => ctx.clearRect(0, 0, pad.width, pad.height), 600);
+  }, 900);
+});
+
+async function tick() {
+  let s;
+  try { s = await (await fetch("state.json", { cache: "no-store" })).json(); } catch (e) { return; }
+  document.getElementById("state").textContent = s.state;
+  document.getElementById("you").textContent = s.player || "-";
+  document.getElementById("robot").textContent = s.robot || "-";
+  document.getElementById("strength").textContent = Math.round(100 * s.strength) + "%";
+  document.getElementById("arm").textContent = s.arm;
+  document.getElementById("touch").textContent = s.touch_N.toFixed(2);
+  document.getElementById("sheet").textContent = s.sheet ? `${s.sheet.x_cm}, ${s.sheet.y_cm} cm · ${s.sheet.rot_deg}° · ${s.sheet.visible ? (s.sheet.stable ? "steady" : "moving") : "hidden"}` : "not seen";
+  const sf = document.getElementById("safety");
+  sf.textContent = s.safety.frozen ? `SAFETY: hand over the paper, arm frozen` : (s.safety.pixels ? `something near the paper` : "safety: clear");
+  sf.classList.toggle("alarm", s.safety.frozen);
+  const sp = document.getElementById("speak"); sp.textContent = s.speaking ? "Buddy is speaking" : "voice idle"; sp.classList.toggle("on", s.speaking);
+  const mic = document.getElementById("mic");
+  if (!s.mic.available) { mic.textContent = "mic off: type below"; }
+  else { micOn = s.mic.enabled; mic.innerHTML = (micOn ? "listening " : "mic muted ") + `<span class="meter"><i style="width:${Math.min(100, s.mic.level * 1500)}%"></i></span>`;
+         document.getElementById("micbtn").textContent = micOn ? "Mute mic" : "Unmute mic"; }
+  if (s.trace.length && s.trace[s.trace.length - 1].t + s.trace.length !== nTrace) {
+    nTrace = s.trace[s.trace.length - 1].t + s.trace.length;
+    const el = document.getElementById("trace");
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    el.innerHTML = s.trace.map(r => `<div class="row"><span class="t">${r.t.toFixed(1)}s</span><span class="badge" style="background:${color(r.stage)}" title="${esc(STAGES[r.stage] || "")}">${r.stage.toUpperCase()}</span><span>${esc(r.msg)}</span></div>`).join("");
+    if (atBottom) el.scrollTop = el.scrollHeight;
+  }
+  if (s.transcript.length !== nChat) {
+    nChat = s.transcript.length;
+    const el = document.getElementById("chat");
+    el.innerHTML = s.transcript.map(m => `<div class="msg ${m.who}"><small>${m.who} · ${m.t.toFixed(1)}s</small>${esc(m.text)}</div>`).join("");
+    el.scrollTop = el.scrollHeight;
   }
 }
+setInterval(tick, 400); tick();
 
-// Typed input submission
-document.getElementById('typed-form').addEventListener('submit', async (e) => {
+document.getElementById("say").addEventListener("submit", async e => {
   e.preventDefault();
-  const input = document.getElementById('typed-input');
-  const text = input.value.trim();
-  if (!text) return;
-  input.value = '';
-  try {
-    await fetch('/say', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({text: text})
-    });
-  } catch(e) {
-    console.error('Say failed:', e);
-  }
+  const t = document.getElementById("text"); if (!t.value.trim()) return;
+  await post("say", { text: t.value }); t.value = "";
 });
-
-// Push to talk button
-const pttBtn = document.getElementById('btn-ptt');
-let pttActive = false;
-function setPTT(active) {
-  if (pttActive === active) return;
-  pttActive = active;
-  pttBtn.style.background = active ? '#dc2626' : '';
-  pttBtn.textContent = active ? '🔴 Recording...' : '🎙️ Push-to-Talk (Hold Space)';
-  fetch('/ptt', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({active: active})
-  }).catch(()=>{});
-}
-pttBtn.addEventListener('mousedown', () => setPTT(true));
-window.addEventListener('mouseup', () => setPTT(false));
-window.addEventListener('keydown', (e) => {
-  if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
-    e.preventDefault();
-    setPTT(true);
-  }
-});
-window.addEventListener('keyup', (e) => {
-  if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
-    setPTT(false);
-  }
-});
-
-// Periodic polling for telemetry & state sync
-let lastMsgCount = 0;
-let lastEventsCount = 0;
-
-async function syncState() {
-  try {
-    const res = await fetch('/api/state', {cache: 'no-store'});
-    if (!res.ok) return;
-    const d = await res.json();
-
-    // Telemetry updates
-    document.getElementById('stat-fps').textContent = d.fps !== undefined ? d.fps.toFixed(1) : '0';
-    document.getElementById('stat-perc-ms').textContent = d.perception_ms !== undefined ? d.perception_ms.toFixed(0) : '0';
-    document.getElementById('stat-gemma-s').textContent = d.gemma_s !== undefined ? d.gemma_s.toFixed(2) : '0.0';
-    document.getElementById('stat-touch').textContent = d.touch_N !== undefined ? d.touch_N.toFixed(2) : '0.00';
-    document.getElementById('stat-sheet').textContent = d.sheet ? `${(d.sheet.x*100).toFixed(0)}, ${(d.sheet.y*100).toFixed(0)}cm` : 'searching';
-
-    // State badge
-    const badgeState = document.getElementById('badge-state');
-    badgeState.textContent = 'STATE: ' + (d.agent_state || 'IDLE').toUpperCase();
-
-    // Hand warning banner & reflex badge
-    const banner = document.getElementById('hand-warning');
-    const badgeReflex = document.getElementById('badge-reflex');
-    if (d.hand_in_area) {
-      banner.style.display = 'block';
-      badgeReflex.className = 'badge urgent';
-      badgeReflex.textContent = 'REFLEX: FROZEN';
-    } else {
-      banner.style.display = 'none';
-      badgeReflex.className = 'badge live';
-      badgeReflex.textContent = 'REFLEX: ARMED';
-    }
-
-    // Why this move
-    if (d.why) {
-      document.getElementById('why-box').innerHTML = `<b>Minimax Decision:</b> ${d.why}`;
-    }
-
-    // Transcript update
-    if (d.transcript && d.transcript.length !== lastMsgCount) {
-      lastMsgCount = d.transcript.length;
-      const tBox = document.getElementById('transcript-box');
-      tBox.innerHTML = '';
-      d.transcript.forEach(line => {
-        const div = document.createElement('div');
-        if (line.startsWith('Buddy:')) {
-          div.className = 'chat-msg buddy';
-          div.textContent = line;
-        } else if (line.startsWith('Player:')) {
-          div.className = 'chat-msg player';
-          div.textContent = line;
-        } else {
-          div.className = 'chat-msg system';
-          div.textContent = line;
-        }
-        tBox.appendChild(div);
-      });
-      tBox.scrollTop = tBox.scrollHeight;
-    }
-
-    // Game events update
-    if (d.game_events && d.game_events.length !== lastEventsCount) {
-      lastEventsCount = d.game_events.length;
-      const eBox = document.getElementById('events-log');
-      eBox.innerHTML = '';
-      d.game_events.forEach(ev => {
-        const div = document.createElement('div');
-        div.className = 'event-row';
-        div.innerHTML = `[${ev.time || 'now'}] <b>${ev.kind}</b>: ${ev.text || ''}`;
-        eBox.appendChild(div);
-      });
-      eBox.scrollTop = eBox.scrollHeight;
-    }
-
-  } catch(e) {
-    // ignore fetch errors during startup
-  }
-}
-
-setInterval(syncState, 400);
-syncState();
-
-// Handle stream disconnect/reconnect
-const streamImg = document.getElementById('cam-stream');
-streamImg.onerror = () => {
-  document.getElementById('stream-status').textContent = 'RECONNECTING';
-  document.getElementById('stream-status').className = 'badge urgent';
-  setTimeout(() => {
-    streamImg.src = '/stream?t=' + Date.now();
-    document.getElementById('stream-status').textContent = 'STREAMING';
-    document.getElementById('stream-status').className = 'badge';
-  }, 1000);
-};
+document.querySelectorAll("[data-a]").forEach(b => b.addEventListener("click", () => post("scene", { action: b.dataset.a })));
+document.getElementById("micbtn").addEventListener("click", () => post("mic", { enabled: !micOn }));
 </script>
 </body>
 </html>

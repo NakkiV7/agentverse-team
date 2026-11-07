@@ -1,8 +1,6 @@
 .venv/
+runtime/
 __pycache__/
 *.pyc
-.pytest_cache/
-out/
-*.log
 .DS_Store
-MUJOCO_LOG.TXT
+MUJOCO_LOG*.TXT

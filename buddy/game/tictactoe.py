@@ -1,116 +1,101 @@
-"""Tic-tac-toe: exact minimax with adaptive difficulty. The robot plays X, the player O.
+"""Noughts and crosses: rules, a perfect solver, and adaptive difficulty.
 
-Board: list of 9 marks "X" | "O" | "" (row by row). Cells 0..8.
+Board: 9 cells, row by row from the player's top-left, each "" / "X" / "O". The board the game uses is always the
+one perception read from the paper, never an internal copy.
+
+Solver: full minimax over the game tree (memoised), scoring every legal move: +10 - depth for a win, 0 for a draw,
+-10 + depth for a loss, so it prefers quick wins and slow losses.
+
+Adaptive difficulty: Buddy plays the best move with probability `strength`; otherwise it plays a random move that
+does not let the player win on the very next turn. After each game, strength goes down if the player lost and up
+if they won, so games stay close and fun.
 """
 from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
+from functools import lru_cache
 
 LINES = [(0, 1, 2), (3, 4, 5), (6, 7, 8), (0, 3, 6), (1, 4, 7), (2, 5, 8), (0, 4, 8), (2, 4, 6)]
+NAMES = ["top left", "top middle", "top right", "middle left", "centre", "middle right",
+         "bottom left", "bottom middle", "bottom right"]
 
 
-def winner(board: list[str]) -> str | None:
+def winner(board) -> tuple[str, tuple] | None:
     for a, b, c in LINES:
         if board[a] and board[a] == board[b] == board[c]:
-            return board[a]
+            return board[a], (a, b, c)
     return None
 
 
-def legal_moves(board: list[str]) -> list[int]:
-    return [i for i, v in enumerate(board) if not v]
+def full(board) -> bool:
+    return all(board)
 
 
-def minimax(board: list[str], me: str, turn: str) -> int:
+def other(sym: str) -> str:
+    return "O" if sym == "X" else "X"
+
+
+@lru_cache(maxsize=None)
+def _minimax(board: tuple, to_move: str, me: str, depth: int) -> int:
     w = winner(board)
     if w:
-        return 1 if w == me else -1
-    moves = legal_moves(board)
-    if not moves:
+        return (10 - depth) if w[0] == me else (depth - 10)
+    if full(board):
         return 0
-    other = "O" if turn == "X" else "X"
     scores = []
-    for m in moves:
-        board[m] = turn
-        scores.append(minimax(board, me, other))
-        board[m] = ""
-    return max(scores) if turn == me else min(scores)
+    for i in range(9):
+        if not board[i]:
+            nb = board[:i] + (to_move,) + board[i + 1:]
+            scores.append(_minimax(nb, other(to_move), me, depth + 1))
+    return max(scores) if to_move == me else min(scores)
 
 
-def best_move(board: list[str], me: str = "X") -> int:
-    other = "O" if me == "X" else "X"
-    best, best_s = None, -2
-    for m in legal_moves(board):
-        board[m] = me
-        s = minimax(board, me, other)
-        board[m] = ""
-        if s > best_s:
-            best, best_s = m, s
-    assert best is not None
-    return best
+def move_scores(board, me: str) -> dict[int, int]:
+    b = tuple(board)
+    return {i: _minimax(b[:i] + (me,) + b[i + 1:], other(me), me, 1) for i in range(9) if not b[i]}
+
+
+def _gives_immediate_loss(board, i, me) -> bool:
+    nb = list(board)
+    nb[i] = me
+    opp = other(me)
+    return any(winner(nb[:j] + [opp] + nb[j + 1:]) for j in range(9) if not nb[j])
+
+
+@dataclass
+class Choice:
+    cell: int
+    best: list[int]
+    scores: dict
+    played_best: bool
+    reason: str
 
 
 @dataclass
 class Difficulty:
-    """Plays perfectly with probability 1 - p, a random legal move with probability p.
-    p rises after a robot win and falls after a player win so games stay close."""
-    p: float = 0.5
-    step: float = 0.15
+    strength: float = 0.75
+    history: list = field(default_factory=list)
 
-    def pick(self, board: list[str], me: str = "X", rng: random.Random | None = None) -> int:
-        rng = rng or random
-        if rng.random() < self.p:
-            return rng.choice(legal_moves(board))
-        return best_move(board, me)
-
-    def after_game(self, result: str) -> None:
-        if result == "robot":
-            self.p = min(0.9, self.p + self.step)
-        elif result == "player":
-            self.p = max(0.0, self.p - self.step)
+    def update(self, result: str) -> str:
+        """result from the PLAYER's side: 'win' / 'loss' / 'draw'."""
+        old = self.strength
+        delta = {"win": +0.15, "loss": -0.2, "draw": +0.05}[result]
+        self.strength = min(1.0, max(0.3, self.strength + delta))
+        self.history.append(result)
+        return f"player {result}: strength {100 * old:.0f}% -> {100 * self.strength:.0f}%"
 
 
-@dataclass
-class Game:
-    """Game state driven by Percepts: the board is whatever the camera sees, memory only spots differences."""
-    robot: str = "X"
-    player: str = "O"
-    board: list[str] = field(default_factory=lambda: [""] * 9)
-    turn: str = "O"                       # the player goes first
-    difficulty: Difficulty = field(default_factory=Difficulty)
-
-    def diff(self, seen: list[str]) -> dict:
-        """Compare the camera's board with memory. Returns {"new": [(cell, mark)], "gone": [cell]}."""
-        new = [(i, s) for i, (s, b) in enumerate(zip(seen, self.board)) if s and s != b]
-        gone = [i for i, (s, b) in enumerate(zip(seen, self.board)) if b and not s]
-        return {"new": new, "gone": gone}
-
-    def check_player(self, seen: list[str]) -> str:
-        """'ok' | 'none' | 'cheat' (two marks, wrong mark, or a mark during the robot's turn)."""
-        d = self.diff(seen)
-        if d["gone"]:
-            return "cheat"
-        if len(d["new"]) == 0:
-            return "none"
-        if len(d["new"]) > 1 or d["new"][0][1] != self.player or self.turn != self.player:
-            return "cheat"
-        self.board[d["new"][0][0]] = self.player
-        self.turn = self.robot
-        return "ok"
-
-    def robot_move(self) -> int:
-        assert self.turn == self.robot
-        cell = self.difficulty.pick(self.board, self.robot)
-        self.board[cell] = self.robot
-        self.turn = self.player
-        return cell
-
-    def result(self) -> str | None:
-        w = winner(self.board)
-        if w == self.robot:
-            return "robot"
-        if w == self.player:
-            return "player"
-        if not legal_moves(self.board):
-            return "draw"
-        return None
+def choose(board, me: str, diff: Difficulty, rng=random) -> Choice:
+    scores = move_scores(board, me)
+    top = max(scores.values())
+    best = [i for i, s in scores.items() if s == top]
+    if rng.random() < diff.strength or len(scores) == 1:
+        i = rng.choice(best)
+        return Choice(i, best, scores, True, f"best move ({diff.strength:.0%} strength)")
+    safe = [i for i in scores if i not in best and not _gives_immediate_loss(board, i, me)]
+    if not safe:
+        i = rng.choice(best)
+        return Choice(i, best, scores, True, "every other move would lose at once, so the best one")
+    i = rng.choice(safe)
+    return Choice(i, best, scores, False, f"a friendlier move ({1 - diff.strength:.0%} of the time)")

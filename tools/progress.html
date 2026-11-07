@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Buddy setup progress</title>
+<style>
+  :root { --bg: #f6f6f4; --fg: #1d1d1b; --muted: #6b6b66; --line: #e2e2dd; --accent: #2f6fd6; --ok: #2f7d32; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161615; --fg: #ececea; --muted: #9a9a94; --line: #34342f; --accent: #6aa0ff; --ok: #6cc070; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 -apple-system, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
+  .track { height: 12px; background: var(--line); border-radius: 6px; overflow: hidden; margin: 12px 0; }
+  .fill { height: 100%; width: 0; background: var(--accent); transition: width .4s; }
+  .fill.done { background: var(--ok); }
+  pre { white-space: pre-wrap; color: var(--muted); font: 12.5px/1.5 ui-monospace, Menlo, monospace; }
+</style>
+</head>
+<body><main>
+  <h1 id="job" style="font-size:18px;margin:0">waiting for a job…</h1>
+  <div class="track"><div class="fill" id="fill"></div></div>
+  <pre id="bar"></pre>
+</main>
+<script>
+async function tick() {
+  try {
+    const s = await (await fetch("progress.json?t=" + Date.now(), { cache: "no-store" })).json();
+    document.getElementById("job").textContent = s.job + (s.done ? " (done)" : "");
+    document.getElementById("fill").style.width = s.percent + "%";
+    document.getElementById("fill").classList.toggle("done", s.done);
+    document.getElementById("bar").textContent = s.bar;
+  } catch (e) {}
+}
+tick(); setInterval(tick, 1000);
+</script>
+</body></html>

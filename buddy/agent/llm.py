@@ -1,105 +1,125 @@
-"""Gemma 4 via Ollama, local, JSON-schema constrained. The model does language only:
-speech -> Intent, situation -> a short spoken line. It never picks moves or arm motions."""
+"""Language understanding with Gemma 3 4B (Ollama, on the laptop).
+
+Every utterance becomes one structured call: the reply is forced into a JSON schema (Ollama structured outputs) with
+the intent, the game, the side, the cell for a spoken move ("put mine in the top left") and, only for small talk,
+a short reply. The state machine acts on these fields; the model never chooses moves, positions or arm motions.
+The situation (what Buddy just asked, whose turn it is, which squares are free) is given with every call.
+"""
 from __future__ import annotations
 
-import base64
 import json
 import time
+import urllib.request
+from dataclasses import dataclass
 
-import requests
+from .. import config as C
 
-from buddy import config
-from buddy.contracts import Intent
+INTENTS = ["play_game", "choose_game", "yes", "no", "explain_rules", "repeat", "stop", "smalltalk", "choose_side",
+           "move", "done", "new_game", "unclear"]
+GAMES = ["tic_tac_toe", "other", "none"]
+SIDES = ["crosses", "noughts", "none"]
+CELLS = ["top_left", "top_middle", "top_right", "middle_left", "centre", "middle_right", "bottom_left",
+         "bottom_middle", "bottom_right", "none"]
 
-INTENT_SCHEMA = {
+SCHEMA = {
     "type": "object",
     "properties": {
-        "kind": {"type": "string", "enum": ["play", "choose_game", "move", "explain_rules", "repeat", "yes", "no", "stop", "chat"]},
-        "cell": {"type": ["integer", "null"], "minimum": 0, "maximum": 8},
-        "text": {"type": "string"},
+        "intent": {"type": "string", "enum": INTENTS},
+        "game": {"type": "string", "enum": GAMES},
+        "side": {"type": "string", "enum": SIDES},
+        "cell": {"type": "string", "enum": CELLS},
     },
-    "required": ["kind", "cell", "text"],
+    "required": ["intent", "game", "side", "cell"],
 }
 
-SYSTEM_INTENT = (
-    "You are the ear of Buddy, a robot arm that plays tic-tac-toe on paper with an older adult. "
-    "Classify what the player just said into one intent. Cells are numbered 0 to 8, row by row, "
-    "top-left first: 'top left' is 0, 'middle' or 'centre' is 4, 'bottom right' is 8. "
-    "If they name a cell, kind is 'move'. 'play', 'let's play', 'a game' -> 'play'. "
-    "'again', 'say that again', 'pardon' -> 'repeat'. 'stop', 'enough', 'bye' -> 'stop'. "
-    "Anything else is 'chat' with a short, warm reply in 'text' (one sentence, plain words)."
-)
+SYSTEM = """You are the language understanding of Buddy, a friendly robot arm that plays noughts and crosses \
+(tic-tac-toe) on paper with older adults. Read what the player said, in the situation given, and return JSON.
 
-SYSTEM_SPEAK = (
-    "You are the voice of Buddy, a kind robot that plays tic-tac-toe on paper with an older adult. "
-    "Write exactly what Buddy says next: one or two short sentences, plain words, no lists, "
-    "no emoji, unhurried, never patronising. Use the facts given; invent nothing."
-)
+intent:
+- play_game: wants to play a game. choose_game: names a game (set game). new_game: wants another game.
+- yes / no: agrees or declines what Buddy just asked.
+- explain_rules: asks how to play. repeat: wants Buddy to say it again. stop: wants to stop or says goodbye.
+- choose_side: picks crosses or noughts (set side).
+- move: says where THEIR mark should go (set cell); Buddy will draw it for them.
+- done: says they have finished their turn ("your turn", "done", "go on").
+- smalltalk: anything social. unclear: cannot tell.
+game: tic_tac_toe for noughts and crosses / tic-tac-toe / X's and O's; other for any other game; else none.
+side: crosses or noughts only with choose_side, else none.
+cell: the square as the player sees the paper: top/middle/bottom row, left/middle/right column; the very middle \
+is centre. "top" alone is top_middle, "left" alone is middle_left. none unless intent is move.
+
+Examples:
+"how does it work again" -> {"intent":"explain_rules","game":"none","side":"none","cell":"none"}
+"go on then" -> {"intent":"yes","game":"none","side":"none","cell":"none"}
+"I'll be noughts" -> {"intent":"choose_side","game":"none","side":"noughts","cell":"none"}
+"put mine in the top left please" -> {"intent":"move","game":"none","side":"none","cell":"top_left"}
+"the middle one" -> {"intent":"move","game":"none","side":"none","cell":"centre"}
+"your go" -> {"intent":"done","game":"none","side":"none","cell":"none"}
+"can we play chess" -> {"intent":"choose_game","game":"other","side":"none","cell":"none"}
+"how are you today" -> {"intent":"smalltalk","game":"none","side":"none","cell":"none"}"""
 
 
-class LLM:
-    def __init__(self, model: str = config.LLM_MODEL, url: str = config.OLLAMA_URL, keep_alive: str = "30m"):
-        self.model, self.url, self.keep_alive = model, url, keep_alive
-        self.grammar_ok = True        # flips to False if the server cannot do constrained decoding
+REPLY_SYSTEM = """You are Buddy, a friendly robot arm that plays noughts and crosses on paper with older adults. \
+Answer the player in one warm sentence of plain British English, at most 20 words, no slang, no emoji. You only \
+know noughts and crosses. Never describe actions or moves that the situation does not mention."""
 
-    def _chat(self, messages, fmt=None, images=None, num_predict=120) -> tuple[str, float, float]:
-        """One chat call. `fmt` is a JSON schema. Ollama builds without the grammar library (the Homebrew
-        build on Apple silicon, Nov 2026) answer 501 to `format`; then we ask for JSON in the prompt
-        instead and validate it ourselves (see _parse_json)."""
-        if images:
-            messages[-1]["images"] = [base64.b64encode(b).decode() for b in images]
-        body = {"model": self.model, "messages": messages, "stream": False, "keep_alive": self.keep_alive,
-                "think": False,            # Gemma 4 thinks by default; that costs seconds and empties `content`
-                "options": {"temperature": 0.2, "num_predict": num_predict}}
-        if fmt and self.grammar_ok:
-            body["format"] = fmt
-        elif fmt:
-            messages[0] = {"role": "system", "content": messages[0]["content"] + "\nAnswer with one JSON object only, "
-                           "no prose, no code fence, matching this JSON schema: " + json.dumps(fmt)}
-        t0 = time.perf_counter()
-        r = requests.post(f"{self.url}/api/chat", json=body, timeout=60)
-        if r.status_code == 501 and fmt and self.grammar_ok:
-            self.grammar_ok = False
-            return self._chat(messages, fmt, None, num_predict)
-        r.raise_for_status()
-        j = r.json()
-        total = time.perf_counter() - t0
-        first = (j.get("prompt_eval_duration", 0) + j.get("load_duration", 0)) / 1e9
-        return j["message"]["content"], first, total
 
-    @staticmethod
-    def _parse_json(txt: str, schema: dict) -> dict:
-        """Pull the first JSON object out of the text and check enums / types against the schema."""
-        txt = txt.strip()
-        if txt.startswith("```"):
-            txt = txt.strip("`").removeprefix("json").strip()
-        start, end = txt.find("{"), txt.rfind("}")
-        j = json.loads(txt[start:end + 1])
-        for k, spec in schema["properties"].items():
-            if "enum" in spec and j.get(k) not in spec["enum"]:
-                raise ValueError(f"{k}={j.get(k)!r} not in {spec['enum']}")
-        return j
+@dataclass
+class Understanding:
+    intent: str
+    game: str
+    side: str
+    cell: int | None          # 0..8 row by row from the player's top-left
+    seconds: float
 
-    def intent(self, utterance: str) -> tuple[Intent, dict]:
-        txt, first, total = self._chat(
-            [{"role": "system", "content": SYSTEM_INTENT}, {"role": "user", "content": utterance}], fmt=INTENT_SCHEMA)
-        j = self._parse_json(txt, INTENT_SCHEMA)
-        cell = j.get("cell")
-        cell = int(cell) if cell not in (None, "", "null") and str(cell).lstrip("-").isdigit() and 0 <= int(cell) <= 8 else None
-        return Intent(kind=j["kind"], cell=cell, text=str(j.get("text") or "")), {"first_s": first, "total_s": total}
 
-    def speak(self, situation: str) -> tuple[str, dict]:
-        txt, first, total = self._chat(
-            [{"role": "system", "content": SYSTEM_SPEAK}, {"role": "user", "content": situation}], num_predict=60)
-        return txt.strip(), {"first_s": first, "total_s": total}
+def _chat(body: dict) -> str:
+    req = urllib.request.Request(f"{C.OLLAMA_URL}/api/chat", data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.loads(r.read())["message"]["content"]
 
-    def read_mark(self, cell_png: bytes) -> tuple[str, dict]:
-        """Backup for low-confidence cells: ask the vision model what is drawn. Returns X | O | empty | unclear."""
-        schema = {"type": "object", "properties": {"mark": {"type": "string", "enum": ["X", "O", "empty", "unclear"]}}, "required": ["mark"]}
-        txt, first, total = self._chat(
-            [{"role": "user", "content": "This is one cell of a hand-drawn tic-tac-toe grid. What is in it?"}],
-            fmt=schema, images=[cell_png], num_predict=20)
-        return self._parse_json(txt, schema)["mark"], {"first_s": first, "total_s": total}
 
-    def warm(self) -> None:
-        self._chat([{"role": "user", "content": "hi"}], num_predict=1)
+class Conversation:
+    """One running conversation with the model. Each call appends to it, so Ollama only has to process the newest
+    message (about 0.4 s) instead of the whole instruction prompt (about 2.2 s). It restarts when it gets long."""
+    MAX_TURNS = 24
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.msgs = [{"role": "system", "content": SYSTEM}]
+
+    def understand(self, utterance: str, situation: str) -> Understanding:
+        if len(self.msgs) > 2 * self.MAX_TURNS:
+            self.reset()
+        self.msgs.append({"role": "user", "content": f"Situation: {situation}\nPlayer said: \"{utterance}\""})
+        body = {"model": C.LLM_MODEL, "stream": False, "format": SCHEMA, "keep_alive": "60m",
+                "options": {"temperature": 0.0, "num_predict": 40}, "messages": self.msgs}
+        t0 = time.time()
+        content = _chat(body)
+        self.msgs.append({"role": "assistant", "content": content})
+        d = json.loads(content)
+        cell = d.get("cell", "none")
+        return Understanding(d.get("intent", "unclear"), d.get("game", "none"), d.get("side", "none"),
+                             CELLS.index(cell) if cell in CELLS[:9] else None, time.time() - t0)
+
+
+def reply(utterance: str, situation: str) -> tuple[str, float]:
+    """A short spoken answer, only for small talk and other free conversation."""
+    body = {"model": C.LLM_MODEL, "stream": False, "keep_alive": "60m",
+            "options": {"temperature": 0.6, "num_predict": 45},
+            "messages": [{"role": "system", "content": REPLY_SYSTEM},
+                         {"role": "user", "content": f"Situation: {situation}\nPlayer said: \"{utterance}\""}]}
+    t0 = time.time()
+    text = _chat(body).strip().strip('"')
+    return text, time.time() - t0
+
+
+def warm_up(conv: Conversation) -> float:
+    """Load the model and process the instructions once, so the first real question is fast."""
+    t0 = time.time()
+    conv.understand("hello", "Buddy is starting up.")
+    reply("hello", "Buddy is starting up.")
+    return time.time() - t0
