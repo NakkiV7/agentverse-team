@@ -1,0 +1,36 @@
+{
+ "boards": 1584,
+ "train_cells": 12123,
+ "val_cells": 2133,
+ "val_accuracy": 1.0,
+ "val_accuracy_when_confident": 1.0,
+ "val_unclear_fraction": 0.002344116268166885,
+ "confusion_rows_true_cols_pred": {
+  "classes": [
+   "empty",
+   "X",
+   "O"
+  ],
+  "matrix": [
+   [
+    711,
+    0,
+    0
+   ],
+   [
+    0,
+    662,
+    0
+   ],
+   [
+    0,
+    0,
+    760
+   ]
+  ]
+ },
+ "min_confidence": 0.9,
+ "epochs": 14,
+ "params": 46771,
+ "seconds": 241.0
+}

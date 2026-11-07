@@ -1,0 +1,101 @@
+"""Noughts and crosses: rules, a perfect solver, and adaptive difficulty.
+
+Board: 9 cells, row by row from the player's top-left, each "" / "X" / "O". The board the game uses is always the
+one perception read from the paper, never an internal copy.
+
+Solver: full minimax over the game tree (memoised), scoring every legal move: +10 - depth for a win, 0 for a draw,
+-10 + depth for a loss, so it prefers quick wins and slow losses.
+
+Adaptive difficulty: Buddy plays the best move with probability `strength`; otherwise it plays a random move that
+does not let the player win on the very next turn. After each game, strength goes down if the player lost and up
+if they won, so games stay close and fun.
+"""
+from __future__ import annotations
+
+import random
+from dataclasses import dataclass, field
+from functools import lru_cache
+
+LINES = [(0, 1, 2), (3, 4, 5), (6, 7, 8), (0, 3, 6), (1, 4, 7), (2, 5, 8), (0, 4, 8), (2, 4, 6)]
+NAMES = ["top left", "top middle", "top right", "middle left", "centre", "middle right",
+         "bottom left", "bottom middle", "bottom right"]
+
+
+def winner(board) -> tuple[str, tuple] | None:
+    for a, b, c in LINES:
+        if board[a] and board[a] == board[b] == board[c]:
+            return board[a], (a, b, c)
+    return None
+
+
+def full(board) -> bool:
+    return all(board)
+
+
+def other(sym: str) -> str:
+    return "O" if sym == "X" else "X"
+
+
+@lru_cache(maxsize=None)
+def _minimax(board: tuple, to_move: str, me: str, depth: int) -> int:
+    w = winner(board)
+    if w:
+        return (10 - depth) if w[0] == me else (depth - 10)
+    if full(board):
+        return 0
+    scores = []
+    for i in range(9):
+        if not board[i]:
+            nb = board[:i] + (to_move,) + board[i + 1:]
+            scores.append(_minimax(nb, other(to_move), me, depth + 1))
+    return max(scores) if to_move == me else min(scores)
+
+
+def move_scores(board, me: str) -> dict[int, int]:
+    b = tuple(board)
+    return {i: _minimax(b[:i] + (me,) + b[i + 1:], other(me), me, 1) for i in range(9) if not b[i]}
+
+
+def _gives_immediate_loss(board, i, me) -> bool:
+    nb = list(board)
+    nb[i] = me
+    opp = other(me)
+    return any(winner(nb[:j] + [opp] + nb[j + 1:]) for j in range(9) if not nb[j])
+
+
+@dataclass
+class Choice:
+    cell: int
+    best: list[int]
+    scores: dict
+    played_best: bool
+    reason: str
+
+
+@dataclass
+class Difficulty:
+    strength: float = 0.75
+    history: list = field(default_factory=list)
+
+    def update(self, result: str) -> str:
+        """result from the PLAYER's side: 'win' / 'loss' / 'draw'."""
+        old = self.strength
+        delta = {"win": +0.15, "loss": -0.2, "draw": +0.05}[result]
+        self.strength = min(1.0, max(0.3, self.strength + delta))
+        self.history.append(result)
+        return f"player {result}: strength {100 * old:.0f}% -> {100 * self.strength:.0f}%"
+
+
+def choose(board, me: str, diff: Difficulty, rng=random) -> Choice:
+    scores = move_scores(board, me)
+    top = max(scores.values())
+    best = [i for i, s in scores.items() if s == top]
+    if rng.random() < diff.strength or len(scores) == 1:
+        i = rng.choice(best)
+        return Choice(i, best, scores, True, f"best move ({diff.strength:.0%} strength)")
+    safe = [i for i in scores if i not in best and not _gives_immediate_loss(board, i, me)]
+    if not safe:
+        i = rng.choice(best)
+        return Choice(i, best, scores, True, "every other move would lose at once, so the best one")
+    i = rng.choice(safe)
+    return Choice(i, best, scores, False, f"a friendlier move ({1 - diff.strength:.0%} of the time)")
