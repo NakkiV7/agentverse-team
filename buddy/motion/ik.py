@@ -1,83 +1,71 @@
-"""Damped least-squares IK for the 5-DOF SO-101 with the pen tip as the end effector.
+"""Inverse kinematics for the pen tip.
 
-Solves for the pen tip position and keeps the pen axis pointing down (within a few degrees of
-vertical), which is what drawing needs. The gripper and wrist_roll are left free to help.
-Works on its own MjData copy so it never disturbs the running simulation.
+Task: put the pen tip at a 3-D point with the pen pointing straight down (within a few degrees). That is 5
+constraints (3 for position, 2 for the pen direction; the spin about the pen axis does not matter), which matches
+the arm's 5 joints exactly. Solved with damped least squares on MuJoCo's Jacobians, on a private copy of the model
+state so the running simulation is never touched.
 """
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 import mujoco
 import numpy as np
 
-from buddy.contracts import ARM_JOINTS
 
-
-def _skew(a):
-    return np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
+@dataclass
+class IKResult:
+    q: np.ndarray            # 5 joint angles (rad)
+    pos_err: float           # m
+    tilt_deg: float          # pen axis vs straight down
+    ok: bool
 
 
 class PenIK:
-    def __init__(self, model: mujoco.MjModel, site: str = "pen_tip"):
+    def __init__(self, model: mujoco.MjModel, tip_body: np.ndarray, axis_body: np.ndarray, joint_names):
         self.m = model
         self.d = mujoco.MjData(model)
-        self.site = model.site(site).id
-        self.jids = [model.joint(n).id for n in ARM_JOINTS]
-        self.qadr = np.array([model.jnt_qposadr[j] for j in self.jids])
-        self.dadr = np.array([model.jnt_dofadr[j] for j in self.jids])
-        self.lo = model.jnt_range[self.jids, 0]
-        self.hi = model.jnt_range[self.jids, 1]
+        self.tip_body, self.axis_body = np.asarray(tip_body, float), np.asarray(axis_body, float)
+        self.body = model.body("gripper").id
+        ids = [model.joint(n).id for n in joint_names]
+        self.qadr = np.array([model.jnt_qposadr[j] for j in ids])
+        self.dadr = np.array([model.jnt_dofadr[j] for j in ids])
+        margin = np.radians(1.0)
+        self.lo = model.jnt_range[ids, 0] + margin
+        self.hi = model.jnt_range[ids, 1] - margin
+        self._jp = np.zeros((3, model.nv))
+        self._jr = np.zeros((3, model.nv))
 
-    def pen_axis(self) -> np.ndarray:
-        """World direction the pen points (tip side). The pen lies along the gripper's -z."""
-        return -self.d.site_xmat[self.site].reshape(3, 3)[:, 2]
-
-    # Drawing postures to seed the search from. Plain DLS from the folded "home" pose runs into joint
-    # limits, so we also start from a few arm-over-the-sheet shapes and keep the best converged answer.
-    SEEDS = ((-1.2, 1.2, 0.9), (-0.7, 0.8, 1.3), (-1.5, 1.5, 0.6), (-0.3, 0.3, 1.5))
-
-    def solve(self, target_pos, q0, target_axis=(0, 0, -1.0), **kw):
-        """Return (q[5], ok, pos_err_m, axis_err). q0 is the 5 arm joint angles to start from.
-        Tries q0 first, then the SEEDS pointed at the target; returns the converged solution nearest q0."""
-        q0 = np.asarray(q0, float)
-        target_pos = np.asarray(target_pos, float)
-        pan = float(np.arctan2(target_pos[1], target_pos[0]))
-        starts = [q0] + [np.array([pan, a, b, c, 0.0]) for a, b, c in self.SEEDS]
-        best = None
-        for q_start in starts:
-            q, ok, ep, ea = self._solve_from(target_pos, q_start, target_axis, **kw)
-            cost = (0 if ok else 1e3) + ep * 1e3 + ea + 0.1 * np.linalg.norm(q - q0)
-            if best is None or cost < best[0]:
-                best = (cost, q, ok, ep, ea)
-            if ok and q_start is q0:
-                break
-        return best[1], best[2], best[3], best[4]
-
-    def _solve_from(self, target_pos, q0, target_axis, iters=60, damping=0.05, step=0.6,
-                    axis_weight=0.05, tol_m=1e-3, tol_axis=0.09):   # 5 deg of vertical is fine for drawing
-        q = np.clip(np.asarray(q0, float).copy(), self.lo, self.hi)
-        target_axis = np.asarray(target_axis, float) / np.linalg.norm(target_axis)
-        jacp = np.zeros((3, self.m.nv)); jacr = np.zeros((3, self.m.nv))
-        for _ in range(iters):
-            self.d.qpos[self.qadr] = q
-            mujoco.mj_kinematics(self.m, self.d)
-            mujoco.mj_comPos(self.m, self.d)
-            pos = self.d.site_xpos[self.site]
-            a = self.pen_axis()
-            e_p = target_pos - pos
-            e_a = np.cross(a, target_axis)              # small rotation taking a onto target_axis
-            if np.linalg.norm(e_p) < tol_m and np.linalg.norm(e_a) < tol_axis:
-                return q, True, float(np.linalg.norm(e_p)), float(np.linalg.norm(e_a))
-            mujoco.mj_jacSite(self.m, self.d, jacp, jacr, self.site)
-            Jp = jacp[:, self.dadr]
-            Ja = jacr[:, self.dadr]                       # d(angle vector)/dq; d a = omega x a
-            J = np.vstack([Jp, axis_weight * Ja])
-            e = np.concatenate([e_p, axis_weight * e_a])
-            JJt = J @ J.T + (damping ** 2) * np.eye(J.shape[0])
-            dq = J.T @ np.linalg.solve(JJt, e)
-            q = np.clip(q + step * dq, self.lo, self.hi)
-        self.d.qpos[self.qadr] = q
+    def fk(self, q5):
+        """(pen tip world position, pen axis world direction) for joint angles q5."""
+        self.d.qpos[self.qadr] = q5
         mujoco.mj_kinematics(self.m, self.d)
-        e_p = target_pos - self.d.site_xpos[self.site]
-        e_a = np.cross(self.pen_axis(), target_axis)
-        ok = np.linalg.norm(e_p) < tol_m and np.linalg.norm(e_a) < tol_axis
-        return q, bool(ok), float(np.linalg.norm(e_p)), float(np.linalg.norm(e_a))
+        R = self.d.xmat[self.body].reshape(3, 3)
+        return self.d.xpos[self.body] + R @ self.tip_body, R @ self.axis_body
+
+    def solve(self, target, q_seed, max_tilt_deg: float = 6.0, iters: int = 80, pos_tol: float = 2e-4) -> IKResult:
+        target = np.asarray(target, float)
+        down = np.array([0.0, 0.0, -1.0])
+        q = np.clip(np.asarray(q_seed, float), self.lo, self.hi)
+        w_rot, lam = 0.06, 0.03
+        for _ in range(iters):
+            p, a = self.fk(q)
+            e_p = target - p
+            e_r = np.cross(a, down)                       # rotation that turns the pen axis toward straight down
+            if np.linalg.norm(e_p) < pos_tol and np.degrees(np.arcsin(min(1.0, np.linalg.norm(e_r)))) < 0.5:
+                break
+            mujoco.mj_comPos(self.m, self.d)
+            mujoco.mj_jac(self.m, self.d, self._jp, self._jr, p, self.body)
+            Jp, Jr = self._jp[:, self.dadr], self._jr[:, self.dadr]
+            P = np.eye(3) - np.outer(a, a)                # spin about the pen axis is free
+            J = np.vstack([Jp, w_rot * (P @ Jr)])
+            e = np.concatenate([e_p, w_rot * (P @ e_r)])
+            dq = J.T @ np.linalg.solve(J @ J.T + lam ** 2 * np.eye(6), e)
+            step = np.linalg.norm(dq)
+            if step > 0.25:
+                dq *= 0.25 / step
+            q = np.clip(q + dq, self.lo, self.hi)
+        p, a = self.fk(q)
+        tilt = float(np.degrees(np.arccos(np.clip(a @ down, -1, 1))))
+        err = float(np.linalg.norm(target - p))
+        return IKResult(q=q, pos_err=err, tilt_deg=tilt, ok=err < 1e-3 and tilt <= max_tilt_deg)
