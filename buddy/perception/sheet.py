@@ -28,6 +28,7 @@ class SheetPose:
     confidence: float
     size_mm: tuple = (0.0, 0.0)
     corners_px: np.ndarray = field(default_factory=lambda: np.zeros((4, 2)))
+    cut_off: bool = False    # the white shape touches the image border: part of the sheet is out of view
 
     def as_tuple(self):
         return (self.x, self.y, self.yaw)
@@ -66,6 +67,8 @@ def find_sheet(rgb: np.ndarray, cam: CameraModel) -> Optional[SheetPose]:
     if cv2.contourArea(blob) < 0.01 * mask.size:
         return None
     corners_px = cv2.boxPoints(cv2.minAreaRect(blob))
+    bx, by, bw, bh = cv2.boundingRect(blob)
+    cut_off = bx <= 2 or by <= 2 or bx + bw >= mask.shape[1] - 2 or by + bh >= mask.shape[0] - 2
     W = cam.to_table(corners_px)
     sides = [np.linalg.norm(W[(i + 1) % 4] - W[i]) for i in range(4)]
     i_long = int(np.argmax(sides[:2]))
@@ -78,7 +81,7 @@ def find_sheet(rgb: np.ndarray, cam: CameraModel) -> Optional[SheetPose]:
     centre = W.mean(axis=0)
     err = abs(long_mm - C.SHEET_SIZE_MM[0]) + abs(short_mm - C.SHEET_SIZE_MM[1])
     conf = float(math.exp(-err / 12.0))
-    return SheetPose(float(centre[0]), float(centre[1]), yaw, conf, (long_mm, short_mm), corners_px)
+    return SheetPose(float(centre[0]), float(centre[1]), yaw, conf, (long_mm, short_mm), corners_px, cut_off)
 
 
 def sheet_mm_to_world(pose, pts_mm, z: float = C.SHEET_THICK) -> np.ndarray:
@@ -110,6 +113,17 @@ def check_lines(rgb: np.ndarray, cam: CameraModel, pose, lines_mm, n: int = 80, 
     return out
 
 
+def ink_fraction(rgb: np.ndarray, cam: CameraModel, pose, half_mm: float, step_mm: float = 1.0) -> float:
+    """Fraction of dark (inked) pixels in the square of half-size half_mm around the sheet centre."""
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    g = np.arange(-half_mm, half_mm + 1e-9, step_mm)
+    pts = np.array([(u, v) for u in g for v in g])
+    uv = np.round(cam.to_pixels(sheet_mm_to_world(pose, pts))).astype(int)
+    H, W = gray.shape
+    ok = (uv[:, 0] >= 0) & (uv[:, 0] < W) & (uv[:, 1] >= 0) & (uv[:, 1] < H)
+    return float((gray[uv[ok, 1], uv[ok, 0]] < 140).mean()) if ok.any() else 0.0
+
+
 def draw_overlay(rgb: np.ndarray, cam: CameraModel, sheet: Optional[SheetPose], lines_mm=None, coverage=None,
                  note: str = "") -> np.ndarray:
     img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR).copy()
@@ -119,20 +133,25 @@ def draw_overlay(rgb: np.ndarray, cam: CameraModel, sheet: Optional[SheetPose], 
         ax = cam.to_pixels(sheet_mm_to_world(sheet.as_tuple(), [(0, 0), (40, 0), (0, 40)]))
         cv2.arrowedLine(img, tuple(ax[0].astype(int)), tuple(ax[1].astype(int)), (0, 0, 255), 3, tipLength=0.2)
         cv2.arrowedLine(img, tuple(ax[0].astype(int)), tuple(ax[2].astype(int)), (0, 160, 0), 3, tipLength=0.2)
-        label = (f"sheet x={100 * sheet.x:.1f} cm y={100 * sheet.y:.1f} cm rot={math.degrees(sheet.yaw):.0f} deg  "
+        label = (f"sheet x={100 * sheet.x:.1f} cm y={round(100 * sheet.y, 1) + 0.0:.1f} cm "
+                 f"rot={math.degrees(sheet.yaw):.0f} deg  "
                  f"size {sheet.size_mm[0]:.0f}x{sheet.size_mm[1]:.0f} mm  conf {sheet.confidence:.2f}")
         cv2.putText(img, label, (int(c[0]) - 330, int(sheet.corners_px[:, 1].max()) + 40), cv2.FONT_HERSHEY_SIMPLEX,
                     0.8, (0, 0, 0), 4, cv2.LINE_AA)
         cv2.putText(img, label, (int(c[0]) - 330, int(sheet.corners_px[:, 1].max()) + 40), cv2.FONT_HERSHEY_SIMPLEX,
                     0.8, (255, 255, 255), 2, cv2.LINE_AA)
-        if lines_mm is not None:
+        if lines_mm is not None:                     # the plan, semi-transparent so the real ink stays visible
+            plan, labels = img.copy(), []
             for i, (a, b) in enumerate(lines_mm):
                 uv = cam.to_pixels(sheet_mm_to_world(sheet.as_tuple(), [a, b])).astype(int)
                 cov = None if coverage is None else coverage[i]
-                col = (200, 200, 200) if cov is None else ((60, 200, 60) if cov >= C.LINE_OK_COVERAGE else (40, 40, 230))
-                cv2.line(img, tuple(uv[0]), tuple(uv[1]), col, 1 if cov is None else 2, cv2.LINE_AA)
+                col = (170, 170, 170) if cov is None else ((60, 200, 60) if cov >= C.LINE_OK_COVERAGE else (40, 40, 230))
+                cv2.line(plan, tuple(uv[0]), tuple(uv[1]), col, 6, cv2.LINE_AA)
                 if cov is not None:
-                    cv2.putText(img, f"{100 * cov:.0f}%", tuple(uv[0] + [6, -6]), cv2.FONT_HERSHEY_SIMPLEX, 0.7, col, 2)
+                    labels.append((f"{100 * cov:.0f}%", tuple(uv[0] + [6, -6]), col))
+            img = cv2.addWeighted(plan, 0.35, img, 0.65, 0)
+            for text, org, col in labels:
+                cv2.putText(img, text, org, cv2.FONT_HERSHEY_SIMPLEX, 0.7, col, 2, cv2.LINE_AA)
     if note:
         cv2.putText(img, note, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 5, cv2.LINE_AA)
         cv2.putText(img, note, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2, cv2.LINE_AA)
