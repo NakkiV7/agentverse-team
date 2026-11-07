@@ -43,8 +43,9 @@ intent:
 new_game: wants another game. list_games: asks which games Buddy knows.
 - choose_difficulty: asks Buddy to play easier or harder, or names a level (set level: easy, medium, hard, impossible, \
 or adaptive for "adjust to me"). "go easy on me" is easy, "play your best" / "don't hold back" is impossible.
-- teach_game: wants to teach Buddy a game of their own, or starts explaining the rules of a game ("let me teach you \
-one", "I know a different game", "here's how mine works", "we take turns putting...").
+- teach_game: ONLY when the player offers to teach or explain a game of THEIR OWN ("let me teach you one", "I know a \
+different game", "here's how mine works") or starts stating rules ("we take turns putting..."). "Let's play a game" \
+or "shall we play" is play_game, never teach_game.
 - yes / no: agrees or declines what Buddy just asked.
 - explain_rules: asks how to play. repeat: wants Buddy to say it again. stop: wants to stop or says goodbye.
 - choose_side: picks crosses or noughts (set side).
@@ -62,6 +63,7 @@ is centre. "top" alone is top_middle, "left" alone is middle_left. none unless i
 Examples:
 "how does it work again" -> {"intent":"explain_rules","game":"none","side":"none","cell":"none","game_name":"","level":"none"}
 "go on then" -> {"intent":"yes","game":"none","side":"none","cell":"none","game_name":"","level":"none"}
+"Buddy, let's play a game" -> {"intent":"play_game","game":"none","side":"none","cell":"none","game_name":"","level":"none"}
 "I'll be noughts" -> {"intent":"choose_side","game":"none","side":"noughts","cell":"none","game_name":"","level":"none"}
 "put mine in the top left please" -> {"intent":"move","game":"none","side":"none","cell":"top_left","game_name":"","level":"none"}
 "the middle one" -> {"intent":"move","game":"none","side":"none","cell":"centre","game_name":"","level":"none"}

@@ -248,6 +248,9 @@ class Brain:
             self._offer_taught(entry)
             return
         if st in ("CHAT", "CHOOSE_GAME"):
+            if intent == "teach_game" and not re.search(r"\b(teach|show you|explain|my game|a game i know|different game|rules|turns)\b", text.lower()):
+                self.app.trace("decide", "teach_game without any teaching words: treating it as play_game")
+                intent = "play_game"
             entry = None
             if intent == "choose_game":
                 entry = self.library.find("noughts and crosses") if u.game == "tic_tac_toe" else \
