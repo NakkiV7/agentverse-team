@@ -3,6 +3,47 @@
 Source of truth for the design: [buddy-architecture.pdf](buddy-architecture.pdf). This file turns it
 into four equal workstreams and the order to do things in. Shared rules first.
 
+## Read this first (7 Nov, evening)
+
+**Two codebases exist right now.** They share file paths and conflict in seven files, so they must not be
+merged automatically. Pick one at kickoff (10 minutes), then port the missing pieces across.
+
+| | `main` (PR #1, Nakkiv) | `hakim/sim-setup` (Hakim, 10 commits) |
+|---|---|---|
+| Sim | scene XML, ink texture, pen + touch sensor, mocap hand, reflex freeze | world built in code (MjSpec), ink texture, pen + touch sensor |
+| Arm | pen IK (sub-mm over the grid), no stroke planner yet | pen IK, **stroke controller: feel for the paper, draw at 0.8 N, lift**, grid planned on the sheet |
+| Vision | stub (depth hand flag only) | **sheet finder (<1 mm, 0.1°), blank check, line check with redraw** |
+| Brain | **tic-tac-toe minimax, cheat check, adaptive difficulty, tests**; agent stub | setup conversation to READY (no game play yet); phrase rules + Gemma 3 4B |
+| LLM | Gemma 4 E4B, `think:false`, JSON fallback when Ollama has no grammar support | Gemma 3 4B with `format` (returns 501 on current Homebrew Ollama builds) |
+| Voice | stub | **whisper.cpp + Silero VAD in, Kokoro out, wake word** |
+| Stage | stub | **demo page (port 8860) with scene buttons and a decision timeline, dry run** |
+| Safety | depth hand flag + freeze every tick (stub flag) | pause hook in the controller, no hand detection |
+| Shared | `contracts.py`, `bus.py`, this plan, uv `pyproject.toml` | `config.py` with provenance, pip `requirements.txt` |
+| Verified | tests pass, touch test and full process run (Nakkiv's Mac) | its 2 tests pass (Nakkiv's Mac); README numbers from Hakim's M4 |
+
+**Recommendation:** take `hakim/sim-setup` as the code base. It covers the demo path end to end and its author
+knows it. Port from `main`, in this order: this file; `buddy/game/tictactoe.py` + `tests/test_tictactoe.py`
+(the game play Hakim's brain stops short of); the `think: false` and JSON-fallback handling from
+`buddy/agent/llm.py` (and consider `gemma4`, which has image input for unclear marks); the depth hand flag
+and per-tick freeze from `buddy/sim/world.py` + `buddy/perception/perceive.py`; `contracts.py` as the agreed
+shapes between modules. One person does the port (an hour); the other three read the winning codebase meanwhile.
+
+**Roles are the same whichever base wins.** Claim yours here (edit this file on GitHub or open a PR):
+
+| Role | Owns | Name |
+|---|---|---|
+| Arm | sim, ink, motion | |
+| Vision | perception, overlay, hand flag | |
+| Brain | game, agent, Gemma | |
+| Voice and stage | voice, ui, pitch | |
+
+File names in the role sections below refer to `main`. On Hakim's base the equivalents are:
+`sim/world.py` ↔ `sim/world.py`; `motion/planner.py` ↔ `motion/controller.py` + `motion/drawing.py`;
+`perception/perceive.py` ↔ `perception/sheet.py`; `agent/agent.py` ↔ `agent/brain.py` + `agent/rules.py`;
+`voice/voice.py` ↔ `voice/stt.py` + `voice/tts.py`; `ui/server.py` ↔ `ui/server.py` + `ui/index.html`.
+
+---
+
 ## Rules we all keep
 
 1. **`buddy/contracts.py` is frozen after hour 1.** Change it only after telling everyone in the room.
