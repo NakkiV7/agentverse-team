@@ -1,4 +1,5 @@
 """Numbers the whole team shares. Keep units in the names."""
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -25,6 +26,9 @@ CONTROL_HZ = 200                       # reflex layer tick
 PEN_TOUCH_N = 0.15                     # touch sensor threshold for "pen is down"
 HAND_HEIGHT_M = 0.03                   # anything this far above the sheet is a hand
 
+# Server port
+PYTHON_PORT = int(os.environ.get("PYTHON_PORT", "8000"))
+
 # Language model (Ollama, local)
-OLLAMA_URL = "http://127.0.0.1:11434"
-LLM_MODEL = "gemma4"                   # E4B, vision capable; fallback "gemma4:e2b"
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
+LLM_MODEL = os.environ.get("LLM_MODEL", "gemma4")                   # E4B, vision capable; fallback "gemma4:e2b"

@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 
 const PORT = parseInt(process.env.PORT || '8000', 10);
-const PYTHON_PORT = 8000;
+const PYTHON_PORT = parseInt(process.env.PYTHON_PORT || '8000', 10);
 const HTML_FILE = path.join(__dirname, 'buddy', 'ui', 'index.html');
 
 // In-memory mock state when python backend is not running
@@ -34,7 +34,7 @@ const mockState = {
 const server = http.createServer((req, res) => {
   const urlPath = req.url.split('?')[0];
 
-  // Try proxying to Python backend if PORT is not 8000
+  // Try proxying to Python backend if PORT is not PYTHON_PORT
   if (PORT !== PYTHON_PORT && (urlPath === '/stream' || urlPath.startsWith('/api') || urlPath === '/say' || urlPath === '/scene' || urlPath === '/ptt')) {
     const proxyReq = http.request({
       hostname: '127.0.0.1',
@@ -48,7 +48,6 @@ const server = http.createServer((req, res) => {
     });
 
     proxyReq.on('error', () => {
-      // Python backend not running on port 8000, fall back to mock
       handleFallback(urlPath, req, res);
     });
 
@@ -111,7 +110,6 @@ function handleFallback(urlPath, req, res) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
   } else if (urlPath === '/stream') {
-    // Generate a placeholder SVG frame or JPEG
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('Camera stream is active when running via python -m buddy.main');
   } else {
