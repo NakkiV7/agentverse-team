@@ -131,6 +131,13 @@ class App:
         from .agent.llm import warm_up
         dt = warm_up(self.brain.conv)
         self.trace("system", f"language model ready (Gemma 3 4B via Ollama, warmed up in {dt:.1f} s)")
+        try:
+            from .agent.teach import TEACH_MODEL
+            from .agent.teach import warm_up as warm_teach
+            dt = warm_teach()
+            self.trace("system", f"teaching model ready ({TEACH_MODEL} via Ollama, warmed up in {dt:.1f} s)")
+        except Exception as e:  # noqa: BLE001
+            self.trace("system", f"teaching model not available ({e}); teaching a new game will not work")
 
     # ------------------------------------------------------------------ services for the brain
     def draw(self, name: str, strokes_mm, on_stroke=None, home: bool = True) -> Job:
@@ -202,6 +209,8 @@ class App:
                                               "conf": round(tr.confidence, 2), "visible": tr.visible,
                                               "stable": tr.stable},
             "board": b.board, "player": b.player_sym, "robot": b.robot_sym,
+            "game": {"name": b.game_name, "rules": b.rules_text(), "taught": b.spec is not None,
+                     "legal": b.legal_cells() if b.state in ("PLAYER_TURN", "CONFIRM_MARK") else []},
             "cells": None if snap is None else [{"mark": c.mark, "conf": round(c.confidence, 3)} for c in snap.cells],
             "safety": {"frozen": self.ctl.paused, "pixels": self.intrusion.pixels,
                        "height_cm": round(self.intrusion.max_height_cm, 1)},

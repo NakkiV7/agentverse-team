@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from .. import config as C
 
 INTENTS = ["play_game", "choose_game", "yes", "no", "explain_rules", "repeat", "stop", "smalltalk", "choose_side",
-           "move", "done", "new_game", "unclear"]
+           "move", "done", "new_game", "teach_game", "unclear"]
 GAMES = ["tic_tac_toe", "other", "none"]
 SIDES = ["crosses", "noughts", "none"]
 CELLS = ["top_left", "top_middle", "top_right", "middle_left", "centre", "middle_right", "bottom_left",
@@ -37,6 +37,8 @@ SYSTEM = """You are the language understanding of Buddy, a friendly robot arm th
 
 intent:
 - play_game: wants to play a game. choose_game: names a game (set game). new_game: wants another game.
+- teach_game: wants to teach Buddy a game of their own, or starts explaining the rules of a game ("let me teach you \
+one", "I know a different game", "here's how mine works", "we take turns putting...").
 - yes / no: agrees or declines what Buddy just asked.
 - explain_rules: asks how to play. repeat: wants Buddy to say it again. stop: wants to stop or says goodbye.
 - choose_side: picks crosses or noughts (set side).
@@ -56,6 +58,8 @@ Examples:
 "the middle one" -> {"intent":"move","game":"none","side":"none","cell":"centre"}
 "your go" -> {"intent":"done","game":"none","side":"none","cell":"none"}
 "can we play chess" -> {"intent":"choose_game","game":"other","side":"none","cell":"none"}
+"let me teach you a game my dad taught me" -> {"intent":"teach_game","game":"other","side":"none","cell":"none"}
+"it's a different one, you put each mark next to the last" -> {"intent":"teach_game","game":"other","side":"none","cell":"none"}
 "how are you today" -> {"intent":"smalltalk","game":"none","side":"none","cell":"none"}"""
 
 

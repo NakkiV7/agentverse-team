@@ -16,6 +16,9 @@ camera and only then committed.
 
 States: IDLE -> CHAT -> CHOOSE_GAME -> SETUP (WAIT_SHEET) -> ASK_SIDE -> PLAYER_TURN <-> ROBOT_TURN -> GAME_OVER
         PLAYER_TURN -> CONFIRM_MARK when a new mark is unclear or the wrong symbol
+        CHAT / CHOOSE_GAME -> TEACH (the player explains a game of their own; buddy/agent/teach.py runs the
+        interview with Gemma 4) -> OFFER_TAUGHT (Buddy reads the rules back, says what the solver found, offers a
+        game) -> SETUP ... the same loop, with buddy/game/solver.py choosing Buddy's moves
 """
 from __future__ import annotations
 
@@ -30,16 +33,23 @@ import numpy as np
 
 from .. import config as C
 from ..game import marks as M
+from ..game.rules import State, legal_moves
+from ..game.rules import result as game_result
+from ..game.solver import analyse
 from ..game.tictactoe import NAMES, Difficulty, choose, full, other, winner
 from ..motion.drawing import grid_lines_mm, sheet_to_world
 from ..perception.sheet import check_lines, ink_fraction
 from .llm import Conversation, reply
+from .teach import Teacher
 
 if TYPE_CHECKING:
     from ..app import App
 
 SYM = {"X": "cross", "O": "nought"}
-OFFER = "I'd love to. I know noughts and crosses. Shall we play that?"
+PLURAL = {"X": "crosses", "O": "noughts"}
+OFFER = "I'd love to. I know noughts and crosses, or you could teach me a game of yours. Shall we play noughts and crosses?"
+TEACH_INVITE = "I'd love to learn it. Tell me the rules in your own words, a sentence or two at a time."
+CANCEL_WORDS = ("never mind", "nevermind", "forget it", "stop", "cancel", "leave it")
 RULES = ("Here's how it works. We take turns putting our mark in one of the nine squares. One of us draws crosses, "
          "the other noughts. The first to get three in a row, across, down or corner to corner, wins.")
 STABLE_S = 1.2                 # a new mark must look the same for this long, with no hand over the paper
@@ -65,6 +75,10 @@ class Brain:
         self.games = 0
         self._seen, self._since = None, 0.0
         self.conv = Conversation()
+        self.spec = None                        # a game the player taught (GameSpec); None = noughts and crosses
+        self.solver = None                      # buddy/game/solver.py Solver for self.spec
+        self.gstate = None                      # rules.State for the taught game, kept in step with self.board
+        self.teacher = None                     # the running teaching conversation
         threading.Thread(target=self._loop, daemon=True, name="brain").start()
         threading.Thread(target=self._watch, daemon=True, name="board-watch").start()
 
@@ -87,12 +101,26 @@ class Brain:
     def free_cells(self):
         return [i for i in range(9) if not self.board[i] and i not in self.ignored]
 
+    def legal_cells(self):
+        """Where the player may put a mark now: any free square, or only next to the last mark in a taught game."""
+        if self.spec is not None and self.gstate is not None:
+            return [c for c in legal_moves(self.spec, self.gstate) if c not in self.ignored]
+        return self.free_cells()
+
+    @property
+    def game_name(self) -> str:
+        return (self.spec.name or "the game you taught me") if self.spec else "noughts and crosses"
+
+    def rules_text(self) -> str:
+        return self.spec.describe() if self.spec else RULES
+
     def situation(self) -> str:
         st = self.state
         if st in ("PLAYER_TURN", "CONFIRM_MARK", "ROBOT_TURN"):
-            free = ", ".join(NAMES[i] for i in self.free_cells()) or "none"
-            base = (f"A game is on. The player is {SYM[self.player_sym]}es, Buddy is {SYM[self.robot_sym]}s. "
-                    f"Free squares: {free}. ")
+            free = ", ".join(NAMES[i] for i in self.legal_cells()) or "none"
+            game = f"The game is {self.game_name}: {self.spec.describe()} " if self.spec else ""
+            base = (f"{game}A game is on. The player is {SYM[self.player_sym]}es, Buddy is {SYM[self.robot_sym]}s. "
+                    f"Squares the player may use: {free}. ")
             if st == "PLAYER_TURN":
                 return base + "It is the player's turn: they draw their mark, or say a square for Buddy to draw it."
             if st == "CONFIRM_MARK":
@@ -101,9 +129,11 @@ class Brain:
         return {
             "IDLE": "Buddy was resting; the player just said its name.",
             "CHAT": "Chatting. Buddy would like to offer a game of noughts and crosses.",
-            "CHOOSE_GAME": "Buddy asked whether they would like to play noughts and crosses.",
+            "CHOOSE_GAME": "Buddy asked whether they would like to play noughts and crosses, or teach it a game.",
+            "TEACH": "The player is teaching Buddy a new game.",
+            "OFFER_TAUGHT": f"Buddy learned the player's game and asked whether they want to play it. It said: {self.last_said}",
             "WAIT_SHEET": f"Buddy is waiting for a usable sheet of paper. It said: {self.last_said}",
-            "SETUP": "Buddy is drawing the noughts and crosses board on the paper.",
+            "SETUP": f"Buddy is drawing the board for {self.game_name} on the paper.",
             "ASK_SIDE": "The board is drawn. Buddy asked: crosses or noughts? Crosses go first.",
             "GAME_OVER": "The game has ended. Buddy asked whether they would like another game.",
         }.get(st, "")
@@ -137,6 +167,14 @@ class Brain:
                 return
             self.set_state("CHAT", "woken up by name")
         self.app.transcript_add("Player", text)
+        if self.state == "TEACH":
+            if any(w in text.lower() for w in CANCEL_WORDS):
+                self.spec = None
+                self.set_state("CHOOSE_GAME", "the player stopped teaching")
+                self.say("No problem. Shall we play noughts and crosses instead?")
+            else:
+                self._teach(text)
+            return
         sit = self.situation()
         u = self.conv.understand(text, sit)
         extra = f", cell={NAMES[u.cell]}" if u.cell is not None else ""
@@ -160,21 +198,35 @@ class Brain:
                 self.set_state("CHOOSE_GAME", "explained the rules and offered a game")
             return
         if st in ("CHAT", "CHOOSE_GAME"):
-            if (intent == "choose_game" and u.game == "tic_tac_toe") or (intent == "yes" and st == "CHOOSE_GAME") \
+            if intent == "teach_game" or (intent == "choose_game" and u.game == "other"):
+                self.start_teaching("the player wants to teach me a game" if intent == "teach_game"
+                                    else "asked for a game I don't know: asking to be taught")
+            elif (intent == "choose_game" and u.game == "tic_tac_toe") or (intent == "yes" and st == "CHOOSE_GAME") \
                     or intent == "new_game":
+                self.spec = None
                 self.start_setup("the player wants noughts and crosses")
             elif intent in ("play_game", "yes"):
                 self.set_state("CHOOSE_GAME", "the player wants to play")
                 self.say(OFFER)
-            elif intent == "choose_game" and u.game == "other":
-                self.set_state("CHOOSE_GAME", "asked for a game I don't know")
-                self._chat_reply(text, sit + " They asked for a game Buddy doesn't know.",
-                                 "Shall we play noughts and crosses?")
             elif intent in ("no", "stop"):
                 self.set_state("IDLE", "the player does not want to play now")
                 self.say("No problem at all. Just say Buddy whenever you fancy a game.")
             else:
                 self._chat_reply(text, sit)
+            return
+        if st == "OFFER_TAUGHT":
+            if intent in ("yes", "play_game", "new_game") or (intent == "choose_game" and u.game == "other"):
+                self.start_setup(f"the player wants to play {self.game_name}")
+            elif intent == "teach_game":
+                self.start_teaching("the player wants to teach me another game")
+            elif intent in ("no", "stop"):
+                self.spec = None
+                self.set_state("CHOOSE_GAME", "the player does not want to play the taught game")
+                self.say("That's fine. Shall we play noughts and crosses instead?")
+            elif intent == "explain_rules":
+                self.say(self.rules_text() + " Shall we play it?")
+            else:
+                self._chat_reply(text, sit, "Shall we play it?")
             return
         if st in ("SETUP", "WAIT_SHEET", "ROBOT_TURN"):
             if intent == "stop":
@@ -216,8 +268,12 @@ class Brain:
                 self.say(self.last_said)
             return
         if st == "GAME_OVER":
-            if intent in ("yes", "new_game", "play_game", "choose_game"):
-                self.start_setup("the player wants another game")
+            if intent == "teach_game" or (intent == "choose_game" and u.game == "other"):
+                self.start_teaching("the player wants to teach me a game")
+            elif intent in ("yes", "new_game", "play_game", "choose_game"):
+                if intent == "choose_game" and u.game == "tic_tac_toe":
+                    self.spec = None
+                self.start_setup(f"the player wants another game of {self.game_name}")
             elif intent in ("no", "stop"):
                 self.end_session()
             else:
@@ -227,6 +283,41 @@ class Brain:
         self.set_state("IDLE", "the player wants to stop")
         self.conv.reset()
         self.say("Thank you, that was lovely. Just say Buddy whenever you want to play again.")
+
+    # ------------------------------------------------------------------ teaching: learn a game from the player
+    def start_teaching(self, why: str):
+        self.set_state("TEACH", why)
+        self.teacher = Teacher()
+        self.say(TEACH_INVITE)
+
+    def _teach(self, text: str):
+        turn = self.teacher.hear(text)
+        d = turn.draft
+        self.app.trace("understand", f"Gemma 4 ({self.teacher.model}): grid {d.rows}x{d.cols}, placement {d.placement}, "
+                                     f"end {d.end}" + (f" k={d.k}" if d.k else "") + f", first {d.first_player}"
+                                     + (f"; asks: {d.question!r}" if d.question and not turn.done else "")
+                                     + f" ({turn.seconds:.1f} s)")
+        if not turn.done:
+            self.say(turn.say)
+            return
+        if turn.spec is None:
+            self.set_state("CHOOSE_GAME", "could not learn that game")
+            self.say(turn.say + " Shall we play noughts and crosses instead?")
+            return
+        spec = turn.spec
+        if (spec.rows, spec.cols) != (3, 3):
+            self.set_state("CHOOSE_GAME", f"the taught game needs a {spec.rows}x{spec.cols} board")
+            self.say("I've understood it, but for now I can only draw a three by three board. "
+                     "Shall we play noughts and crosses instead?")
+            return
+        self.say(turn.say, wait=True)                      # "Let me make sure I have it. ..."
+        self.solver, a = analyse(spec)
+        self.spec = spec
+        self.app.trace("plan", f"solved the game: {a.nodes} positions in {a.seconds * 1000:.0f} ms, outcome with "
+                               f"perfect play: {a.outcome}" + (f", winning first squares: "
+                               + ", ".join(NAMES[c] for c in a.winning_first_moves) if a.winning_first_moves else ""))
+        self.set_state("OFFER_TAUGHT", "learned the game and solved it")
+        self.say("Let me think... " + a.speak(spec) + " Shall we play it?")
 
     # ------------------------------------------------------------------ setup: find the sheet, draw the board
     def start_setup(self, why: str):
@@ -283,7 +374,7 @@ class Brain:
                                                                               f"({names[todo[k]]})"))
             if attempt == 0:
                 time.sleep(2.0)
-                self.say(RULES)
+                self.say(self.rules_text())
             job.done.wait()
             if not job.ok:
                 self.set_state("CHAT", "drawing failed")
@@ -300,7 +391,8 @@ class Brain:
             app.trace("decide", f"redrawing line(s) {', '.join(str(i + 1) for i in todo)}")
         self.board = [""] * 9
         self.ignored = set()
-        self.say("There we are. Would you like to be crosses or noughts? Crosses go first.")
+        self.gstate = State.start(self.spec) if self.spec else None
+        self.say("There we are. Would you like to be crosses or noughts?" + (" Crosses go first." if not self.spec else ""))
         self.set_state("ASK_SIDE", "the board is drawn and checked")
 
     # ------------------------------------------------------------------ the game
@@ -309,13 +401,16 @@ class Brain:
         self.games += 1
         self.app.trace("decide", f"game {self.games}: player {SYM[player_sym]}es, Buddy {SYM[self.robot_sym]}s, "
                                  f"Buddy plays the best move {100 * self.difficulty.strength:.0f}% of the time")
-        if player_sym == "X":
-            self.set_state("PLAYER_TURN", "the player chose crosses and goes first")
-            self.say("Crosses for you, so you go first. Draw your cross in any square, or tell me the square and "
-                     "I'll draw it for you.")
+        player_first = (self.spec.first_player == "player") if self.spec else (player_sym == "X")
+        if self.spec:
+            self.gstate = State.start(self.spec, player_sym if player_first else self.robot_sym)
+        if player_first:
+            self.set_state("PLAYER_TURN", f"the player chose {SYM[player_sym]}es and goes first")
+            self.say(f"{PLURAL[player_sym].capitalize()} for you, and you go first. Draw your {SYM[player_sym]} in any "
+                     "square, or tell me the square and I'll draw it for you.")
         else:
-            self.set_state("ROBOT_TURN", "the player chose noughts, so Buddy goes first")
-            self.say("Noughts for you, so I'll start.")
+            self.set_state("ROBOT_TURN", f"the player chose {SYM[player_sym]}es; Buddy goes first")
+            self.say(f"{PLURAL[player_sym].capitalize()} for you, so I'll start.")
             self._worker(self._robot_move)
 
     def _watch(self):
@@ -375,8 +470,16 @@ class Brain:
         self._commit_player(new)
 
     def _commit_player(self, cells):
+        if self.spec is not None and self.gstate is not None:
+            bad = [c for c in cells if c not in legal_moves(self.spec, self.gstate)]
+            if bad:
+                self.app.trace("decide", f"the {NAMES[bad[0]]} is not allowed by the rules ({self.spec.placement}): "
+                                         "pointing it out kindly and carrying on from there")
+                self.say(f"Remember, in this game the mark has to go next to the last one. I'll let it go this once.")
         for c in cells:
             self.board[c] = self.player_sym
+        if self.spec is not None:
+            self.gstate = State(tuple(self.board), cells[-1], self.robot_sym)
         self.app.trace("decide", "the player played the " + " and ".join(NAMES[c] for c in cells))
         self._seen = None
         if not self._game_over():
@@ -386,6 +489,11 @@ class Brain:
     def _voice_move(self, cell: int):
         if cell not in self.free_cells():
             self.say(f"The {NAMES[cell]} is already taken. Which other square would you like?")
+            return
+        if cell not in self.legal_cells():
+            allowed = ", ".join(NAMES[c] for c in self.legal_cells()) or "none"
+            self.say(f"In this game it has to go next to the last mark, so the {NAMES[cell]} isn't allowed. "
+                     f"You could use the {allowed}.")
             return
         self.app.trace("decide", f"the player asked me to draw their {SYM[self.player_sym]} in the {NAMES[cell]}")
         self.say(f"Your {SYM[self.player_sym]} in the {NAMES[cell]}. Here it comes.")
@@ -405,9 +513,13 @@ class Brain:
         return snap.cells if snap else None
 
     def _robot_move(self):
-        ch = choose(self.board, self.robot_sym, self.difficulty, self.rng)
+        if self.spec is not None:
+            ch = self.solver.choose(self.gstate, self.difficulty, self.rng)
+        else:
+            ch = choose(self.board, self.robot_sym, self.difficulty, self.rng)
         shown = ", ".join(f"{NAMES[i]} {s:+d}" for i, s in sorted(ch.scores.items(), key=lambda kv: -kv[1])[:4])
-        self.app.trace("plan", f"minimax scores (win +, loss -): {shown} -> {NAMES[ch.cell]}: {ch.reason}")
+        self.app.trace("plan", f"{'solver' if self.spec else 'minimax'} scores (win +, loss -): {shown} -> "
+                               f"{NAMES[ch.cell]}: {ch.reason}")
         self.say(f"I'll take the {NAMES[ch.cell]}.")
         for attempt in range(2):
             job = self.app.draw(f"my {SYM[self.robot_sym]}", M.robot_mark(self.robot_sym, ch.cell))
@@ -423,12 +535,22 @@ class Brain:
                 break
             self.app.trace("decide", "my mark did not come out clearly: drawing it again")
         self.board[ch.cell] = self.robot_sym
+        if self.spec is not None:
+            self.gstate = State(tuple(self.board), ch.cell, self.player_sym)
         self._seen = None
         if not self._game_over():
             self.set_state("PLAYER_TURN", "Buddy has played")
             self.say("Your turn.")
 
     def _game_over(self) -> bool:
+        if self.spec is not None:
+            r = game_result(self.spec, self.gstate)
+            if r is None:
+                return False
+            self.set_state("GAME_OVER", "draw" if r[0] == "draw" else
+                           f"{PLURAL[r[1]]} win" + (" with a line" if r[2] else ": the other side cannot move"))
+            self._worker(self._finish_taught, r)
+            return True
         w = winner(self.board)
         if not w and not full(self.board):
             return False
@@ -451,5 +573,31 @@ class Brain:
         else:
             self.say("It's a draw! Neither of us gave an inch.")
             result = "draw"
+        self.app.trace("decide", "difficulty: " + self.difficulty.update(result))
+        self.say("Shall we play another? Pop a fresh sheet down and say yes.")
+
+    def _finish_taught(self, r):
+        kind, sym, line = r
+        job = None
+        if line:
+            self.app.trace("plan", f"{self.spec.k} in a row: {', '.join(NAMES[c] for c in line)}: drawing the line")
+            job = self.app.draw("the line", M.win_line(list(line)))
+        if kind == "draw":
+            self.say("It's a draw! Neither of us gave an inch.")
+            result = "draw"
+        else:
+            buddy_won = sym == self.robot_sym
+            result = "loss" if buddy_won else "win"
+            if self.spec.end == "no_legal_move_loses":
+                self.say("You can't move anywhere, so that's my win! Well played though." if buddy_won
+                         else "I'm stuck, I can't move anywhere. You win, well done!")
+            elif self.spec.end == "k_in_a_row_loses":
+                self.say(f"{self.spec.k} in a row, and in this game that means you lose. My win, but a good game!"
+                         if buddy_won else f"Oh no, I made {self.spec.k} in a row. That's your win, well done!")
+            else:
+                self.say(f"{self.spec.k} in a row for me! Well played though, that was a good game." if buddy_won
+                         else f"{self.spec.k} in a row! Well done, you beat me fair and square.")
+        if job is not None:
+            job.done.wait()
         self.app.trace("decide", "difficulty: " + self.difficulty.update(result))
         self.say("Shall we play another? Pop a fresh sheet down and say yes.")

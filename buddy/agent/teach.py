@@ -144,6 +144,18 @@ class Teacher:
         return TeachTurn(self.draft, q, False, None, dt)
 
 
+def warm_up(model: str = TEACH_MODEL) -> float:
+    """Load the teaching model once at start-up so the first lesson is not slowed by a cold start (~6 s)."""
+    t0 = time.perf_counter()
+    body = {"model": model, "messages": [{"role": "user", "content": "hi"}], "stream": False, "think": False,
+            "keep_alive": "30m", "options": {"num_predict": 1}}
+    req = urllib.request.Request(f"{C.OLLAMA_URL}/api/chat", data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=120):
+        pass
+    return time.perf_counter() - t0
+
+
 def _default_question(d: Draft) -> str:
     if d.placement == "unspecified":
         return "Where can a mark go: any empty square, or only next to the last one played?"
