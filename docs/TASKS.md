@@ -14,7 +14,7 @@ merged automatically. Pick one at kickoff (10 minutes), then port the missing pi
 | Arm | pen IK (sub-mm over the grid), no stroke planner yet | pen IK, **stroke controller: feel for the paper, draw at 0.8 N, lift**, grid planned on the sheet |
 | Vision | stub (depth hand flag only) | **sheet finder (<1 mm, 0.1°), blank check, line check with redraw** |
 | Brain | **tic-tac-toe minimax, cheat check, adaptive difficulty, tests**; agent stub | setup conversation to READY (no game play yet); phrase rules + Gemma 3 4B |
-| LLM | Gemma 4 E4B, `think:false`, JSON fallback when Ollama has no grammar support | Gemma 3 4B with `format` (returns 501 on current Homebrew Ollama builds) |
+| LLM | Gemma 4 E4B (image input), `think:false`, JSON fallback because Ollama's MLX backend for Gemma 4 has no grammar support | Gemma 3 4B with `format` (works: the llama.cpp backend has grammar support) |
 | Voice | stub | **whisper.cpp + Silero VAD in, Kokoro out, wake word** |
 | Stage | stub | **demo page (port 8860) with scene buttons and a decision timeline, dry run** |
 | Safety | depth hand flag + freeze every tick (stub flag) | pause hook in the controller, no hand detection |
@@ -24,7 +24,7 @@ merged automatically. Pick one at kickoff (10 minutes), then port the missing pi
 **Recommendation:** take `hakim/sim-setup` as the code base. It covers the demo path end to end and its author
 knows it. Port from `main`, in this order: this file; `buddy/game/tictactoe.py` + `tests/test_tictactoe.py`
 (the game play Hakim's brain stops short of); the `think: false` and JSON-fallback handling from
-`buddy/agent/llm.py` (and consider `gemma4`, which has image input for unclear marks); the depth hand flag
+`buddy/agent/llm.py` only if the team moves to `gemma4` (image input for unclear marks; it needs them, Gemma 3 does not); the depth hand flag
 and per-tick freeze from `buddy/sim/world.py` + `buddy/perception/perceive.py`; `contracts.py` as the agreed
 shapes between modules. One person does the port (an hour); the other three read the winning codebase meanwhile.
 
@@ -123,9 +123,9 @@ Owns the game and the conversation. The minimax and the Gemma client exist; the 
       spoken lines in 0.3 to 0.5 s on the M5 (nothing else running). If it gets slow with the sim up, try
       `gemma4:e2b` or shorter prompts. Tune the prompts in `buddy/agent/llm.py`.
       Two things we learned: Gemma 4 *thinks* by default (seconds, and `content` comes back empty), so the
-      client sends `think: false`; and the Homebrew Ollama build on Apple silicon has no grammar library, so
-      JSON-schema `format` answers 501 and the client falls back to asking for JSON in the prompt and
-      validating it itself. The official Ollama app may restore constrained decoding; not required.
+      client sends `think: false`; and Ollama runs Gemma 4 on its MLX backend, which has no grammar library,
+      so JSON-schema `format` answers 501 for `gemma4` and the client falls back to asking for JSON in the
+      prompt and validating it itself. `gemma3:4b` runs on the llama.cpp backend and `format` works there.
 - [ ] **Hour 5:** `Agent.run()`: the full state machine (IDLE → GREET → CHOOSE_GAME → SETUP → PLAYER_TURN ↔
       ROBOT_TURN → GAME_OVER). Player's mark from `bus.percept` via `Game.check_player`; robot's move via
       `Game.robot_move`; `MotionCommand(draw=x_strokes(cell))`; results via `Game.result()`; difficulty via
