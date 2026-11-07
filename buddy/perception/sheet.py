@@ -66,7 +66,8 @@ def find_sheet(rgb: np.ndarray, cam: CameraModel) -> Optional[SheetPose]:
     blob = max(contours, key=cv2.contourArea)
     if cv2.contourArea(blob) < 0.01 * mask.size:
         return None
-    corners_px = cv2.boxPoints(cv2.minAreaRect(blob))
+    # the convex hull keeps the rectangle right when the arm hides part of the sheet (as long as its corners show)
+    corners_px = cv2.boxPoints(cv2.minAreaRect(cv2.convexHull(blob)))
     bx, by, bw, bh = cv2.boundingRect(blob)
     cut_off = bx <= 2 or by <= 2 or bx + bw >= mask.shape[1] - 2 or by + bh >= mask.shape[0] - 2
     W = cam.to_table(corners_px)
@@ -82,6 +83,39 @@ def find_sheet(rgb: np.ndarray, cam: CameraModel) -> Optional[SheetPose]:
     err = abs(long_mm - C.SHEET_SIZE_MM[0]) + abs(short_mm - C.SHEET_SIZE_MM[1])
     conf = float(math.exp(-err / 12.0))
     return SheetPose(float(centre[0]), float(centre[1]), yaw, conf, (long_mm, short_mm), corners_px, cut_off)
+
+
+@dataclass
+class Track:
+    pose: tuple               # (x, y, yaw) of the last reliable sighting
+    visible: bool             # seen reliably in the latest frame (size matches A4, not cut off)
+    stable: bool              # the last sightings over STABLE_S agree within STABLE_MM / STABLE_DEG
+    confidence: float
+    t: float
+
+
+class SheetTracker:
+    """Turns per-frame sightings into a track the arm controller can rely on while it draws. A sighting only
+    counts when the rectangle still measures as A4 (an arm hiding a corner shrinks it, so it is ignored)."""
+    MIN_CONF, STABLE_S, STABLE_MM, STABLE_DEG = 0.85, 0.6, 1.0, 0.4
+
+    def __init__(self):
+        self.hist: list = []
+        self.track: Optional[Track] = None
+
+    def update(self, sheet: Optional[SheetPose], t: float) -> Optional[Track]:
+        if sheet is None or sheet.cut_off or sheet.confidence < self.MIN_CONF:
+            if self.track is not None:
+                self.track = Track(self.track.pose, False, False, sheet.confidence if sheet else 0.0, t)
+            return self.track
+        p = sheet.as_tuple()
+        self.hist = [(tt, q) for tt, q in self.hist if t - tt <= self.STABLE_S] + [(t, p)]
+        stable = len(self.hist) >= 3 and all(
+            1000 * math.hypot(q[0] - p[0], q[1] - p[1]) < self.STABLE_MM and
+            abs(math.degrees((q[2] - p[2] + math.pi) % (2 * math.pi) - math.pi)) < self.STABLE_DEG
+            for _, q in self.hist)
+        self.track = Track(p, True, stable, sheet.confidence, t)
+        return self.track
 
 
 def sheet_mm_to_world(pose, pts_mm, z: float = C.SHEET_THICK) -> np.ndarray:

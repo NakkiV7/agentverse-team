@@ -36,14 +36,22 @@ class MotionError(RuntimeError):
     pass
 
 
+class SheetMoved(Exception):
+    pass
+
+
 @dataclass
 class Job:
+    """Strokes are given on the SHEET (mm, sheet frame). `sheet` returns the camera's latest sheet track; each stroke
+    is placed in the world with the pose measured at that moment, and watched while it is drawn."""
     name: str
-    strokes: list = field(default_factory=list)      # list of world-frame polylines [(x, y), ...]
+    strokes_mm: list = field(default_factory=list)
+    sheet: Optional[Callable] = None
     home: bool = False
     done: threading.Event = field(default_factory=threading.Event)
     ok: bool = False
     error: str = ""
+    replans: int = 0
     on_stroke: Optional[Callable[[int, int], None]] = None    # called before each stroke (index, total)
 
 
@@ -151,28 +159,74 @@ class ArmController:
             yield self._ik([xy[0], xy[1], z])
 
     # ------------------------------------------------------------------ jobs
+    MOVE_MM, MOVE_DEG = 3.0, 1.5          # the sheet counts as moved beyond this (camera noise is ~0.3 mm)
+
+    def _moved(self, a, b) -> tuple[float, float]:
+        d = 1000 * math.hypot(b[0] - a[0], b[1] - a[1])
+        return d, abs(math.degrees((b[2] - a[2] + math.pi) % (2 * math.pi) - math.pi))
+
+    def _wait_stable(self, job: Job, why: str):
+        """Hold still (pen up) until the camera sees the sheet again, not moving."""
+        t = 0.0
+        while True:
+            tr = job.sheet()
+            if tr is not None and tr.visible and tr.stable:
+                return tr.pose
+            t += DT
+            if t > 20.0:
+                raise MotionError(f"{why}: the sheet did not settle within 20 s")
+            yield self.q_cmd
+
+    def _stroke(self, job: Job, pose, stroke_mm, expect, hover):
+        from .drawing import sheet_to_world
+        world = sheet_to_world(pose, stroke_mm)
+
+        def watch():
+            tr = job.sheet()
+            if tr is not None and tr.visible:
+                d, a = self._moved(pose, tr.pose)
+                if d > self.MOVE_MM or a > self.MOVE_DEG:
+                    raise SheetMoved(f"{d:.0f} mm, {a:.1f} deg")
+
+        for gen in (self._line([world[0][0], world[0][1], expect + hover], C.TRAVEL_SPEED),
+                    self._feel_for_paper(expect), self._draw(world)):
+            for q in gen:
+                watch()
+                yield q
+
     def _run(self, job: Job):
         expect = C.SHEET_THICK if self.surface_z is None else self.surface_z
         hover = C.HOVER_MM / 1000.0
-        if job.strokes:
+        if job.strokes_mm:
+            from .drawing import sheet_to_world
             self.at_home = False
-            first = job.strokes[0][0]
+            pose = yield from self._wait_stable(job, "before drawing")
+            first = sheet_to_world(pose, [job.strokes_mm[0][0]])[0]
             above = np.array([first[0], first[1], expect + 0.03])
             seed = np.array([math.atan2(first[1], first[0] - 0.039), 0.0, 0.5, 1.2, 0.0])
             r = self.ik.solve(above, seed, max_tilt_deg=20.0)
             if not r.ok:
                 raise MotionError(f"the first stroke starts out of reach ({100 * first[0]:.1f}, {100 * first[1]:.1f}) cm")
-            self.log("act", "moving the pen above the sheet")
+            self.log("act", f"{job.name}: moving the pen above the sheet")
             yield from self._joint_move(r.q)
             self.tip_cmd = above
-            for k, stroke in enumerate(job.strokes):
+            for k, stroke in enumerate(job.strokes_mm):
                 if job.on_stroke:
-                    job.on_stroke(k, len(job.strokes))
-                start = stroke[0]
-                yield from self._line([start[0], start[1], expect + hover], C.TRAVEL_SPEED)
-                yield from self._feel_for_paper(expect)
+                    job.on_stroke(k, len(job.strokes_mm))
+                while True:
+                    try:
+                        yield from self._stroke(job, pose, stroke, expect, hover)
+                        break
+                    except SheetMoved as e:
+                        job.replans += 1
+                        self.log("adapt", f"the sheet moved ({e}) while I was drawing: pen up, waiting for it to "
+                                          "settle, then redrawing this stroke where the paper is now")
+                        yield from self._line([self.tip_cmd[0], self.tip_cmd[1], (self.surface_z or expect) + 0.025],
+                                              C.TRAVEL_SPEED)
+                        pose = yield from self._wait_stable(job, "after the sheet moved")
+                        self.log("adapt", f"sheet settled at ({100 * pose[0]:.1f}, {100 * pose[1]:.1f}) cm, "
+                                          f"{math.degrees(pose[2]):.0f} deg: re-planned")
                 expect = self.surface_z
-                yield from self._draw(stroke)
                 yield from self._line([self.tip_cmd[0], self.tip_cmd[1], expect + hover], C.TRAVEL_SPEED)
             yield from self._line([self.tip_cmd[0], self.tip_cmd[1], expect + 0.03], C.TRAVEL_SPEED)
         if job.home:
