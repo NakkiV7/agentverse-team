@@ -3,9 +3,11 @@
 GET  /             the page (buddy/ui/index.html)
 GET  /overhead.jpg overhead camera with the perception overlay
 GET  /scene.jpg    3/4 view of the arm
+GET  /sheet.jpg    the sheet straightened top-down, with the mark classifier's reading of each cell
 GET  /state.json   state machine, pipeline trace, conversation, sensors
 POST /say          {"text": ...}  typed input, same path as the microphone
-POST /scene        {"action": new_sheet | slide | rotate | far | remove | back}
+POST /scene        {"action": new_sheet | slide | rotate | far | remove | back | reach | player_mark, "arg": cell}
+POST /draw         {"strokes": [[[x_mm, y_mm], ...], ...]}  the player's hand draws these on the sheet
 POST /mic          {"enabled": true/false}
 """
 from __future__ import annotations
@@ -39,6 +41,8 @@ def serve(app, port: int):
                 self._send(app.overhead_jpg, "image/jpeg")
             elif path == "/scene.jpg":
                 self._send(app.scene_jpg, "image/jpeg")
+            elif path == "/sheet.jpg":
+                self._send(app.sheet_jpg, "image/jpeg")
             elif path == "/state.json":
                 self._send(json.dumps(app.state()).encode(), "application/json")
             else:
@@ -54,7 +58,11 @@ def serve(app, port: int):
             if path == "/say" and str(data.get("text", "")).strip():
                 app.brain.hear(str(data["text"]).strip()[:300], "typed")
             elif path == "/scene":
-                app.scene_actions.put(str(data.get("action", "")))
+                app.scene_actions.put((str(data.get("action", "")), data.get("arg")))
+            elif path == "/draw":
+                strokes = [[(float(p[0]), float(p[1])) for p in st] for st in data.get("strokes", []) if len(st) >= 2]
+                if strokes:
+                    app.scene_actions.put(("strokes", strokes))
             elif path == "/mic" and app.listener is not None:
                 app.listener.enabled = bool(data.get("enabled", True))
             self._send(b"{}", "application/json")
