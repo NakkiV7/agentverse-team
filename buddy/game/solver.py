@@ -19,7 +19,7 @@ WIN = 100
 
 
 class Solver:
-    def __init__(self, spec: GameSpec, node_budget: int = 3_000_000, lookahead: int = 6):
+    def __init__(self, spec: GameSpec, node_budget: int = 400_000, lookahead: int = 6):
         self.spec = spec
         self.memo: dict = {}
         self.nodes = 0
@@ -167,7 +167,7 @@ def _join(names: list[str]) -> str:
     return ", ".join(names[:-1]) + " or " + names[-1]
 
 
-def analyse(spec: GameSpec, first: str = "X", node_budget: int = 3_000_000) -> tuple[Solver, Analysis]:
+def analyse(spec: GameSpec, first: str = "X", node_budget: int = 400_000) -> tuple[Solver, Analysis]:
     """Solve the game from the empty board. Returns the solver (with its memo, ready to play) and the verdict."""
     t0 = time.perf_counter()
     solver = Solver(spec, node_budget=node_budget)
