@@ -1,0 +1,75 @@
+<!-- Buddy world: SO-101 arm with a pen, a table, a free A4 sheet with a paintable ink texture,
+     an overhead RGB-D camera and a mocap "hand" that can be moved over the sheet.
+     Frames (see docs/buddy-architecture.pdf): robot base at the origin, x forward, y to the
+     robot's left, z up, z = 0 on the table top. -->
+<mujoco model="buddy">
+  <include file="../assets/so101/so101_buddy.xml"/>
+  <compiler angle="radian" meshdir="../assets/so101/assets" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast" cone="elliptic" impratio="10"/>
+
+  <visual>
+    <headlight diffuse="0.5 0.5 0.5" ambient="0.35 0.35 0.35" specular="0.1 0.1 0.1"/>
+    <global azimuth="150" elevation="-25" offwidth="1280" offheight="960"/>
+    <quality shadowsize="4096"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.85 0.88 0.92" rgb2="0.55 0.6 0.7" width="256" height="1536"/>
+    <texture name="wood" type="2d" builtin="flat" rgb1="0.78 0.62 0.42" width="32" height="32"/>
+    <material name="wood" texture="wood" specular="0.2" shininess="0.2" reflectance="0.05"/>
+    <!-- Ink lives in this texture: 2 px per mm of A4 (297 x 210 mm). buddy.sim.ink paints into it. -->
+    <texture name="sheet_tex" type="2d" builtin="flat" rgb1="1 1 1" width="594" height="420"/>
+    <material name="sheet_mat" texture="sheet_tex" specular="0.05" shininess="0.05"/>
+    <!-- Top face of the sheet as a textured quad: u runs along x (long edge), v along y. -->
+    <mesh name="sheet_quad" inertia="shell"
+          vertex="-0.1485 -0.105 0   0.1485 -0.105 0   0.1485 0.105 0   -0.1485 0.105 0"
+          face="0 1 2   0 2 3"
+          texcoord="0 0   1 0   1 1   0 1"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0.3 0.2 1.5" dir="-0.2 -0.1 -1" directional="false" diffuse="0.8 0.8 0.8" castshadow="true"/>
+    <light pos="-0.5 -0.8 1.2" dir="0.4 0.6 -1" directional="true" diffuse="0.3 0.3 0.3" castshadow="false"/>
+    <geom name="floor" type="plane" size="3 3 0.1" pos="0 0 -0.75" rgba="0.6 0.6 0.62 1"/>
+    <!-- Table top is the z = 0 plane. -->
+    <geom name="table" type="box" size="0.5 0.4 0.02" pos="0.2 0 -0.02" material="wood" friction="1.0 0.005 0.0001"/>
+
+    <!-- A4 sheet, landscape for the player (long edge along robot y, so sheet yaw = +90 deg), centred
+         about 21 cm in front of the base. Free so a player can slide it. -->
+    <body name="sheet" pos="0.21 0 0.0011" quat="0.7071068 0 0 0.7071068">
+      <freejoint name="sheet_free"/>
+      <geom name="sheet_box" type="box" size="0.1485 0.105 0.001" rgba="0.97 0.97 0.97 1" density="160"
+            friction="1.0 0.005 0.0001" condim="3" solref="0.005 1" solimp="0.95 0.99 0.001"/>
+      <geom name="sheet_face" type="mesh" mesh="sheet_quad" material="sheet_mat" pos="0 0 0.00105" density="0"
+            contype="0" conaffinity="0"/>
+      <site name="sheet_centre" pos="0 0 0.001" size="0.003" rgba="0 1 0 0.3" group="3"/>
+    </body>
+
+    <!-- A player's hand. Parked under the table; the sim moves it over the sheet (mocap) to test the freeze. -->
+    <body name="hand" mocap="true" pos="0.21 0 -1.0">
+      <geom name="hand_palm" type="capsule" size="0.035" fromto="0 0 0 0.12 0 0" rgba="0.9 0.75 0.65 1"
+            contype="0" conaffinity="0"/>
+      <geom name="hand_finger" type="capsule" size="0.012" fromto="0.12 0 0 0.19 0 0" rgba="0.9 0.75 0.65 1"
+            contype="0" conaffinity="0"/>
+    </body>
+
+    <!-- Overhead RGB-D camera, 640x480 at 10 Hz. Image up = +x (away from the robot). -->
+    <camera name="overhead" pos="0.21 0 0.70" xyaxes="0 -1 0 1 0 0" fovy="45"/>
+    <camera name="side" pos="0.75 -0.75 0.45" mode="targetbody" target="sheet"/>
+    <camera name="front" pos="0.9 0 0.35" mode="targetbody" target="sheet"/>
+  </worldbody>
+
+  <sensor>
+    <touch name="pen_touch" site="pen_tip"/>
+    <jointpos name="pen_compress" joint="pen_slide"/>
+    <framepos name="pen_tip_pos" objtype="site" objname="pen_tip"/>
+    <framepos name="sheet_pos" objtype="body" objname="sheet"/>
+    <framequat name="sheet_quat" objtype="body" objname="sheet"/>
+  </sensor>
+
+  <keyframe>
+    <!-- qpos order: 5 arm joints, pen_slide, gripper, sheet free joint (xyz + wxyz). "home" folds the arm up and back, out of the camera's drawing area. -->
+    <key name="home" qpos="0 -0.18 -1.34 -1.65 0  0 0.3  0.21 0 0.0011 0.7071068 0 0 0.7071068"
+         ctrl="0 -0.18 -1.34 -1.65 0 0.3"/>
+  </keyframe>
+</mujoco>
