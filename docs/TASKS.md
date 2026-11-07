@@ -166,3 +166,4 @@ Files: `buddy/voice/*`, `buddy/ui/*`, `docs/pitch.md`.
 - **Hour 5:** Arm + Vision: the arm draws the grid, Vision reports `grid_found=True` and nine empty cells.
 - **Hour 7:** Brain + Stage: a typed game end to end on the stream page.
 - **Hour 9:** everyone: slide the sheet mid-stroke, wave the hand in, draw two O's; Buddy reacts correctly to each.
+##
