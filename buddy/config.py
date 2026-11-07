@@ -22,7 +22,9 @@ SHEET_THICK = 0.0004                       # m
 SHEET_POSE0 = (0.21, 0.0, 1.5708)         # sheet centre x, y (m), yaw (rad): landscape in front of the arm
 TEX_PX_PER_MM = 4                          # ink texture resolution
 INK_RADIUS_MM = 0.7                        # felt-tip line half-width
-INK_RGB = (25, 30, 95)                     # dark blue ink
+INK_RGB = (25, 30, 95)                     # Buddy's dark blue ink
+PLAYER_INK_RGB = (30, 30, 34)              # the player's black pen
+HAND_PARK = (0.75, 0.25, 0.25)             # where the simulated player's hand rests (out of the camera's view)
 
 # ---------------------------------------------------------------- the pen (held in the gripper)
 PEN_PAST_TIPS = 0.030         # m the pen tip sticks out past the fingertips (planning showed <= 3-4 cm keeps a
@@ -36,6 +38,8 @@ PEN_PRESS_MM = 2.0            # how far the holder goes 'into' the paper while d
 
 # ---------------------------------------------------------------- sensors
 OVERHEAD_CAM = dict(pos=(0.20, 0.0, 0.55), fovy=50.0, size=(1280, 960))  # straight down; ~1.9 px per mm on the sheet
+DEPTH_SIZE = (320, 240)       # depth + segmentation for the safety check (about 2 mm per pixel on the sheet)
+CAMERA_NOISE = 3.0            # grey levels of sensor noise added to every colour frame (plus a slight blur)
 SCENE_VIEW = dict(lookat=(0.17, 0.0, 0.06), distance=0.75, azimuth=200.0, elevation=-32.0, size=(640, 480))
 
 # ---------------------------------------------------------------- drawing

@@ -112,6 +112,19 @@ def build_model():
     spec.add_sensor(name="pen_touch", type=mujoco.mjtSensor.mjSENS_TOUCH, objtype=mujoco.mjtObj.mjOBJ_SITE,
                     objname="pen_tip")
 
+    # the player's hand holding their own pen (mocap, visual only). Its origin is the pen tip; the forearm comes
+    # from the player's side of the table (+x). The depth camera sees it like a real hand.
+    skin = [0.87, 0.68, 0.56, 1]
+    hand = wb.add_body(name="player_hand", mocap=True, pos=list(C.HAND_PARK))
+    hand.add_geom(type=mujoco.mjtGeom.mjGEOM_CYLINDER, size=[0.0045, 0, 0], fromto=[0, 0, 0.002, 0.035, 0.012, 0.115],
+                  rgba=[0.12, 0.12, 0.14, 1], contype=0, conaffinity=0)
+    hand.add_geom(type=mujoco.mjtGeom.mjGEOM_ELLIPSOID, size=[0.045, 0.032, 0.022], pos=[0.06, 0.02, 0.125],
+                  rgba=skin, contype=0, conaffinity=0)
+    hand.add_geom(type=mujoco.mjtGeom.mjGEOM_CAPSULE, size=[0.008, 0, 0], fromto=[0.03, 0.0, 0.10, 0.012, 0.004, 0.035],
+                  rgba=skin, contype=0, conaffinity=0)                       # index finger along the pen
+    hand.add_geom(type=mujoco.mjtGeom.mjGEOM_CAPSULE, size=[0.030, 0, 0], fromto=[0.10, 0.03, 0.14, 0.32, 0.09, 0.21],
+                  rgba=[0.35, 0.45, 0.65, 1], contype=0, conaffinity=0)     # forearm in a sleeve
+
     # overhead RGB-D camera: straight down, image up = toward the robot, image right = robot's left (player's view)
     cam = C.OVERHEAD_CAM
     wb.add_camera(name="overhead", pos=list(cam["pos"]), quat=_quat_z(math.pi / 2), fovy=cam["fovy"])
@@ -155,8 +168,24 @@ class World:
         mujoco.mj_forward(m, self.data)
         W, H = C.OVERHEAD_CAM["size"]
         self.r_overhead = mujoco.Renderer(m, height=H, width=W)
-        self.r_depth = mujoco.Renderer(m, height=H, width=W)
+        dW, dH = C.DEPTH_SIZE
+        self.r_depth = mujoco.Renderer(m, height=dH, width=dW)
         self.r_depth.enable_depth_rendering()
+        self.r_seg = mujoco.Renderer(m, height=dH, width=dW)
+        self.r_seg.enable_segmentation_rendering()
+        self.rng = np.random.default_rng(7)
+        self.noise = C.CAMERA_NOISE
+        # which geoms belong to the robot (the arm knows its own body: used to filter itself out of the depth image)
+        robot_bodies = set()
+        for b in range(m.nbody):
+            r = b
+            while r > 0 and m.body(r).name != "base":
+                r = m.body_parentid[r]
+            if r > 0:
+                robot_bodies.add(b)
+        self.robot_geom = np.array([m.geom_bodyid[g] in robot_bodies for g in range(m.ngeom)] + [False])
+        self.hand_mocap = m.body("player_hand").mocapid[0]
+        self.anim = []                                   # running animations (sheet slides, the player's hand)
         SW, SH = C.SCENE_VIEW["size"]
         self.r_scene = mujoco.Renderer(m, height=SH, width=SW)
         self.scene_cam = mujoco.MjvCamera()
@@ -232,11 +261,96 @@ class World:
                 return
         self.last_ink_px = None
 
+    # ------------------------------------------------------------ animations (scene changes made by "the player")
+    def slide_sheet(self, dx, dy, dyaw, duration=1.2):
+        x, y, yaw = self.sheet_pose()
+        self.anim.append({"kind": "sheet", "t": 0.0, "T": duration, "p0": (x, y, yaw), "p1": (x + dx, y + dy, yaw + dyaw)})
+
+    def hand_strokes(self, strokes_mm, rgb=C.PLAYER_INK_RGB, speed=0.12):
+        """The player's hand draws these polylines (sheet mm) on the sheet: approach, pen down, draw, lift, leave."""
+        self.anim.append({"kind": "strokes", "t": 0.0, "strokes": [np.asarray(s, float) for s in strokes_mm],
+                          "rgb": rgb, "speed": speed, "path": None})
+
+    def reach_in(self, duration=4.0):
+        """A hand reaches over the drawing area, stays, and leaves (to test the safety stop)."""
+        self.anim.append({"kind": "reach", "t": 0.0, "T": duration})
+
+    def busy_animating(self) -> bool:
+        return bool(self.anim)
+
+    def _hand_at(self, p):
+        self.data.mocap_pos[self.hand_mocap] = p
+
+    def _sheet_world(self, mm, z=C.SHEET_THICK):
+        x, y, yaw = self.sheet_pose()
+        c, s = math.cos(yaw), math.sin(yaw)
+        u, v = mm[0] / 1000.0, mm[1] / 1000.0
+        return np.array([x + c * u - s * v, y + s * u + c * v, z])
+
+    def _hand_path(self, a):
+        """Whole path of the player's pen tip: from rest, over each stroke (lifted between strokes), back to rest."""
+        pts, ink = [np.array(C.HAND_PARK)], [False]
+        for st in a["strokes"]:
+            pts += [self._sheet_world(st[0], 0.02), self._sheet_world(st[0])]
+            ink += [False, False]
+            for q in st[1:]:
+                pts.append(self._sheet_world(q))
+                ink.append(True)
+            pts.append(self._sheet_world(st[-1], 0.02))
+            ink.append(False)
+        pts.append(np.array(C.HAND_PARK))
+        ink.append(False)
+        P, ink = np.array(pts), np.array(ink)
+        seg = np.linalg.norm(np.diff(P, axis=0), axis=1)
+        seg = np.where(ink[1:], seg, seg * 0.35)                         # moves in the air are quicker
+        a["path"], a["ink"], a["L"], a["last_mm"] = P, ink, np.concatenate([[0], np.cumsum(seg)]), None
+
+    def _animate(self, dt: float):
+        if not self.anim:
+            return
+        a = self.anim[0]
+        a["t"] += dt
+        t = a["t"]
+        if a["kind"] == "sheet":
+            u = min(1.0, t / a["T"])
+            u = u * u * (3 - 2 * u)
+            self.move_sheet(*(a["p0"][i] + (a["p1"][i] - a["p0"][i]) * u for i in range(3)))
+            done = t >= a["T"]
+        elif a["kind"] == "reach":
+            T = a["T"]
+            centre = self._sheet_world((0.0, 0.0), 0.06)
+            park = np.array(C.HAND_PARK)
+            u = min(1.0, t / 0.8) if t < T - 0.8 else max(0.0, (T - t) / 0.8)
+            self._hand_at(park + (centre - park) * (u * u * (3 - 2 * u)))
+            done = t >= T
+        else:                                                            # the player's hand drawing strokes
+            if a["path"] is None:
+                self._hand_path(a)
+            L = a["L"]
+            s_now = min(L[-1], t * a["speed"])
+            i = min(int(np.searchsorted(L, s_now, side="right") - 1), len(a["path"]) - 2)
+            w = (s_now - L[i]) / max(1e-9, L[i + 1] - L[i])
+            p = a["path"][i] + (a["path"][i + 1] - a["path"][i]) * w
+            self._hand_at(p)
+            if a["ink"][i + 1]:
+                mm = self.world_to_sheet_mm(p)
+                if a["last_mm"] is not None:
+                    self.paint(a["last_mm"], mm, rgb=a["rgb"], radius_mm=0.8)
+                a["last_mm"] = mm
+            else:
+                a["last_mm"] = None
+            done = s_now >= L[-1]
+        if done:
+            if a["kind"] != "sheet":
+                self._hand_at(np.array(C.HAND_PARK))
+            self.anim.pop(0)
+
     # ------------------------------------------------------------ time
     def step(self, n: int = 1) -> None:
         for _ in range(n):
             mujoco.mj_step(self.model, self.data)
             self._pen_ink()
+        self._animate(n * self.model.opt.timestep)
 
     # ------------------------------------------------------------ rendering
     def _upload_ink(self, renderer) -> None:
@@ -244,16 +358,27 @@ class World:
         mujoco.mjr_uploadTexture(self.model, renderer._mjr_context, self.tex_id)
 
     def render_overhead(self):
-        """(rgb uint8 HxWx3, depth float32 HxW in metres) from the overhead camera."""
+        """Colour image from the overhead camera, with sensor noise and a slight lens blur."""
         if self.ink_dirty:
             for r in (self.r_overhead, self.r_scene):
                 self._upload_ink(r)
             self.ink_dirty = False
         self.r_overhead.update_scene(self.data, camera="overhead")
-        rgb = self.r_overhead.render().copy()
+        rgb = self.r_overhead.render().astype(np.float32)
+        rgb = cv2.GaussianBlur(rgb, (3, 3), 0.7)
+        rgb += self.rng.normal(0.0, self.noise, rgb.shape).astype(np.float32)
+        return np.clip(rgb, 0, 255).astype(np.uint8)
+
+    def render_depth(self):
+        """(depth in metres, robot_mask) at DEPTH_SIZE from the same camera. robot_mask marks pixels showing the
+        robot's own body, from a segmentation render: the arm filters itself out of what it considers an obstacle."""
         self.r_depth.update_scene(self.data, camera="overhead")
         depth = self.r_depth.render().copy()
-        return rgb, depth
+        self.r_seg.update_scene(self.data, camera="overhead")
+        seg = self.r_seg.render()
+        ids = seg[:, :, 0]
+        robot = self.robot_geom[np.where((ids >= 0) & (ids < len(self.robot_geom) - 1), ids, -1)]
+        return depth, robot
 
     def render_scene(self):
         if self.ink_dirty:
@@ -275,5 +400,5 @@ class World:
         return K, R_cv, d.cam_xpos[cid].copy()
 
     def close(self):
-        for r in (self.r_overhead, self.r_depth, self.r_scene):
+        for r in (self.r_overhead, self.r_depth, self.r_seg, self.r_scene):
             r.close()
