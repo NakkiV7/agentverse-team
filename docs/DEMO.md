@@ -1,38 +1,40 @@
-# Demo walkthrough: from "Buddy, let's play a game?" to a drawn board
+# Demo walkthrough
 
-What to show, what to say, and where it happens in the code. Start with `.venv/bin/python -m buddy` and put the demo page (http://localhost:8860) on the projector. The timeline panel ("How Buddy decided") shows every step below with a coloured label as it happens, so you can point at it.
+Start `.venv/bin/python -m buddy` and put the demo page (http://localhost:8860) on the projector. The timeline on the right ("How Buddy decided") labels every step as it happens: HEAR, UNDERSTAND, DECIDE, SEE, PLAN, ACT, SENSE, CHECK, ADAPT, SAFETY, SAY. Point at it.
 
 ## The page
 
-- **What Buddy sees.** The overhead camera image, with what perception found drawn on it: the sheet outline (green), its axes (red = the player's right, green = away from the player), its measured position and size, and later the planned grid lines with the ink coverage of each.
-- **The arm.** A 3/4 view of the MuJoCo simulation.
-- **Conversation.** What was heard and what Buddy said.
-- **How Buddy decided.** Every pipeline step, in order: HEAR, UNDERSTAND, DECIDE, SEE, PLAN, ACT, SENSE, CHECK, SAY.
-- **Change the scene.** Buttons to move or remove the sheet live.
+- **What Buddy sees.** The overhead camera with what perception found: the sheet outline and axes, its measured position, size and confidence, and the grid lines with the ink coverage of each.
+- **The arm.** The MuJoCo simulation.
+- **The paper, straightened.** The sheet as Buddy straightens it, with the mark classifier's verdict on every square (empty / X / O and its confidence). Draw on it with the mouse: the player's hand in the simulation draws the same strokes on the sheet. Or use the square buttons below it.
+- **Conversation**, and **Change the scene**: buttons to reach over the paper, slide, rotate, move or remove the sheet.
 
-## Step by step
+## A game, step by step
 
-| # | You do / say | Buddy does | Label | Explain |
+| # | You | Buddy | Labels | What to explain |
 |---|---|---|---|---|
-| 1 | "Buddy, how are you?" | answers warmly, offers a game | HEAR, UNDERSTAND, SAY | Speech is cut into utterances by Silero VAD and transcribed by Whisper on the laptop. Buddy ignores anything said without its name. Small talk goes to Gemma 3 4B, running locally in Ollama. |
-| 2 | "Let's play a game" | "I know noughts and crosses. Shall we play that?" | UNDERSTAND (phrase rules), DECIDE | Clear answers are understood by simple phrase rules instantly. The language model is only asked when the rules do not match, and it never decides actions: the state machine does. |
-| 3 | "Go on then" | "Let me have a look at the paper." | DECIDE: CHOOSE_GAME → SETUP | The state changes are listed with their reason. |
-| 4 | (nothing) | finds the sheet | SEE | White, unsaturated pixels → largest shape → rectangle → corners projected onto the table → 297 × 210 mm checked against A4. Point at the measured position and confidence on the image. |
-| 5 | (nothing) | checks reach and blankness | PLAN, SEE | The grid is planned on the sheet itself, in the sheet's own coordinates. The inverse kinematics checks every grid corner can be reached with the pen upright, and the camera checks the grid area has no ink yet. |
-| 6 | (nothing) | moves above the sheet, explains the rules while drawing | ACT, SAY | Each motion runs one step per 20 ms tick: travel, feel for the paper, draw, lift. |
-| 7 | (nothing) | "pen touched the paper at z = 0.2 mm" | SENSE | Buddy does not assume where the paper is: it lowers the pen until the touch sensor fires. The felt tip is spring-loaded (like a plotter pen holder), and the pressure is held at 0.8 N while drawing. |
-| 8 | (nothing) | parks the arm, checks the lines: 100 %, 100 %, 100 %, 100 % | CHECK | The camera samples ink along each planned line. A line under 90 % would be redrawn once. Point at the green coverage labels. |
-| 9 | "Crosses please" | "Crosses for you, so you go first." | UNDERSTAND, DECIDE: ASK_SIDE → READY | |
+| 1 | "Buddy, shall we play a game?" | offers noughts and crosses | HEAR, UNDERSTAND, DECIDE | Whisper on the laptop, then Gemma 3 4B turns the words into a structured intent (schema-checked JSON). A state machine decides; the language model never picks actions. |
+| 2 | "Yes, go on" | looks at the paper | SEE, PLAN | The camera finds the A4 sheet (size check against 297 × 210 mm), checks the grid corners are reachable with the pen upright and that the sheet is blank. |
+| 3 | (listen) | draws the board while explaining the rules | ACT, SENSE | The pen feels for the paper with its touch sensor and holds 0.8 N; the grid is planned on the sheet itself. |
+| 4 | (watch) | checks its own lines: 100 % × 4 | CHECK | Ink sampled along every line; a weak line would be redrawn. |
+| 5 | "I'll be crosses" | "you go first" | UNDERSTAND, DECIDE | |
+| 6 | draw a cross on the straightened paper | reads it: "centre: X 98 %" | SEE | The CNN, trained only on simulator images, reads every square. Buddy waits until your hand has left the paper and the mark has been steady for 1.2 s: that is how it knows your turn is over. |
+| 7 | (watch) | "I'll take the top right", draws its nought, reads it back | PLAN, ACT, CHECK | The trace shows the minimax score of every move and whether Buddy played the best one (adaptive difficulty). |
+| 8 | "Put my cross in the bottom left, please" | draws your cross for you | UNDERSTAND (cell = bottom left), ACT | For players who cannot hold a pen. |
+| 9 | ... until three in a row | draws the winning line, congratulates, adjusts its strength | PLAN, DECIDE | "player win: strength 75 % → 90 %". |
 
-## Live changes worth showing (the scene changes, Buddy re-plans)
+## Unscripted changes to show live
 
-| Press | Buddy's reaction |
+| Press / do | What Buddy does |
 |---|---|
-| **Push it out of reach**, then start a game | SEE finds the sheet, PLAN reports the far grid corner is out of reach (with its distance), Buddy asks you to slide the paper closer. Press **Put it back** and it continues on its own. |
-| **Take the sheet away** | "I can't see a sheet of A4 paper. Could you put a blank sheet in front of me?" It keeps looking every second. |
-| **Rotate** or **Slide** before the game | The grid is drawn rotated and shifted with the sheet: it is planned in the sheet's frame, from what the camera measured. |
-| Start a second game without **New blank sheet** | "This sheet already has drawing on it. Could you give me a fresh one?" (the camera measures about 4 % ink in the grid area). |
+| **Reach over the paper** while Buddy draws | SAFETY: the arm freezes within a camera frame, "I'll wait until your hand is out of the way", resumes 1 s after the area is clear. The depth image ignores the robot's own body. |
+| **Slide the sheet** while Buddy draws | ADAPT: "the sheet moved (32 mm)", pen up, "Oh, the paper moved", waits for it to settle, redraws the stroke where the paper is now. |
+| **Rotate** or **Slide** before a game | The board is drawn rotated and shifted with the sheet. |
+| Draw a very small, faint or half-finished mark on the pad | If the classifier is under 90 % sure: "I can't quite read the mark in the top left. Is that your cross?" Answer yes or no. |
+| Draw a nought when you are crosses | "That looks like a nought, but you're crosses. Shall I count it as your cross?" |
+| **Push it out of reach** / **Take the sheet away** | "Could you slide it a little closer to me?" / "Could you put a blank sheet in front of me?" Press **Put it back**. |
+| Start a second game without **New blank sheet** | "This sheet already has drawing on it. Could you give me a fresh one?" |
 
 ## Numbers to quote
 
-Sheet position from the camera: under 1 mm and 0.1°. Pen pressure while drawing: 0.8 N. Grid: about 45 s. Whisper: under 1 s per sentence. Kokoro: under 1 s before Buddy starts speaking. Gemma: about 2 s, and only when the phrase rules do not understand. All on a MacBook Air M4, no network.
+Sheet position: under 1 mm and 0.1°. Mark classifier: 100 % on 2,133 held-out squares, trained in 4 minutes on simulator images only. Hand → arm frozen: one camera frame. Pen pressure: 0.8 N. Whisper under 1 s, Gemma about 2 s, Kokoro under 1 s. All on a MacBook Air M4, offline.
