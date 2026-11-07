@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Buddy · Live Stage & Stream</title>
+<style>
+  :root {
+    --bg: #0e1117;
+    --card: #161b22;
+    --card-border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --accent-hover: #79b8ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+    padding: 16px;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--card-border);
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .title-group { display: flex; align-items: center; gap: 12px; }
+  h1 { font-size: 20px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }
+  .badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 12px;
+    background: #21262d;
+    border: 1px solid var(--card-border);
+    color: var(--text-muted);
+  }
+  .badge.state { background: rgba(88, 166, 255, 0.15); color: var(--accent); border-color: rgba(88, 166, 255, 0.3); }
+  .badge.urgent { background: rgba(248, 81, 73, 0.15); color: var(--red); border-color: rgba(248, 81, 73, 0.3); }
+  .badge.live { background: rgba(63, 185, 80, 0.15); color: var(--green); border-color: rgba(63, 185, 80, 0.3); }
+
+  .telemetry-bar {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .stat-chip {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .stat-chip b { color: #fff; font-family: monospace; }
+
+  main {
+    display: grid;
+    grid-template-columns: minmax(420px, 1.4fr) minmax(360px, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 960px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: relative;
+  }
+  .panel-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  /* Video stream */
+  .stream-container {
+    width: 100%;
+    aspect-ratio: 4/3;
+    background: #000;
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .stream-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  .warning-banner {
+    display: none;
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    background: rgba(248, 81, 73, 0.9);
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 13px;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    animation: pulse 1s infinite alternate;
+  }
+  @keyframes pulse { from { opacity: 0.8; } to { opacity: 1; } }
+
+  /* Why this move */
+  .why-box {
+    background: rgba(88, 166, 255, 0.08);
+    border: 1px solid rgba(88, 166, 255, 0.25);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #e6edf3;
+  }
+  .why-box b { color: var(--accent); }
+
+  /* Chat / Transcript */
+  .transcript-box {
+    height: 220px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 4px;
+    font-size: 13px;
+  }
+  .chat-msg {
+    max-width: 88%;
+    padding: 6px 12px;
+    border-radius: 12px;
+    word-wrap: break-word;
+  }
+  .chat-msg.buddy {
+    background: #1f2937;
+    border: 1px solid #374151;
+    align-self: flex-start;
+    color: #93c5fd;
+  }
+  .chat-msg.player {
+    background: #064e3b;
+    border: 1px solid #047857;
+    align-self: flex-end;
+    color: #a7f3d0;
+  }
+  .chat-msg.system {
+    background: #27272a;
+    border: 1px solid #3f3f46;
+    align-self: center;
+    font-size: 11.5px;
+    color: var(--text-muted);
+  }
+
+  /* Typed input */
+  .input-form {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  input[type=text] {
+    flex: 1;
+    background: #0d1117;
+    border: 1px solid var(--card-border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+  }
+  input[type=text]:focus { border-color: var(--accent); }
+  button {
+    background: #21262d;
+    color: var(--text);
+    border: 1px solid var(--card-border);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+  }
+  button:hover { background: #30363d; border-color: var(--text-muted); }
+  button.primary {
+    background: #238636;
+    border-color: rgba(240, 246, 252, 0.1);
+    color: #fff;
+  }
+  button.primary:hover { background: #2ea043; }
+  button.warn { background: rgba(248, 81, 73, 0.2); border-color: var(--red); color: var(--red); }
+  button.warn:hover { background: rgba(248, 81, 73, 0.35); }
+
+  /* Scene controls */
+  .button-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .grid-3x3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    max-width: 180px;
+  }
+  .grid-3x3 button {
+    height: 38px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  /* Game events */
+  .events-box {
+    height: 140px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 11.5px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: #0d1117;
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    padding: 6px 10px;
+  }
+  .event-row { color: var(--text-muted); }
+  .event-row b { color: var(--purple); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title-group">
+    <h1>🤖 Buddy <span style="font-weight:400; font-size:15px; color:var(--text-muted);">· Stage & Stream</span></h1>
+    <span class="badge state" id="badge-state">STATE: IDLE</span>
+    <span class="badge live" id="badge-reflex">REFLEX: ARMED</span>
+  </div>
+
+  <div class="telemetry-bar">
+    <div class="stat-chip">Perception: <b id="stat-fps">0</b> FPS (<b id="stat-perc-ms">0</b> ms)</div>
+    <div class="stat-chip">Gemma: <b id="stat-gemma-s">0.0</b> s</div>
+    <div class="stat-chip">Touch: <b id="stat-touch">0.00</b> N</div>
+    <div class="stat-chip">Sheet: <b id="stat-sheet">--</b></div>
+  </div>
+</header>
+
+<main>
+  <!-- LEFT COLUMN: CAMERA OVERLAY & WHY THIS MOVE -->
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="panel">
+      <div class="panel-title">
+        <span>Live Overhead Camera · OpenCV Perception Overlay</span>
+        <span class="badge" id="stream-status">STREAMING</span>
+      </div>
+      <div class="stream-container">
+        <img id="cam-stream" src="/stream" alt="Overhead camera overlay stream">
+        <div class="warning-banner" id="hand-warning">⚠️ HAND IN AREA — REFLEX LAYER FROZEN</div>
+      </div>
+    </div>
+
+    <!-- WHY THIS MOVE PANEL (Hour 7) -->
+    <div class="panel">
+      <div class="panel-title">💡 Why this move (Minimax Reasoning)</div>
+      <div class="why-box" id="why-box">
+        Waiting for initial robot move or evaluation...
+      </div>
+    </div>
+
+    <!-- GAME EVENTS LOG (Hour 7) -->
+    <div class="panel">
+      <div class="panel-title">🎮 Game Events</div>
+      <div class="events-box" id="events-log">
+        <div class="event-row">[system] Game subsystem initialized.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT COLUMN: TRANSCRIPT, TYPED FALLBACK, SCENE BUTTONS -->
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <!-- TRANSCRIPT & TYPED INPUT (Hour 1) -->
+    <div class="panel">
+      <div class="panel-title">💬 Conversation & Voice Transcript</div>
+      <div class="transcript-box" id="transcript-box">
+        <div class="chat-msg system">Buddy system ready. Speak "Buddy" or type below.</div>
+      </div>
+      <form class="input-form" id="typed-form">
+        <input type="text" id="typed-input" placeholder="Type what to say (e.g. 'let's play', 'cell 4', 'stop')..." autocomplete="off">
+        <button type="submit" class="primary">Send</button>
+      </form>
+      <div style="display:flex; gap:6px; align-items:center; margin-top:4px;">
+        <button type="button" id="btn-ptt" style="flex:1;">🎙️ Push-to-Talk (Hold Space)</button>
+        <span style="font-size:11px; color:var(--text-muted);">Noisy room fallback: active</span>
+      </div>
+    </div>
+
+    <!-- SCENE BUTTONS (Hour 3) -->
+    <div class="panel">
+      <div class="panel-title">🎬 Scene Controls (Live Demo Actions)</div>
+
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <!-- Sheet Translations & Rotations -->
+        <div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">Move / Rotate Sheet:</div>
+          <div class="button-group">
+            <button onclick="postScene('sheet_left')">← Left</button>
+            <button onclick="postScene('sheet_right')">→ Right</button>
+            <button onclick="postScene('sheet_forward')">↑ Forward</button>
+            <button onclick="postScene('sheet_back')">↓ Back</button>
+            <button onclick="postScene('sheet_ccw')">↺ Rot CCW</button>
+            <button onclick="postScene('sheet_cw')">↻ Rot CW</button>
+            <button onclick="postScene('sheet_reset')">Reset Sheet</button>
+          </div>
+        </div>
+
+        <!-- Hand Reflex Freeze Controls -->
+        <div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">Safety & Reflex Trigger:</div>
+          <div class="button-group">
+            <button class="warn" onclick="postScene('hand_over')">✋ Place Hand Over Sheet</button>
+            <button onclick="postScene('hand_away')">👋 Remove Hand</button>
+          </div>
+        </div>
+
+        <!-- Add Human Mark O on Cell (0..8) -->
+        <div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">Add Player Mark 'O' (Simulate drawing):</div>
+          <div style="display:flex; gap:16px; align-items:center;">
+            <div class="grid-3x3">
+              <button onclick="postScene('mark_0')">0</button>
+              <button onclick="postScene('mark_1')">1</button>
+              <button onclick="postScene('mark_2')">2</button>
+              <button onclick="postScene('mark_3')">3</button>
+              <button onclick="postScene('mark_4')">4</button>
+              <button onclick="postScene('mark_5')">5</button>
+              <button onclick="postScene('mark_6')">6</button>
+              <button onclick="postScene('mark_7')">7</button>
+              <button onclick="postScene('mark_8')">8</button>
+            </div>
+            <div style="font-size:11px; color:var(--text-muted); line-height:1.4;">
+              Click a cell to draw an <b>O</b> into the paper texture. Perception will detect it on the next frame!
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+async function postScene(action) {
+  try {
+    await fetch('/scene', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: action})
+    });
+  } catch(e) {
+    console.error('Scene command failed:', e);
+  }
+}
+
+// Typed input submission
+document.getElementById('typed-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = document.getElementById('typed-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  try {
+    await fetch('/say', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text: text})
+    });
+  } catch(e) {
+    console.error('Say failed:', e);
+  }
+});
+
+// Push to talk button
+const pttBtn = document.getElementById('btn-ptt');
+let pttActive = false;
+function setPTT(active) {
+  if (pttActive === active) return;
+  pttActive = active;
+  pttBtn.style.background = active ? '#dc2626' : '';
+  pttBtn.textContent = active ? '🔴 Recording...' : '🎙️ Push-to-Talk (Hold Space)';
+  fetch('/ptt', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({active: active})
+  }).catch(()=>{});
+}
+pttBtn.addEventListener('mousedown', () => setPTT(true));
+window.addEventListener('mouseup', () => setPTT(false));
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
+    e.preventDefault();
+    setPTT(true);
+  }
+});
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
+    setPTT(false);
+  }
+});
+
+// Periodic polling for telemetry & state sync
+let lastMsgCount = 0;
+let lastEventsCount = 0;
+
+async function syncState() {
+  try {
+    const res = await fetch('/api/state', {cache: 'no-store'});
+    if (!res.ok) return;
+    const d = await res.json();
+
+    // Telemetry updates
+    document.getElementById('stat-fps').textContent = d.fps !== undefined ? d.fps.toFixed(1) : '0';
+    document.getElementById('stat-perc-ms').textContent = d.perception_ms !== undefined ? d.perception_ms.toFixed(0) : '0';
+    document.getElementById('stat-gemma-s').textContent = d.gemma_s !== undefined ? d.gemma_s.toFixed(2) : '0.0';
+    document.getElementById('stat-touch').textContent = d.touch_N !== undefined ? d.touch_N.toFixed(2) : '0.00';
+    document.getElementById('stat-sheet').textContent = d.sheet ? `${(d.sheet.x*100).toFixed(0)}, ${(d.sheet.y*100).toFixed(0)}cm` : 'searching';
+
+    // State badge
+    const badgeState = document.getElementById('badge-state');
+    badgeState.textContent = 'STATE: ' + (d.agent_state || 'IDLE').toUpperCase();
+
+    // Hand warning banner & reflex badge
+    const banner = document.getElementById('hand-warning');
+    const badgeReflex = document.getElementById('badge-reflex');
+    if (d.hand_in_area) {
+      banner.style.display = 'block';
+      badgeReflex.className = 'badge urgent';
+      badgeReflex.textContent = 'REFLEX: FROZEN';
+    } else {
+      banner.style.display = 'none';
+      badgeReflex.className = 'badge live';
+      badgeReflex.textContent = 'REFLEX: ARMED';
+    }
+
+    // Why this move
+    if (d.why) {
+      document.getElementById('why-box').innerHTML = `<b>Minimax Decision:</b> ${d.why}`;
+    }
+
+    // Transcript update
+    if (d.transcript && d.transcript.length !== lastMsgCount) {
+      lastMsgCount = d.transcript.length;
+      const tBox = document.getElementById('transcript-box');
+      tBox.innerHTML = '';
+      d.transcript.forEach(line => {
+        const div = document.createElement('div');
+        if (line.startsWith('Buddy:')) {
+          div.className = 'chat-msg buddy';
+          div.textContent = line;
+        } else if (line.startsWith('Player:')) {
+          div.className = 'chat-msg player';
+          div.textContent = line;
+        } else {
+          div.className = 'chat-msg system';
+          div.textContent = line;
+        }
+        tBox.appendChild(div);
+      });
+      tBox.scrollTop = tBox.scrollHeight;
+    }
+
+    // Game events update
+    if (d.game_events && d.game_events.length !== lastEventsCount) {
+      lastEventsCount = d.game_events.length;
+      const eBox = document.getElementById('events-log');
+      eBox.innerHTML = '';
+      d.game_events.forEach(ev => {
+        const div = document.createElement('div');
+        div.className = 'event-row';
+        div.innerHTML = `[${ev.time || 'now'}] <b>${ev.kind}</b>: ${ev.text || ''}`;
+        eBox.appendChild(div);
+      });
+      eBox.scrollTop = eBox.scrollHeight;
+    }
+
+  } catch(e) {
+    // ignore fetch errors during startup
+  }
+}
+
+setInterval(syncState, 400);
+syncState();
+
+// Handle stream disconnect/reconnect
+const streamImg = document.getElementById('cam-stream');
+streamImg.onerror = () => {
+  document.getElementById('stream-status').textContent = 'RECONNECTING';
+  document.getElementById('stream-status').className = 'badge urgent';
+  setTimeout(() => {
+    streamImg.src = '/stream?t=' + Date.now();
+    document.getElementById('stream-status').textContent = 'STREAMING';
+    document.getElementById('stream-status').className = 'badge';
+  }, 1000);
+};
+</script>
+</body>
+</html>
