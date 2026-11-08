@@ -129,6 +129,7 @@ class Paper:
         self.brain, self.app = brain, brain.app
         self.items: dict[str, PaperItem] = {}
         self.rules: list[dict] = []
+        self._recipes: dict[str, dict] = {}
         self._queue = queue.Queue()
         self._lock = threading.RLock()
         self._generation = 0
@@ -195,6 +196,20 @@ class Paper:
     def needs_rewrite(self, item_id):
         with self._lock:
             return item_id in self._missing
+
+    def rewrite(self, item_id, context=None):
+        """Restore saved text on a fresh sheet, with new layout and no marks.
+
+        Like run(), call outside the brain drawing worker/input loop. Reapply
+        any wanted marks from the current game with run() after this returns.
+        """
+        with self._lock:
+            if item_id in self.items:
+                return f"{item_id} is already on this sheet."
+            recipe = deepcopy(self._recipes.get(item_id))
+        if recipe is None:
+            return f"I don't have saved writing for {item_id}; please tell me what to write."
+        return self.run([recipe], context)
 
     def on_event(self, ev):
         if self._closed:
@@ -441,6 +456,8 @@ class Paper:
                     if generation != self._generation:
                         raise ValueError("the sheet changed before I could write")
                     self.items[item_id] = item  # reserve even partially drawn ink
+                    self._recipes[item_id] = {"op": "write_text", "id": item_id, "text": text,
+                                              "place": place, "size_mm": size}
                 start = 0
             else:
                 item = self._item(item_id, from_rule)
@@ -469,6 +486,7 @@ class Paper:
                     item.text += text
                     item.characters += cells[start:]
                     item.complete = False
+                    self._recipes[item_id]["text"] = item.text
             if len(item.characters) - start >= 20:
                 self.brain.say("Writing all those letters will take a few minutes; you can keep guessing as I write.")
             for cell in item.characters[start:]:

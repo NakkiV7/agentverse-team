@@ -246,3 +246,17 @@ def test_template_context_does_not_leak_an_old_games_score(paper):
     assert "score_player" not in context_from(paper.brain)
     paper.brain.game_name = "noughts and crosses"
     assert "pattern" not in context_from(paper.brain)
+
+
+def test_rewrite_restores_saved_text_on_a_fresh_sheet_without_old_marks(paper):
+    assert write(paper, "AB") is None
+    assert paper.run([{"op": "append_text", "id": "alphabet", "text": "C"},
+                      {"op": "cross_out", "target": {"id": "alphabet", "chars": "B"}}]) is None
+    assert "already" in paper.rewrite("alphabet")
+    paper.new_sheet()
+    assert paper.needs_rewrite("alphabet")
+    assert paper.rewrite("alphabet", context_from(paper.brain)) is None
+    assert paper.items["alphabet"].text == "ABC"
+    assert not any(c.marks for c in paper.items["alphabet"].characters)
+    assert not paper.needs_rewrite("alphabet")
+    assert "don't have saved writing" in paper.rewrite("unknown")
