@@ -2,6 +2,32 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov 2026: alphabet writing in under three minutes of arm time (B4-paper-speed, `agent/paper`)
+
+- **Changed**: after merging `games/integration`, writing and appending draw one job per row, split at six
+  characters. Each job checks every character's segments and glyph ink from one camera frame. Only failed
+  characters get an individual retry; successful siblings retain their checked state. Queued guesses run at
+  every job boundary, including before a retry and after the final job. Busy/reserved-turn waiting and the
+  single-mark operations are unchanged. Existing `brain.paper` integration and public APIs need no changes.
+- **Before/after, same real MuJoCo script**: `tools/paper_dry_run.py` passed both runs with exactly B, C, D, F
+  crossed. First alphabet job through last glyph check: **414.42 -> 157.30 simulated seconds (62.0% less)**,
+  **225.79 -> 127.56 wall seconds**, **26 -> 6 jobs**. The trace intervals are 58.54–284.34 s before and
+  44.31–171.87 s after. This fresh baseline is separate from the tester's earlier approximately nine-minute
+  live run. Whole-script wall times: 378.3 -> 280.3 s. The script now reports both clocks and fails at 240
+  simulated seconds. Traces: `runtime/paper_b4_before_trace.log`, `runtime/paper_b4_after_trace.log`;
+  snapshots: `runtime/paper_b4_before.json`, `runtime/paper_b4_after.json`.
+- **Camera checks**: all 26 glyphs checked at 100% segment coverage, minimum final glyph ink 38.84%, zero
+  retries. B/C/D/F diagonals each 100%; maximum of the other 22 letters 85%, right letter P 45%, against the
+  90% cross-out threshold. Pictures: `runtime/paper_sheet.png`, `runtime/paper_overhead.png`.
+- **Planner/compiler acceptance**: `.venv/bin/python tools/alphabet_dry_run.py` exited 0, all four questions
+  correct, exactly B/C/D crossed at 100%, P 47.5%, other letters at most 85%, minimum glyph ink 38.64%.
+  Its compiled text wrapped differently: five jobs, 94.5 s wall from first job at 105.7 s to last glyph check
+  at 200.2 s, zero retries; whole script 324.1 s. Evidence: `runtime/alphabet_b4_trace.log`,
+  `runtime/alphabet.json`, `runtime/alphabet_sheet.png`, `runtime/alphabet_overhead.png`.
+- **Tests**: `.venv/bin/python -m pytest -q tests/test_paper*.py`: **55 passed in 0.60 s**, including row
+  grouping, append boundaries, partial redraw and queued guesses before retries/after the final job.
+  `.venv/bin/python -m pytest -q tests`: **406 passed in 56.44 s** (`runtime/paper_b4_pytest.log`).
+
 ## 8 Nov, 06:40: Buddy knows what is going on, and does new things on paper (round 3 merged, branch `agent/tools`)
 
 - **The two things the player asked for.** (1) "What letters have I asked so far" and any other question about the
