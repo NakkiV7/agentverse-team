@@ -87,6 +87,7 @@ def main():
                 invite = " ".join(say("I want to teach you a new game and play it with you."))
                 wait(lambda: b.state == "TEACH", "the teaching state")
                 result["invite"] = invite
+                say("Thank you.")                      # a stray remark before the explanation must not derail it
                 replies = say(EXPLANATION, timeout=120)
                 for _ in range(2):
                     question = replies[-1]

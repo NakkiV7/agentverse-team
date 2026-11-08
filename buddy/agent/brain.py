@@ -510,6 +510,13 @@ class Brain:
                 return
             self.set_state("CHAT", "woken up by name")
         self.app.transcript_add("Player", text)
+        if re.fullmatch(r"\s*\[[^\]]*\]\s*[.!]?\s*", text):          # Whisper's [INAUDIBLE], [NON-ENGLISH SPEECH]
+            self.app.trace("decide", "ignored: nothing was said")
+            return
+        if source == "mic" and self.state == "TEACH" and len(text.split()) <= 3 \
+                and not re.search(r"\b(yes|no|yeah|skip|cancel|stop|never mind|done|again|first|second|win|wins)\b", text.lower()):
+            self.app.trace("decide", f"ignored while learning a game: {text!r} is too short to be a rule (background talk)")
+            return
         self.last_heard = text
         self.emit("heard", "player", text)
         self._note_name(text)
@@ -804,11 +811,17 @@ class Brain:
         self.teacher = Teacher()
         self.relearn = None
         self.awaiting_example = False
+        self._teach_text = ""
         self.say(TEACH_INVITE)
 
     def _teach(self, text: str):
-        if self.relearn is None and self.teacher.questions == 0:
-            hidden = relearn_module.recognise(self.library, text)
+        # Everything said in this lesson counts towards recognising a hidden game: a stray remark or a one-word
+        # answer before the real explanation (background talk picked up by the mic) must not hide it.
+        self._teach_text = (getattr(self, "_teach_text", "") + " " + text).strip()
+        if self.relearn is None:
+            named = self.library.find(text, include_hidden=True)
+            hidden = named if named is not None and self.library.is_hidden(named) else \
+                relearn_module.recognise(self.library, self._teach_text)
             if hidden is not None:
                 self.relearn = relearn_module.Relearn(hidden, text)
                 self.app.trace("understand", f"this explanation describes {hidden.name}, which Buddy is learning: "

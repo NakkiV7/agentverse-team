@@ -60,3 +60,12 @@ def test_model_questions_are_checked(tmp_path, monkeypatch):
     second = r.ask()                       # a near repeat is rejected in favour of a fixed question
     assert second != "Who goes first, then?" and second.endswith("?")
     assert r.used_fallback == 1
+
+
+def test_name_alone_and_accumulated_text_recognise_the_hidden_game(tmp_path):
+    lib = library(tmp_path)
+    named = lib.find("dots and boxes", include_hidden=True)
+    assert named is not None and lib.is_hidden(named)
+    first, second = "Thank you.", "You join two dots with a line; the fourth side of a box claims it with your initial."
+    assert relearn.recognise(lib, first) is None
+    assert relearn.recognise(lib, first + " " + second).name == "dots and boxes"
