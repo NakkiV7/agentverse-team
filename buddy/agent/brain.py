@@ -46,6 +46,7 @@ from ..perception.sheet import check_lines, ink_fraction
 from .llm import Conversation, reply
 from .teach import Teacher
 from ..game.hangman import Hangman, WORDS, letter as hangman_letter
+from .dots_brain import STATES as DOTS_STATES, DotsPlay
 from copy import deepcopy
 
 if TYPE_CHECKING:
@@ -89,6 +90,7 @@ class Brain:
         self.entry = self.library.find("noughts and crosses")   # the library entry of the current game
         self.pending_spec = None                # a taught game waiting for its name
         self.hangman = None
+        self.dots = None                        # the running dots-and-boxes game (buddy/agent/dots_brain.py)
         self._hangman_strokes = []
         self._hangman_pending = None
         threading.Thread(target=self._loop, daemon=True, name="brain").start()
@@ -175,6 +177,9 @@ class Brain:
             "SETUP": f"Buddy is drawing the board for {self.game_name} on the paper.",
             "ASK_SIDE": "The board is drawn. Buddy asked: crosses or noughts? Crosses go first.",
             "GAME_OVER": "The game has ended. Buddy asked whether they would like another game.",
+            "DOTS_SETUP": "Buddy is drawing the dots for dots and boxes.",
+            "DOTS_PLAYER_TURN": "Dots and boxes: it is the player's turn to join two neighbouring dots with a line, on the paper or on the page. Buddy reads it with the camera; the player cannot name a line by voice yet.",
+            "DOTS_ROBOT_TURN": "Dots and boxes: Buddy is drawing its line.",
             "HANGMAN_SETUP": "Buddy is preparing hangman on paper. Say yes to retry, or stop to finish.",
             "HANGMAN_TURN": "The player is guessing a hangman word. Say one letter, or ask for a hint. "
                             "Do not choose a letter for the player.",
@@ -354,6 +359,8 @@ class Brain:
                 self._chat_reply(text, sit, "Shall we play another?")
         if st in ("HANGMAN_SETUP", "HANGMAN_TURN"):
             self._hangman_act(u)
+        if st in DOTS_STATES and self.dots is not None:
+            self.dots.act(u, text, sit)
 
     def end_session(self):
         self.set_state("IDLE", "the player wants to stop")
@@ -411,6 +418,10 @@ class Brain:
     def _setup(self):
         if self.entry is not None and self.entry.kind == "hangman":
             self._hangman_setup()
+            return
+        if self.entry is not None and self.entry.kind == "dots":
+            self.dots = DotsPlay(self, n=2)
+            self.dots.setup()
             return
         app = self.app
         asked = None

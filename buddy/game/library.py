@@ -35,6 +35,9 @@ class Entry:
     kind: str = "grid"                  # Non-grid built-ins also have spec None.
 
     def describe(self) -> str:
+        if self.kind == "dots":
+            return ("I draw a grid of dots. We take turns joining two dots that are next to each other with a line. "
+                    "Whoever draws the fourth side of a box wins it, marks it, and goes again. Most boxes wins.")
         if self.kind == "hangman":
             return ("I choose a familiar word. Say or type one letter at a time. I write every matching letter. "
                     "A wrong letter adds one gallows part. Find the word before six misses. You can ask for a hint.")
@@ -50,6 +53,7 @@ BUILTIN = [
     Entry("backwards noughts and crosses", MISERE, ("misere", "misère", "reverse noughts and crosses", "backwards tic tac toe", "inverse tic tac toe"), True),
     Entry("Footsteps with diagonals", FOOTSTEPS_DIAG, ("diagonal footsteps", "footsteps diagonals"), True),
     Entry("hangman", None, ("hang man", "the word game"), True, kind="hangman"),
+    Entry("dots and boxes", None, ("dots", "boxes", "dots & boxes", "the dots game", "squares"), True, kind="dots"),
 ]
 
 

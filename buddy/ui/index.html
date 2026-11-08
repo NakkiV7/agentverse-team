@@ -136,11 +136,14 @@ const NEXT = {
   WAIT_SHEET: "Buddy needs the paper: use the scene buttons (New blank sheet, Put it back).",
   ASK_SIDE: "Type <b>crosses</b> or <b>noughts</b>.",
   PLAYER_TURN: "Your move: click a square, draw your mark on the paper, or type <b>put mine in the top left</b>.",
+  DOTS_SETUP: "Buddy is drawing the dots. Watch the arm.",
+  DOTS_PLAYER_TURN: "Your line: draw it on the paper between two neighbouring dots with the mouse. Closing a box means you go again.",
+  DOTS_ROBOT_TURN: "Buddy's line: watch it plan, draw and read its own line back.",
   CONFIRM_MARK: "Buddy asked about a mark: type <b>yes</b> or <b>no</b>.",
   ROBOT_TURN: "Buddy's move: watch it plan, draw and read its own mark back. Try <b>Reach over the paper</b> while it draws.",
   GAME_OVER: "Type <b>yes</b> for another game (press <b>New blank sheet</b> first), or <b>let me teach you a game</b>.",
 };
-const myTurn = () => S && S.state === "PLAYER_TURN";
+const myTurn = () => S && (S.state === "PLAYER_TURN" || S.state === "DOTS_PLAYER_TURN");
 function notNow() {
   const el = document.getElementById("turnhint");
   el.className = "hint warn";
@@ -153,6 +156,7 @@ function notNow() {
 document.getElementById("cells").innerHTML = NAMES.map((n, i) => `<button data-cell="${i}">${n}</button>`).join("");
 document.querySelectorAll("[data-cell]").forEach(b => b.addEventListener("click", () => {
   if (!myTurn()) return notNow();
+  if (S.state === "DOTS_PLAYER_TURN") { const el = document.getElementById("turnhint"); el.className = "hint warn"; el.textContent = "In dots and boxes, draw your line on the paper above."; setTimeout(() => { el.className = "hint"; el.textContent = ""; }, 4000); return; }
   const legal = (S.game && S.game.legal) || [];
   if (legal.length && !legal.includes(+b.dataset.cell)) {
     const el = document.getElementById("turnhint"); el.className = "hint warn";
