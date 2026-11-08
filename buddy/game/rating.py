@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import random
 import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -119,3 +120,41 @@ class Rating:
             temp.replace(self.path)
         finally:
             temp.unlink(missing_ok=True)
+
+
+@dataclass(frozen=True)
+class Selection:
+    strength: float
+    target_strength: float
+    expected_score: float
+    reason: str
+
+
+def select_strength(rating: Rating, rng=random) -> Selection:
+    """Aim for 45% player wins, with small, deliberate variation each game.
+
+    Elo predicts score, so add half the recent draw rate to the win target.
+    Strength is capped below perfect play to leave room for the existing
+    solvers' friendly moves. A target is an aim, not a promised outcome:
+    forced results and the solvers' safety rules can make it unreachable.
+    """
+    recent = rating.player.recent
+    draw_rate = recent.count("draw") / len(recent) if recent else 0.0
+    target_score = min(0.95, 0.45 + 0.5 * draw_rate)
+    strengths = STRENGTHS[1:-1]             # adaptive: 0.05 to 0.95; fixed perfect play stays separate
+    target = min(strengths, key=lambda s: abs(rating.expected(s) - target_score))
+    nearby = [s for s in strengths if abs(s - target) <= 0.100001]
+    strength = rng.choice(nearby)
+    if recent[-3:] == ["win"] * 3:
+        reason = "You have won the last three games, so I will try a bit harder."
+    elif recent[-3:] == ["loss"] * 3:
+        reason = "I have won the last three games, so I will make things a little gentler."
+    elif recent and recent[-1] == "win":
+        reason = "You won, so I am adjusting the challenge and mixing up my play."
+    elif recent and recent[-1] == "loss":
+        reason = "I won, so I am easing the challenge and mixing up my play."
+    elif recent:
+        reason = "We drew, so I am allowing for draws and mixing up my play."
+    else:
+        reason = "I will start with a varied challenge while I learn how you play."
+    return Selection(strength, target, rating.expected(strength), reason)
