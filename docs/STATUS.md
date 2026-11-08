@@ -26,6 +26,51 @@ Updated after every big change. Newest first. Numbers are measured on Nakkiv's M
   for a new game, retaining it on retries; `hint_text(self)` honours later level changes. `word_for_level` also
   accepts the difficulty object directly. `brain.py`, `dots_brain.py`, `toolcall.py` and `tools.py` are untouched.
   `app.py` has only an added method after `draw`; this status entry is the only shared documentation addition.
+## 8 Nov, 04:00: ask Buddy for anything in your own words (task B2-toolcall, branch `agent/toolcall`)
+
+- **How it works**: every sentence after the wake word goes to Gemma 4 through Ollama's native tool calling
+  (`buddy/agent/toolcall.py`, think off, temperature 0, one running conversation seeded with five worked examples).
+  The model only picks names and arguments from the vocabulary in `buddy/agent/tools.py`: switch_game, teach_game,
+  list_games, set_difficulty, new_board, start_again, stop, answer, choose_side, fresh_sheet_ready, draw_my_mark,
+  draw_my_line, say_letter, finish_my_line, i_am_done, redraw_last_stroke, wait, tell_score, explain_rules,
+  explain_last_move, give_hint, repeat, say. The brain (`brain.run_tools`) checks each one against the state it was
+  asked in and then runs it through the same methods as before: a spoken square goes through `_voice_move` (free and
+  legal), a spoken line through `dots._spoken_line`, a letter through `_hangman_act`, yes / no / done through `_act`.
+  The model never chooses a move. Several requests in one breath run in order: "let's do dots and boxes, a small one,
+  and don't go too hard on me" is switch_game, new_board, set_difficulty, and the size is kept across the level step.
+- **Fallback**: when the planner gets no answer (server down, 20 s timeout, nothing usable) the Gemma 3 intent path
+  runs unchanged, so everything works with the model off (`BUDDY_TOOLS=0` forces that). A size answer to the size
+  question still wins, now without a model call. Traced as `UNDERSTAND tools: name(args) (seconds)`.
+- **What the model gets wrong, and the fixes**: examples written as text in the instructions ("yes please" ->
+  answer(yes=true)) made it answer in text too, in three shapes: `answer(yes=true)`, a bare name (`stop`,
+  `switch_game hangman`) and Gemma's half-formed native syntax `new_board{size:<|"|>small<|"|>}<tool_call|>`. The
+  examples are now real tool-call turns at the start of the conversation and all three text shapes are parsed anyway.
+  Without the examples, a bare "yes" became choose_side or draw_my_mark (a move the player never named, refused by
+  the checks but still wrong); with them, 21 of 21 session requests pick the expected tool.
+- **Speed**: Ollama caches the prompt prefix and the tool list is part of it. Offering only the state's tools, as
+  tools.py intended, changes the prefix at every state change: 5.7 s a call on average over the 21 requests, against
+  1.8 s (0.7 to 1.9 s warm) with the full list every time and the brain refusing what does not fit. The full list is
+  sent. On a quiet machine a request is answered in about 1.2 s; with another agent's `python -m buddy` and the tool
+  eval sharing Ollama (load average 12 to 14, gemma4 at 13.6 GB of 24) the same calls took 5 to 17 s and three of
+  twelve hit the 20 s timeout and fell back, so measure on an idle laptop before the demo.
+- **Scripted session** (`tools/tool_dry_run.py`, free phrasing only): menu, dots and boxes with size and level in one
+  sentence, a spoken line drawn and read back, wait, score, why, redraw of the last stroke, hint, a switch to hangman
+  with a fresh sheet, a letter, stop. **12 of 12 requests produced the expected tool, 1.1 s a request (0.7 to
+  1.4 s), 96 s wall, ending in IDLE.** The same run under the shared load above: 11 of 12 (one 58 s stall), 425 s.
+  Hakim's `tools/dry_run.py` (106 s) and `tools/dots_full_dry_run.py` (277 s) pass with their typed sentences now
+  going through the tools: switch_game, answer, set_difficulty, choose_side, draw_my_mark, draw_my_line, and the
+  size answer without a model call. Two things they caught: "Buddy, let's play a game" was planned as switch_game
+  (the CHAT situation mentions offering noughts and crosses), so a game name the player did not actually say is not
+  trusted and the menu is offered as before; and dots_brain.parse_edge matched words as a set, so "row 1, column 3"
+  also matched "row 1, column 1" and the first won (a pre-existing bug), and "the top left box" meant nothing on a
+  board named by row and column. It matches as a multiset now and translates the corner names.
+- **Tests**: `tests/test_toolcall.py`, 29: routing of every tool with a fake app, refusals outside the state, unknown
+  game -> teach, taken and illegal squares refused, a hint never plays, two tools in order, the fallback hook, the
+  three text shapes, and one live plan() (skipped without gemma4). Found by them: brain.py had not imported
+  Understanding, so answer / i_am_done / say_letter would have failed at run time.
+- **Open**: tell_score / explain_last_move / give_hint use short built-in lines until `buddy/agent/narration.py` lands
+  (imported inside a try, so either merge order works); "finish my line" takes any line at least 15% inked; a new size
+  said mid-game restarts the board; the planner's seconds are only as good as a shared Ollama allows.
 
 ## 8 Nov, 03:00: change your mind at any point (branch `games/switch-anytime`, in PR #14)
 
