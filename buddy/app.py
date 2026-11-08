@@ -403,6 +403,9 @@ class App:
 
     def close(self):
         self.running = False
+        paper = getattr(getattr(self, "brain", None), "paper", None)
+        if paper is not None:
+            paper.close()
         self.world.close()
 
     def points_reachable(self, pose, points_mm) -> tuple[bool, str]:

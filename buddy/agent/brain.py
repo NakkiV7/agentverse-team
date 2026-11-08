@@ -52,6 +52,7 @@ from copy import deepcopy
 from ..game import dotsboxes as D
 from . import tools
 from .toolcall import Planner, ToolCall
+from . import paper_glue
 from dataclasses import dataclass, field
 
 
@@ -127,6 +128,8 @@ class Brain:
         threading.Thread(target=self._warm_planner, daemon=True, name="planner-warm-up").start()
 
     # ------------------------------------------------------------------ helpers
+        paper_glue.install(self)                # buddy/paper routines + the custom_request tool (docs/round3.md)
+
     def set_state(self, new: str, why: str):
         if new != self.state:
             self.app.trace("decide", f"{self.state} -> {new}: {why}")
@@ -1177,6 +1180,8 @@ class Brain:
         if u.intent == "stop":
             self.end_session()
             return
+        if self.paper is not None and self.paper.defer_guess(u):   # a letter said while Buddy writes a note: queued
+            return
         if self.busy:
             self.say("Let me finish checking the paper first.")
             return
@@ -1241,6 +1246,9 @@ class Brain:
             self.app.trace("decide", "difficulty: " + self.difficulty.start_game(self.game_name, self.rng))
             self.hangman = Hangman.for_difficulty(self.difficulty, self.rng)
             self.app.trace("plan", f"hangman word list: {self.hangman.level}, {len(self.hangman.word)} letters")
+            self.games += 1
+            self.emit("game_start", "buddy", f"game {self.games} of hangman started on a fresh sheet: a {len(self.hangman.word)}-letter "
+                      f"word, level {self.hangman.level}", game="hangman", number=self.games, level=self.hangman.level)
             self._hangman_strokes = []
             self._hangman_pending = None
         look = self._hangman_look()
@@ -1518,6 +1526,8 @@ class Brain:
         yes = args.get("yes", True)
         if isinstance(yes, str):
             yes = yes.strip().lower() in ("true", "yes", "1")
+        if paper_glue.answer_rewrite(self, bool(yes)):     # "shall I write the alphabet on this sheet again?"
+            return
         self._act(self._u("yes" if yes else "no"), text, self.situation())
 
     def _tool_choose_side(self, args, text):

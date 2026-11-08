@@ -106,6 +106,12 @@ class DotsPlay:
         far), check them, then hand over to whoever is to move."""
         app, b, n = self.app, self.b, self.n
         b.set_state("DOTS_SETUP", f"dots and boxes, {D.size_words(n)}" + (" (redrawing after a fresh sheet)" if restore else ""))
+        if restore is None:
+            b.games += 1
+            b.emit("game_start", "buddy", f"game {b.games} of dots and boxes started, {D.size_words(n)} boxes, level {b.difficulty.level}",
+                   game="dots and boxes", number=b.games, size=list(D.rc(n)), level=b.difficulty.level)
+        elif getattr(b, "paper", None) is not None:
+            b.paper.new_sheet()                      # notes on the old sheet are gone; standing rules stay
         asked = None
         while True:
             look = app.look(timeout=20)

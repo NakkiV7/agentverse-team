@@ -18,7 +18,7 @@ try:
 except ImportError:                                   # task C3 not merged
     _requests = None
 try:
-    from ..paper.routines import Paper, context_from  # task B3 not merged
+    from ..paper import Paper, context_from           # task B3 not merged
 except ImportError:
     Paper = None
 
@@ -40,7 +40,7 @@ def _on_event(brain, ev):
     """A new game on a fresh sheet: anything a standing rule still needs is offered again ("from now on")."""
     if ev.kind != "game_start" or brain.paper is None:
         return
-    missing = list(getattr(brain.paper, "needs_rewrite", lambda: [])())
+    missing = [i for i in list(getattr(brain.paper, "_recipes", {})) if brain.paper.needs_rewrite(i)]
     if missing:
         brain.pending_rewrite = missing
         brain.say(f"Shall I write the {' and the '.join(missing)} on this sheet again?")
@@ -52,15 +52,26 @@ def answer_rewrite(brain, yes: bool) -> bool:
     if not ids:
         return False
     if yes and brain.paper is not None:
-        brain.say("Right you are.")
-        threading.Thread(target=_run, args=(brain, brain.paper.rewrite, ids), daemon=True).start()
+        brain.say("Right you are. This will take me a little while.")
+        threading.Thread(target=_rewrite, args=(brain, ids), daemon=True).start()
     else:
         brain.say("Alright, I'll leave the paper as it is.")
     return True
 
 
+def _rewrite(brain, ids):
+    """Write the saved items again on the fresh sheet, then put back the marks the current game calls for."""
+    for item in ids:
+        problem = _run(brain, brain.paper.rewrite, item, context_from(brain))
+        if problem:
+            continue
+        ctx = context_from(brain)
+        if ctx.get("wrong") and any(a.get("op") == "cross_out" for r in brain.paper.rules for a in r.get("do", [])):
+            _run(brain, brain.paper.run, [{"op": "cross_out", "target": {"id": item, "chars": "{wrong}"}}], ctx)
+
+
 def custom_request(brain, args, text):
-    request = str(args.get("request") or text).strip()
+    request = (text or "").strip() or str(args.get("request") or "").strip()   # the player's whole sentence, verbatim
     if brain.paper is None or _requests is None:
         brain.say("I can't write extra things on the paper yet, I'm afraid. I can play, keep score and explain.")
         return
@@ -100,3 +111,4 @@ def _run(brain, fn, *args):
         problem = "I'm sorry, that didn't work on the paper."
     if problem:
         brain.say(problem)
+    return problem
