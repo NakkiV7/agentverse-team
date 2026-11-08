@@ -98,8 +98,38 @@ def test_list_games_offers_the_menu(brain):
 def test_switch_game_starts_the_setup_of_a_known_game(brain, monkeypatch):
     started = []
     monkeypatch.setattr(brain, "start_setup", lambda why: started.append(why))
-    run(brain, "switch_game", name="hangman")
+    run(brain, "switch_game", "can we play hangman", name="hangman")
     assert brain.entry.name == "hangman" and started
+
+
+def test_switch_game_without_a_game_in_the_words_offers_the_menu(brain):
+    """"Buddy, let's play a game": the model may guess a game, the brain offers the menu as it always did."""
+    run(brain, "switch_game", "Buddy, let's play a game", name="noughts and crosses")
+    assert brain.state == "CHOOSE_GAME" and "Shall we play" in brain.last_said
+    brain.state = "GAME_OVER"
+    brain.games = 1
+    brain.app.traces.clear()
+    run(brain, "switch_game", "let's play again", name="noughts and crosses")
+    assert any("start noughts and crosses again" in t for t in brain.app.traces)
+
+
+def test_draw_my_line_tells_rows_and_columns_apart_and_knows_corners(brain, monkeypatch):
+    from buddy.game import dotsboxes as D
+    brain._select(brain.library.find("dots and boxes"))
+    brain.dots = brain_module.DotsPlay(brain, (2, 3))
+    brain.dots.state = D.State.start((2, 3), ("P", "B"), first="P")
+    brain.state = "DOTS_PLAYER_TURN"
+    drawn = []
+    monkeypatch.setattr(brain.dots, "_draw_for_player", lambda e: drawn.append(D.edge_name((2, 3), e)))
+    run(brain, "draw_my_line", "put my line on the left side of the box in row 1, column 3",
+        where="left side of the box in row 1, column 3")
+    run(brain, "draw_my_line", "the top side of the top left box", where="top side of the top left box")
+    run(brain, "draw_my_line", "the bottom of the bottom right box", where="bottom side of the bottom right box")
+    assert drawn == ["the left side of the box in row 1, column 3", "the top side of the box in row 1, column 1",
+                     "the bottom side of the box in row 2, column 3"]
+    brain.dots.state = D.play(brain.dots.state, 0)              # the top side of row 1, column 1 is now drawn
+    run(brain, "draw_my_line", where="the top side of the top left box")
+    assert "already drawn" in brain.last_said and len(drawn) == 3
 
 
 def test_unknown_game_asks_to_be_taught(brain):

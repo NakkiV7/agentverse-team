@@ -1095,10 +1095,26 @@ class Brain:
         return "I can't do that just now."
 
     # -- choosing what to play
+    def _named_game(self, text: str):
+        """The game the player's own words name, if any ("let's play a game" names none)."""
+        entry = self.library.find(text)
+        if entry is not None and entry is self.library.find("noughts and crosses") \
+                and not re.search(r"noughts|crosses|tic.?tac|x'?s and o'?s", text.lower()):
+            return None
+        return entry
+
     def _tool_switch_game(self, args, text):
         name = str(args.get("name") or "").strip()
-        entry = self.library.find(name) or self.library.find(text)
         st = self.state
+        in_words = self._named_game(text)
+        said_it = bool(name) and all(w in text.lower() for w in re.findall(r"[a-z]{3,}", name.lower()))
+        if in_words is None and not said_it and st in ("CHAT", "CHOOSE_GAME"):
+            # the player wants to play but named no game: the model's pick is a guess, so offer the menu as before
+            self.app.trace("decide", f"switch_game({name!r}) but the player named no game: offering the menu")
+            self.set_state("CHOOSE_GAME", "the player wants to play")
+            self.say(self.offer_text())
+            return
+        entry = in_words or self.library.find(name)
         if entry is None:
             why = f"asked for a game I don't know ({name or text!r}): asking to be taught"
             if st in self.RESTING:
@@ -1213,17 +1229,16 @@ class Brain:
 
     # -- the player's own move, said rather than drawn
     def _cell_index(self, words: str):
-        t = re.sub(r"[^a-z ]+", " ", words.lower())
-        t = re.sub(r"\bcenter\b", "centre", t)
-        t = re.sub(r"\bmiddle\b", "centre", t) if re.fullmatch(r"\s*(the\s+)?middle\s*(one|square)?\s*", t) else t
-        if t.strip() in tools.CELLS:
-            return tools.CELLS.index(t.strip())
-        rows = {"top": 0, "centre": 1, "middle": 1, "bottom": 2}
-        cols = {"left": 0, "centre": 1, "middle": 1, "right": 2}
-        r = next((v for k, v in rows.items() if re.search(rf"\b{k}\b", t)), None)
-        c = next((v for k, v in cols.items() if re.search(rf"\b{k}\b", t) and not (k in ("centre", "middle") and r == 1 and t.count(k) < 2)), None)
+        """'top left', 'the centre', 'bottom-right corner', 'middle' -> 0..8 as the player sees the paper, else None."""
+        ws = re.sub(r"[^a-z]+", " ", words.lower()).split()
+        rows = {"top": 0, "upper": 0, "middle": 1, "centre": 1, "center": 1, "bottom": 2, "lower": 2}
+        cols = {"left": 0, "middle": 1, "centre": 1, "center": 1, "right": 2}
+        r = next((rows[w] for w in ws if w in rows), None)
+        c = next((cols[w] for w in reversed(ws) if w in cols), None)
         if r is None and c is None:
             return None
+        if r == 1 and c == 1 and sum(w in ("middle", "centre", "center") for w in ws) == 1:
+            return 4                                   # "the middle" alone is the centre
         return 3 * (1 if r is None else r) + (1 if c is None else c)
 
     def _tool_draw_my_mark(self, args, text):
