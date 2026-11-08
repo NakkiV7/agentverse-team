@@ -404,3 +404,32 @@ class App:
     def close(self):
         self.running = False
         self.world.close()
+
+    def points_reachable(self, pose, points_mm) -> tuple[bool, str]:
+        """Check every supplied sheet point at contact, hover and travel height.
+
+        Use an independent planner: the game and paper workers may be planning
+        concurrently, and PenIK owns mutable MuJoCo data. No simulated joint or
+        controller state is changed by this check.
+        """
+        points = np.asarray(points_mm, dtype=float)
+        if points.size == 0:
+            return True, "there are no points to draw"
+        if points.ndim != 2 or points.shape[1] != 2 or not np.isfinite(points).all():
+            return False, "the drawing contains an invalid point"
+        half = np.asarray(C.SHEET_SIZE_MM) / 2
+        if (np.abs(points) > half - 1).any():
+            return False, "the drawing would leave the sheet"
+        if len(pose) != 3 or not np.isfinite(pose).all():
+            return False, "the sheet position is not known"
+        planner = PenIK(self.world.model, self.world.pen.tip_body, self.world.pen.axis_body, World.ARM)
+        worst = 0.0
+        for mm, (x, y) in zip(points, sheet_to_world(pose, points)):
+            seed = np.array([math.atan2(y, x - .039), 0.0, .5, 1.2, 0.0])
+            for height, tilt in ((0.0, 6.0), (C.HOVER_MM / 1000, 20.0), (.03, 20.0)):
+                r = planner.solve([x, y, C.SHEET_THICK + height], seed, max_tilt_deg=tilt)
+                worst = max(worst, r.tilt_deg)
+                if not r.ok:
+                    return False, (f"the point ({mm[0]:.1f}, {mm[1]:.1f}) mm is out of reach "
+                                   f"at {height * 1000:.0f} mm above the paper")
+        return True, f"all {len(points)} points reachable (worst lean {worst:.1f} degrees)"
