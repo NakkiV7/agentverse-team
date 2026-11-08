@@ -189,6 +189,21 @@ class App:
                                    f"{100 * math.hypot(x - 0.039, y):.1f} cm from my shoulder, is out of reach")
         return True, f"all 4 grid corners reachable with the pen upright (worst lean {worst:.1f} deg)"
 
+    def dots_reachable(self, pose, n: int) -> tuple[bool, str]:
+        """Dots and boxes: every dot of the n x n board must be reachable on the paper, at hover height, and at the
+        3 cm the pen rises to before and after a stroke (the far row is what limits the board size)."""
+        pts = sheet_to_world(pose, M.dot_positions_mm(n))
+        seed = np.array([0.0, 0.0, 0.5, 1.2, 0.0])
+        worst = 0.0
+        for x, y in pts:
+            for z in (C.SHEET_THICK, C.SHEET_THICK + C.HOVER_MM / 1000, C.SHEET_THICK + 0.03):
+                r = self.ik_planner.solve([x, y, z], seed)
+                worst = max(worst, r.tilt_deg)
+                if not r.ok:
+                    return False, (f"the dot at ({100 * x:.1f}, {100 * y:.1f}) cm is out of reach "
+                                   f"{100 * z:.0f} cm above the paper")
+        return True, f"all {len(pts)} dots reachable with the pen upright (worst lean {worst:.1f} deg)"
+
     def set_overlay_lines(self, lines, cov):
         self.overlay_lines, self.overlay_cov = lines, cov
 
@@ -303,6 +318,17 @@ class App:
         elif action == "strokes" and arg:
             w.hand_strokes(arg)
             action = "the player draws on the paper"
+        elif action in ("player_edge", "player_box") and self.brain.state != "DOTS_PLAYER_TURN":
+            self.trace("system", f"ignored a line from the page: it is not the player's turn (state {self.brain.state})")
+            return
+        elif action == "player_edge" and arg is not None:         # dots and boxes: arg = (boxes per side, edge)
+            n, e = arg
+            w.hand_strokes(M.hand_edge(int(n), int(e), np.random.default_rng()))
+            action = "the player joins two dots"
+        elif action == "player_box" and arg is not None:          # dots and boxes: arg = (boxes per side, box)
+            n, b = arg
+            w.hand_strokes(M.hand_box_claim(int(n), int(b), np.random.default_rng()))
+            action = "the player marks the box they won"
         else:
             return
         self.trace("system", f"scene change: {action.replace('_', ' ')}")

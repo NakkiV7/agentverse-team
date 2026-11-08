@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 
 from ..game.dotsboxes import edge_dots, n_edges
-from ..game.marks import DOT_SPACING_MM, dot_mm, dot_positions_mm
+from ..game.marks import dot_mm, dot_positions_mm
 from .board import RECT_PX_PER_MM, mm_to_rect_px
 
 SKIP_MM = 5.0                 # sample no closer than this to either dot
@@ -63,7 +63,7 @@ def _coverage(ink: np.ndarray, a, b) -> float:
     return float(hit.mean())
 
 
-def read_edges(rect: np.ndarray, n: int, spacing: float = DOT_SPACING_MM) -> list[Edge]:
+def read_edges(rect: np.ndarray, n: int, spacing: float | None = None) -> list[Edge]:
     """One Edge per candidate edge of an n x n box board, numbered as in buddy/game/dotsboxes.py."""
     ink = _ink(rect)
     out = []
@@ -76,7 +76,7 @@ def read_edges(rect: np.ndarray, n: int, spacing: float = DOT_SPACING_MM) -> lis
     return out
 
 
-def read_dots(rect: np.ndarray, n: int, spacing: float = DOT_SPACING_MM) -> list[float]:
+def read_dots(rect: np.ndarray, n: int, spacing: float | None = None) -> list[float]:
     """Fraction of inked pixels within DOT_RADIUS_MM of each planned dot (a drawn dot is well above 0.3)."""
     ink = _ink(rect)
     H, W = ink.shape
@@ -100,7 +100,7 @@ def drawn_mask(edges: list[Edge]) -> int:
 
 
 def draw_edges(rect: np.ndarray, n: int, edges: list[Edge] | None, owners=None, note: str = "",
-               spacing: float = DOT_SPACING_MM) -> np.ndarray:
+               spacing: float | None = None) -> np.ndarray:
     """The straightened sheet with each edge's reading (for the demo page): green drawn, grey empty, red unsure."""
     img = cv2.cvtColor(rect, cv2.COLOR_RGB2BGR).copy()
     if note:
