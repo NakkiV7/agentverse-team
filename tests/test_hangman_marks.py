@@ -8,8 +8,8 @@ from tools.draw_alphabet import alphabet_strokes
 
 
 def test_font_and_centred_seven_letter_row():
-    assert set(M.CAPITAL_STROKES) == set("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-    for c in M.CAPITAL_STROKES:
+    assert set(M.CAPITAL_STROKES) == set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.:-/")
+    for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789":
         pts = np.concatenate(M.capital_letter(c))
         assert np.ptp(pts[:, 1]) == 25
         assert pts[:, 0].min() >= 0 and pts[:, 0].max() <= 14
