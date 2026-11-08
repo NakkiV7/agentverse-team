@@ -1,7 +1,7 @@
 # Extras backlog: if we have time
 
 Technical ideas that would strengthen Penny but are **not** part of the MVP. Only pick something up once the
-MVP list in the README's next steps is done (PR #10 merged, invalid-mark fix, the video, latencies).
+next steps in the README are done (persona files, "Margaret taught me this one", the unreadable-mark fix, the video, latencies).
 
 How to read it: **Story** = which beat of the pitch it supports; **Score** = which judging criterion it helps
 (perception 25%, adaptation 25%, autonomy 15%, relevance 20%, ambition 15%). Effort is a rough guess for one
@@ -11,11 +11,11 @@ person with an AI assistant.
 
 | # | Idea | Story | Score | Effort | Where |
 |---|---|---|---|---|---|
-| 1 | **"Margaret taught me this one"**: store who taught each game; when Penny offers it to someone else she credits them and explains the rules before playing | The spread (emotional peak) | Relevance, ambition | 1–2 h | `buddy/game/library.py`, `buddy/agent/brain.py` |
-| 2 | **Confirm before drawing**: when Penny writes for the resident she repeats the square and waits for a yes ("Top left, is that right?") | "Shall I write for you?" | Relevance (failure mode) | 30–60 min | `buddy/agent/brain.py` |
-| 3 | **Penny's face, levels 1–2**: a simple stylised face in a corner of the demo page; mouth moves while `speaking`; expressions from her state (listening, thinking, drawing, frozen, won/lost) | Warmth, every beat | Shows the decision loop to judges | 1–2 h | new `buddy/ui/face.js` + `face.css`, small hook in `index.html` (after PR #10 merges) |
-| 4 | **Latency instrumentation**: timers around sheet finding, board reading, hand → freeze, Whisper, Gemma, Kokoro, move → reply; print median and worst case after a dry run | "Runs on the robot" slide | Autonomy | 1 h | `buddy/app.py`, `tools/dry_run.py` |
-| 5 | **"Shall I write for you?" preference**: ask once, remember per resident, allow a mix ("you do this one") | "Shall I write for you?" | Relevance | 1–2 h | `buddy/agent/brain.py`, a small `runtime/residents.json` |
+| 1 | **"Margaret taught me this one"** *(in progress, Nakki)*: store who taught each game; when Penny offers it to someone else she credits them and explains the rules before playing | The spread (emotional peak) | Relevance, ambition | 1–2 h | `buddy/game/library.py`, `buddy/agent/brain.py` |
+| 2 | **Confirm before drawing** *(in progress; she already repeats the square)*: when Penny writes for the resident she repeats the square and waits for a yes ("Top left, is that right?") | "Shall I write for you?" | Relevance (failure mode) | 30–60 min | `buddy/agent/brain.py` |
+| 3 | **Penny's face, levels 1–2**: a simple stylised face in a corner of the demo page; mouth moves while `speaking`; expressions from her state (listening, thinking, drawing, frozen, won/lost) | Warmth, every beat | Shows the decision loop to judges | 1–2 h | new `buddy/ui/face.js` + `face.css`, small hook in `index.html` |
+| 4 | **Latency instrumentation**: timers around sheet finding, board reading, hand → freeze, Whisper, Gemma, Piper, move → reply; print median and worst case after a dry run | "Runs on the robot" slide | Autonomy | 1 h | `buddy/app.py`, `tools/dry_run.py` |
+| 5 | **"Shall I write for you?" preference** *(in progress as persona files, Nakki)*: ask once, remember per resident, allow a mix ("you do this one") | "Shall I write for you?" | Relevance | 1–2 h | `buddy/agent/brain.py`, a small `runtime/residents.json` |
 
 ## Mark reading and failure handling
 
@@ -46,15 +46,15 @@ person with an AI assistant.
 | Number noughts and crosses | Odds vs evens 1–9, make a line adding to 15 | Needs digit reading |
 | Chomp | Cross out a square and everything above-right; the poisoned corner loses | Crossing out squares |
 | Cram (4×4) | Draw dominoes; can't move, you lose; second player wins by mirroring | Needs line detection |
-| Dots and boxes | Join dots, complete a box to claim it | Line checks already exist (`check_lines`) |
-| Hangman (or "snowman") | Penny draws, letters are spoken | Mostly voice and drawing |
+| Dots and boxes | Join dots, complete a box to claim it | **built** |
+| Hangman (or "snowman") | Penny draws, letters are spoken | **built** |
 | Mini sudoku (4×4) | Penny generates it and checks answers | Needs digit reading |
 
 ## Physical setup and access
 
 | Idea | Why | Effort |
 |---|---|---|
-| Wake word only at the start of a sentence ("Penny, …") | A resident or carer may be called Penny | 15 min (`buddy/voice/stt.py`) |
+| ~~Wake word only at the start of a sentence ("Penny, …")~~ **done** | A resident or carer may be called Penny | on `main` |
 | Paper roll in simulation: a long strip that slides along between games | Fresh paper for residents who can't move; reuses sheet tracking | 2–3 h (sheet finder expects A4) |
 | Several boards per sheet | Fewer paper changes | 1–2 h (reach limits board size) |
 | Redraw the game on a clean part of the sheet after a stray mark | Avoids restarting | 2 h, slow to draw |

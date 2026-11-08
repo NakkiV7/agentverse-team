@@ -1,4 +1,4 @@
-# Buddy: status quo
+# Penny: status quo (build log; earlier entries call her Buddy)
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 

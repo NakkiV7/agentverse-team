@@ -31,14 +31,17 @@ time (`tools/teach_eval.py`); Gemma 3 4B guesses missing rules, so it stays on t
 match `docs/games/footsteps.pdf`. Left here: a rules panel on the demo page, and the "example game drawn on the
 paper" idea from `docs/concept.md`.
 
-**Claim your role here** (edit this file on GitHub or open a PR):
+
+**Roles** (from who built what; edit if it changes):
 
 | Role | Owns | Name |
 |---|---|---|
-| Arm | `buddy/sim/world.py`, `buddy/motion/` (ik, controller, drawing) | |
-| Vision | `buddy/perception/` (sheet, board, marknet, safety), `tools/train_marks.py` | |
-| Brain | `buddy/game/` (tictactoe, marks), `buddy/agent/` (brain, llm) | |
-| Voice and stage | `buddy/voice/` (stt, tts), `buddy/ui/`, `docs/DEMO.md`, pitch | |
+| Arm | `buddy/sim/world.py`, `buddy/motion/` (ik, controller, drawing) | Hakim |
+| Vision | `buddy/perception/` (sheet, board, marknet, safety), `tools/train_marks.py` | Hakim |
+| Brain | `buddy/game/`, `buddy/agent/` (brain, teaching, planner), `buddy/paper/` | Nakki |
+| Voice and page | `buddy/voice/` (stt, tts), `buddy/ui/`, `docs/DEMO.md` | Nakki, Misha |
+| Pitch | the five-minute pitch (shortlisted teams), presenting | Misha |
+| Story and documents | `docs/concept.md`, `evidence.md`, `personas.md`, the technical summary | Elias |
 
 The role sections below were written for the scaffold's file names; the table above gives the files in this
 code base. The milestones, rules and integration checkpoints still apply.

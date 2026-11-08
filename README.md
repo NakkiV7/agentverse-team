@@ -13,39 +13,27 @@ Agentverse 2026, Robotics track ("give an agent a body"). Built in simulation: a
 
 ## The story
 
-**Entertainment, not therapy.** Penny is a game partner: something fun to do on a long afternoon. We make no
-medical claims.
+**Some games were never written down.** Many family and regional games live only in people's memories; you won't
+find them in an app. Penny learns them from the one person who still remembers.
 
-**Something to do.** Care home residents spend around half of their waking time inactive or dozing (University
-of Kent, "Being occupied: supporting meaningful activity in care homes for older people in England"). Staff are
-busy, other residents may not know the game, and family visits are short. Penny is always free to play.
+- **Nostalgia is the hook.** A resident teaches Penny the game from their childhood, in their own words. She asks
+  about anything that's missing, reads the rules back, draws the board and works out how to play well.
+- **Inactivity and loneliness are the stakes, not the promise.** Care home residents spend around half of their
+  waking time inactive or dozing (University of Kent); staff are busy and visits are short. Penny is a game partner
+  who is always free. We make no medical claims and never claim she cures loneliness.
+- **Connection is the payoff.** Every taught game is saved in Penny's library, so next week she can offer it to
+  someone else: *"Margaret taught me this one. Would you like to learn it?"* She gives residents something to share
+  with each other rather than replacing anyone.
+- **Her hands when yours won't.** Tremor, arthritis or a stroke can end paper games people still enjoy. Residents
+  write their own moves, or say the square and Penny writes it for them.
 
-**Nostalgia.** Many family and regional games were never written down; you won't find them in an app. Penny can
-learn them from the one person who still remembers, by conversation: she asks questions until she understands,
-reads the rules back, draws the board and works out how to play well.
-
-**Games that spread.** Every game a resident teaches is saved in Penny's game library. Next week she can offer
-it to someone else and explain it: *"Margaret taught me this one. Would you like to learn it?"* Penny doesn't
-replace people; she gives residents something to share with each other.
-
-**Her hands when yours won't.** Tremor, arthritis or a stroke can end paper games people still enjoy. Residents
-can write their own moves, ask Penny to write them, or mix the two, and Penny confirms the square before she
-draws, because ink is permanent.
-
-The scene we pitch:
-
-1. **A care home afternoon.** Staff are busy and Margaret fancies a game. Penny draws the board and writes
-   Margaret's moves when her hand is unsteady.
-2. **Nostalgia.** "Do you know the game we played as children?" Penny doesn't, so Margaret teaches her. Penny
-   asks a question or two, works out the strategy and plays her.
-3. **The spread.** Next week, Penny offers Margaret's game to Arthur down the hall: "Margaret taught me this one."
-
-More detail: [docs/concept.md](docs/concept.md) and [docs/ideas-for-consideration.pdf](docs/ideas-for-consideration.pdf).
+The residents in the story (Margaret, Arthur, Doreen) and the carer (Priya) are fictional composites:
+[docs/personas.md](docs/personas.md). Sources for every figure: [docs/evidence.md](docs/evidence.md). More detail:
+[docs/concept.md](docs/concept.md).
 
 ## Status at a glance
 
-Everything below is on the `games/integration` branch ([PR #14](https://github.com/NakkiV7/agentverse-team/pull/14)
-into `main`). The log of every change with its measurements is [docs/STATUS.md](docs/STATUS.md).
+Everything below is on `main`. The log of every change with its measurements is [docs/STATUS.md](docs/STATUS.md).
 
 | Feature | State |
 |---|---|
@@ -57,9 +45,10 @@ into `main`). The log of every change with its measurements is [docs/STATUS.md](
 | Ask Penny anything in your own words: Gemma 4 picks her tools; questions answered from the live game facts | done (45 of 46 test questions) |
 | Free requests on the paper: "write the alphabet in the corner and cross out my wrong letters from now on" | done (28 of 32 test requests) |
 | Change your mind at any point: switch game, teach, restart or stop mid-move | done |
+| Write a spoken move for the player; refuse a taken or illegal square | done (she repeats the square, then draws) |
 | British female voice (Piper, under 0.1 s a sentence), live transcript while you speak | done |
-| Resident profiles ("I'm Margaret"), "Margaret taught me this one", confirm the square before drawing | being added |
-| Unreadable-mark handling (an "8" must never become a move) | being added |
+| Resident profiles ("I'm Margaret"), "Margaret taught me this one", a yes before drawing a spoken move | being added |
+| Unreadable mark: "Is that where you meant to go?"; yes only if legal; no = fresh sheet, game redrawn | being added |
 
 ## Quick start (macOS, Apple Silicon)
 
@@ -103,9 +92,9 @@ Gemma 4 takes 18 GB of unified memory.
 | Paper | free requests compiled by Gemma 4 into a checked routine: write, cross out, underline, keep doing it on every event | `buddy/agent/requests.py`, `buddy/paper/` |
 | Say | Piper, British female voice, sentence by sentence, first audio in about 0.05 s (Kokoro and macOS voices selectable) | `buddy/voice/tts.py` |
 
-**The language model understands the rules; the solver masters the game; the camera keeps everyone honest.**
-When Penny is unsure she asks: a square read below 90% confidence, a mark of the wrong symbol, or a missing,
-unreachable or used sheet.
+**The language model understands people; the solver chooses moves; the camera checks everything.** When Penny is
+unsure she asks: a square read below 90% confidence, a mark of the wrong symbol, a taken or illegal square, or a
+missing, unreachable or used sheet.
 
 **The mark classifier** is trained only on simulator images (`tools/train_marks.py`): 1,584 boards with random
 X, O or empty squares in many hand-drawn styles, lighting and camera noise. A 46.8k-parameter CNN on 48×48 crops
@@ -152,30 +141,34 @@ assets/so101/      the SO-101 model (TheRobotStudio SO-ARM100, unmodified, see N
 assets/models/     the trained mark classifier and its report
 tools/             scripted games in the simulator, evaluations, measurements, classifier training
 tests/             unit tests (about 430) and the evaluation cases in tests/data/
-docs/              design, pitch and planning documents (below)
+docs/              design, evidence and planning documents (below)
 ```
 
 ## Documents
 
 | Document | What's in it |
 |---|---|
-| [docs/concept.md](docs/concept.md) | The idea in depth: modes, resident profiles, failure modes, latency plan |
-| [docs/ideas-for-consideration.pdf](docs/ideas-for-consideration.pdf) | Design ideas with status: ways to play, unreadable marks, language model vs code, fresh paper |
 | [docs/technical-summary.pdf](docs/technical-summary.pdf) | The one-page technical summary for the judges |
-| [docs/evidence.md](docs/evidence.md) | Sourced figures for the story, with how strong each one is |
+| [docs/concept.md](docs/concept.md) | The idea in depth: the story, ways to play, modes, failure modes, next steps |
+| [docs/personas.md](docs/personas.md) | Preset games and the residents in the story (Margaret, Arthur, Doreen, Priya) |
+| [docs/evidence.md](docs/evidence.md) | Every statistic with its source and strength, and what not to claim |
+| [docs/pitch-outline.pdf](docs/pitch-outline.pdf) | Slide-by-slide outline for the five-minute pitch (shortlisted teams only) |
+| [docs/ideas-for-consideration.pdf](docs/ideas-for-consideration.pdf) | Design decisions with status: ways to play, unreadable marks, language model vs code, fresh paper |
+| [docs/extras-backlog.md](docs/extras-backlog.md) | Extra technical ideas, ranked, for spare time |
 | [docs/games/footsteps.pdf](docs/games/footsteps.pdf) | Rules and solver-checked strategy for Footsteps, the first game we teach Penny |
-| [docs/architecture.md](docs/architecture.md) | Architecture and tech stack |
-| [docs/DEMO.md](docs/DEMO.md) | Step-by-step demo walkthrough |
-| [docs/TASKS.md](docs/TASKS.md) | Roles, milestones, team rules |
-
 | [docs/STATUS.md](docs/STATUS.md) | Every change, newest first, with what was measured |
 | [docs/round3.md](docs/round3.md) | How the conversation, paper routines and request compiler fit together |
-
-`docs/concept.md` is an earlier draft that calls the robot Buddy and leads with loneliness; the story above
-(entertainment, inactivity, nostalgia, games that spread) replaces that framing.
+| [docs/architecture.md](docs/architecture.md) | Architecture and tech stack |
+| [docs/DEMO.md](docs/DEMO.md) | Step-by-step demo walkthrough |
+| [docs/TASKS.md](docs/TASKS.md) | Roles (current) and the first-hour plan (historical) |
 
 ## Known issues
 
+- **An unreadable mark can still become a move.** Draw an "8" and Penny asks "Is that your cross?"; a yes counts
+  it. Agreed fix (being added): "Is that where you meant to go?"; a yes only counts a new mark in an empty square on
+  the player's turn; a no gets a fresh sheet and Penny redraws the game from the last legal state.
+- **Spoken moves are drawn without a yes.** Penny repeats the square ("Your cross in the top left. Here it comes.")
+  and draws straight away; waiting for a yes is being added.
 - The mark classifier's 100% is on simulator images from the same generator; it has not been stress-tested on
   unusual marks (digits, scribbles, marks over grid lines).
 - Drawing is slow (17 s a mark) because every stroke is followed by a camera check; writing is batched per row.
@@ -185,17 +178,27 @@ docs/              design, pitch and planning documents (below)
 
 ## Next steps
 
-1. Merge PR #14 so `main` runs the full build.
-2. Pitch deliverables: the one-page technical summary, the one-minute single-take video, the five-minute pitch.
+Before the deadline (Sunday 14:00):
 
-Later (for the "where this goes" slide): Penny as the hands for two residents playing each other, or a resident and
-a visiting grandchild; a self-advancing paper roll; card and board games; a real SO-101 running the same code.
+1. **Resident profiles** and **"Margaret taught me this one"** (Nakki).
+2. **Unreadable-mark handling** and **a yes before drawing a spoken move**.
+3. **The demo video:** two unusual situations, a wrong mark or move from the player, and teaching with incomplete
+   rules. Cuts allowed between them; each reaction shown uncut. Captions and voice-over added after.
+4. **The pitch** (Misha presents; shortlisted teams only).
+
+Later:
+
+- A paper roll, so residents who can't move always have a fresh sheet.
+- Swappable attachments (fingertips, suction cup) for card and board games.
+- A small computer and microphone in Penny's base, so no laptop is needed.
+- The same code on a real SO-101. An early hardware test (not yet running Penny's software) already draws the grid
+  and plays noughts and crosses; calibration is the next step.
 
 ## Team
 
-From the commit history: **Hakim** built the simulation, perception, voice and the app; **Nakki** the scaffold,
-teaching, the game library and the planning docs; **Misha** environment configuration and voice; **Elias** the
-concept, the story, the pitch plan and Footsteps.
+**Hakim:** the simulation, perception, safety and the first app. **Nakki:** the scaffold, the brain, teaching, the
+game library, voice integration, the demo page and the measurements. **Misha:** voice, environment configuration,
+and the pitch. **Elias:** the concept, the story, the evidence, Footsteps and the technical summary.
 
 ## Running the games and the checks
 
@@ -215,5 +218,3 @@ concept, the story, the pitch plan and Footsteps.
 .venv/bin/python tools/measure_m5.py           # latency and memory on this machine
 .venv/bin/python -m pytest -q tests            # the whole suite
 ```
-
-Status and open points: [docs/STATUS.md](docs/STATUS.md); who does what: [docs/TASKS.md](docs/TASKS.md).
