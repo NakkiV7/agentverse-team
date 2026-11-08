@@ -173,7 +173,9 @@ function refreshImg(id, url) {
   im.onload = () => { document.getElementById(id).src = im.src; };
   im.src = url + "?t=" + Date.now();
 }
-setInterval(() => { refreshImg("overhead", "overhead.jpg"); refreshImg("scene", "scene.jpg"); refreshImg("sheetimg", "sheet.jpg"); }, 300);
+// Images twice a second, state twice a second, nothing while the tab is hidden: the app renders and encodes an
+// image only while it is being fetched, and every render competes with the language model for the GPU.
+setInterval(() => { if (document.hidden) return; refreshImg("overhead", "overhead.jpg"); refreshImg("scene", "scene.jpg"); refreshImg("sheetimg", "sheet.jpg"); }, 500);
 
 // drawing pad over the straightened sheet (891 x 630 px = 297 x 210 mm, 3 px per mm)
 const pad = document.getElementById("pad"), ctx = pad.getContext("2d");
@@ -243,7 +245,8 @@ async function tick() {
     el.scrollTop = el.scrollHeight;
   }
 }
-setInterval(tick, 400); tick();
+setInterval(() => { if (!document.hidden) tick(); }, 500); tick();
+document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
 
 document.getElementById("say").addEventListener("submit", async e => {
   e.preventDefault();

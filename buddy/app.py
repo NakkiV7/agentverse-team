@@ -1,11 +1,12 @@
 """Buddy, the whole system in one process.
 
 Threads
-  main        MuJoCo in real time: arm controller 50 Hz, physics 500 Hz, overhead camera 10 Hz, and the SAFETY REFLEX
-              (depth + segmentation at camera rate: a hand over the paper freezes the arm). OpenGL stays on this
-              thread (macOS).
+  main        MuJoCo in real time: arm controller 50 Hz, physics 500 Hz, overhead camera 10 Hz while anything moves or
+              waits for a frame (3 Hz idle), and the SAFETY REFLEX (depth + segmentation at camera rate: a hand over
+              the paper freezes the arm). OpenGL stays on this thread (macOS). The 3/4 view for the page is rendered
+              only while the page fetches it.
   perception  every camera frame: find the sheet and track it (also while the arm draws), read the board with the
-              mark classifier when the view is clear, draw the overlays for the demo page
+              mark classifier when the view is clear, draw the overlays for the demo page while it is open
   brain       conversation + game (buddy/agent/brain.py), with workers for setup and moves
   voice       Kokoro speaker; microphone listener (Silero VAD + Whisper)
   web         the demo page at http://localhost:8860
@@ -35,6 +36,15 @@ from .perception.sheet import CameraModel, SheetPose, SheetTracker, Track, draw_
 from .sim.world import World
 
 DEFAULT_SHEET = C.SHEET_POSE0
+
+# The simulator's rendering shares the GPU with the language model (gemma4 through Ollama's MLX runner), and the
+# model's prompt processing slowed from 400 to 150 tokens a second with the demo rendering at full rate. So the
+# camera runs at C.CAMERA_HZ only while something needs it (the arm moving or frozen, something over the paper, a
+# scene animation, a look() or fresh board snapshot waiting, the sheet not yet tracked) and at CAMERA_IDLE_HZ
+# otherwise; the page's 3/4 view and the overlay JPEGs are rendered only while the page is actually fetching them.
+CAMERA_IDLE_HZ = 3            # overhead camera (and the safety depth check) while nothing moves and nobody waits for a frame
+SCENE_HZ = 5                  # the 3/4 view for the demo page, at most, and only while the page polls it
+PAGE_WANTED_S = 2.0           # an image is rendered and encoded only if the page fetched it this recently
 
 
 @dataclass
@@ -77,6 +87,8 @@ class App:
         self._frame, self._frame_t, self._last_sheet = None, -1.0, None
         self.board_snap: Optional[BoardSnapshot] = None
         self.overhead_jpg = self.scene_jpg = self.sheet_jpg = b""
+        self.polled: dict[str, float] = {}       # image name -> time.time() of the page's last GET (buddy/ui/server.py)
+        self._camera_wanted_until = 0.0          # look() / board_snapshot(fresh=True) keep the camera at full rate until then
         self.overlay_lines, self.overlay_cov = None, None
         self.scene_actions: "queue.Queue" = queue.Queue()
         self.last_strokes = None                 # (name, strokes_mm) of the most recent drawing job
@@ -165,11 +177,24 @@ class App:
         return (self.ctl.at_home and not self.ctl.busy and not self.intrusion.present
                 and not self.world.busy_animating())
 
+    def page_wants(self, name: str) -> bool:
+        """True while the demo page is fetching this image (overhead, scene, sheet)."""
+        return time.time() - self.polled.get(name, 0.0) < PAGE_WANTED_S
+
+    def camera_busy(self) -> bool:
+        """Full camera rate: the arm moving or frozen, something over the paper, a scene animation, someone waiting
+        for a frame, or the sheet not tracked and steady yet. Otherwise the camera idles at CAMERA_IDLE_HZ."""
+        tr = self.tracker.track
+        return (self.ctl.busy or not self.ctl.at_home or self.ctl.paused or self.intrusion.present
+                or self.world.busy_animating() or time.time() < self._camera_wanted_until
+                or tr is None or not tr.visible or not tr.stable)
+
     def look(self, timeout: float = 10.0) -> Optional[Look]:
         """A camera frame taken after this call with the arm parked and nothing over the paper."""
         t_req = self.sim_time
         t_end = time.time() + timeout
         while time.time() < t_end:
+            self._camera_wanted_until = time.time() + 1.0
             with self._lock:
                 rgb, t, sheet = self._frame, self._frame_t, self._last_sheet
             if rgb is not None and t > t_req + 0.15 and self.view_clear():
@@ -186,6 +211,7 @@ class App:
         t_req = self.sim_time
         t_end = time.time() + timeout
         while time.time() < t_end:
+            self._camera_wanted_until = time.time() + 1.0
             s = self.board_snap
             if s is not None and s.usable and s.t > t_req + 0.15:
                 return s
@@ -274,14 +300,15 @@ class App:
             if tr is not None and tr.visible:
                 cells, rect = self.reader.read(rgb, self.cam, tr.pose)
                 self.board_snap = BoardSnapshot(cells, t, clear and tr.stable)
-            note = ("SAFETY: hand over the paper, arm frozen" if self.ctl.paused else
-                    "SEE: clear view" if clear else "arm or hand over the paper: tracking the sheet")
-            show = SheetPose(*tr.pose, tr.confidence, sheet.size_mm if sheet else (0, 0),
-                             sheet.corners_px if sheet else np.zeros((4, 2))) if tr is not None else sheet
-            overlay = draw_overlay(rgb, self.cam, show, self.overlay_lines, self.overlay_cov, note)
-            self.overhead_jpg = cv2.imencode(".jpg", cv2.resize(overlay, (960, 720), interpolation=cv2.INTER_AREA),
-                                             [cv2.IMWRITE_JPEG_QUALITY, 80])[1].tobytes()
-            if rect is not None:
+            if self.page_wants("overhead"):          # the overlay and its JPEG only while the page shows them
+                note = ("SAFETY: hand over the paper, arm frozen" if self.ctl.paused else
+                        "SEE: clear view" if clear else "arm or hand over the paper: tracking the sheet")
+                show = SheetPose(*tr.pose, tr.confidence, sheet.size_mm if sheet else (0, 0),
+                                 sheet.corners_px if sheet else np.zeros((4, 2))) if tr is not None else sheet
+                overlay = draw_overlay(rgb, self.cam, show, self.overlay_lines, self.overlay_cov, note)
+                self.overhead_jpg = cv2.imencode(".jpg", cv2.resize(overlay, (960, 720), interpolation=cv2.INTER_AREA),
+                                                 [cv2.IMWRITE_JPEG_QUALITY, 80])[1].tobytes()
+            if rect is not None and self.page_wants("sheet"):
                 readable = clear and tr.stable
                 img = draw_board(rect, cells if readable else None,
                                  "" if readable else "arm or hand over the paper: reading paused")
@@ -372,7 +399,7 @@ class App:
     def run(self, until=None, realtime: bool = True):
         spt = int(round(1.0 / C.CONTROL_HZ / C.TIMESTEP))
         dt = 1.0 / C.CONTROL_HZ
-        next_cam = next_scene = 0.0
+        last_cam, next_scene = -1.0, 0.0
         start = time.perf_counter()
         while self.running:
             while not self.scene_actions.empty():
@@ -380,16 +407,18 @@ class App:
             self.world.command(self.ctl.tick(self.world.touch()))
             self.world.step(spt)
             self.sim_time += dt
-            if self.sim_time >= next_cam:
+            # the camera: C.CAMERA_HZ while something needs it, CAMERA_IDLE_HZ otherwise (see the top of the file)
+            if self.sim_time - last_cam >= 1.0 / (C.CAMERA_HZ if self.camera_busy() else CAMERA_IDLE_HZ) - 1e-9:
+                last_cam = self.sim_time
                 rgb = self.world.render_overhead()
                 with self._lock:
                     self._frame, self._frame_t = rgb, self.sim_time
                 self._reflex()
-                next_cam += 1.0 / C.CAMERA_HZ
             if self.sim_time >= next_scene:
-                scene = cv2.cvtColor(self.world.render_scene(), cv2.COLOR_RGB2BGR)
-                self.scene_jpg = cv2.imencode(".jpg", scene, [cv2.IMWRITE_JPEG_QUALITY, 80])[1].tobytes()
-                next_scene += 0.1
+                next_scene = self.sim_time + 1.0 / SCENE_HZ
+                if self.page_wants("scene"):      # the 3/4 view only while the page shows it
+                    scene = cv2.cvtColor(self.world.render_scene(), cv2.COLOR_RGB2BGR)
+                    self.scene_jpg = cv2.imencode(".jpg", scene, [cv2.IMWRITE_JPEG_QUALITY, 80])[1].tobytes()
             if until is not None and until(self):
                 break
             if not realtime:

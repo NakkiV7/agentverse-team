@@ -10,10 +10,21 @@ tool call becomes say(text). One running conversation is kept, like llm.Conversa
 the newest message; the oldest exchanges are dropped when it gets long, and it restarts after a failure.
 
 The facts (brain.facts(): the board, the letters tried, the score, the history, the last turns of conversation) ride
-in the newest user message only, under "Facts:", so the system prompt and the worked examples stay a stable,
-cached prefix. Questions are answered with say from those facts; the model is told never to invent one. Gemma 4's
-context here is 4096 tokens and the prefix is about 2560, so the stored history keeps only the player's words and
-the model's calls, never the facts, and at most MAX_TURNS exchanges.
+in the newest user message only, so the system prompt and the worked examples stay a stable, cached prefix.
+Questions are answered with say from those facts; the model is told never to invent one.
+
+What Ollama has to process again at every call is everything after the first token that differs from a cached
+request (its log says so: "cache hit total=4144 matched=3438 left=712"), so the message is ordered stable first,
+volatile last: the situation (the same for a whole state), the facts' head (the game, its rules, the level, the
+record, the player's name: the same for a whole game), the facts' tail (the position, the moves, the conversation:
+new at every turn), the player's words. brain.facts() writes head and tail in that order. The stored history is
+empty by default (MAX_TURNS = 0): the facts already carry the last turns of conversation, and a history turn stored
+without its facts broke the cached prefix at the previous exchange, so the whole facts block (700 tokens) was
+processed again at every call. Measured on the M5 (gemma4 8.1B, Ollama's MLX runner, 150 to 400 prompt tokens a
+second depending on what else uses the GPU): a cold prefix of 3960 tokens costs 7.7 to 8.1 s of prompt processing
+plus a 3 s first-token stall, a warm one 0.03 to 0.1 s, and the demo's calls took 11 s with 712 tokens left to
+process; the same facts head cached, a new tail costs 0.5 to 1.4 s. (Putting the situation after the facts was
+tried for a longer stable run and dropped tools/question_eval.py from 45 to 39 of 46, so the proven order stays.)
 
 BUDDY_TOOLS=0 in the environment switches the planner off (every call returns None), for comparing the two paths.
 
@@ -39,8 +50,9 @@ TIMEOUT_S = 20.0
 NUM_PREDICT = 160             # a tool call or three short sentences; the 4096-token context is shared with the prompt
 NUM_CTX = 8192                # Ollama's default context is 4096 and the facts block took the prompt to 3660 tokens before the
                               # custom_request tool joined the list; a per-request window twice that leaves room (measured: same speed)
-MAX_TURNS = 3                 # exchanges kept in the running conversation (the facts carry the last eight turns anyway):
-                              # measured in the simulator, prefix 3126 + facts and situation up to ~600 + history ~70 each
+MAX_TURNS = 0                 # exchanges kept in the running conversation: none, the facts carry the last eight turns of
+                              # conversation and Buddy's last words, and every stored exchange moved the point where the
+                              # cached prefix ends back by a whole facts block (see the module docstring)
 # Ollama caches the prompt prefix, and the tool list is part of it. Offering only the state's tools (tools.schemas)
 # changes the prefix at every state change, so the whole prompt is processed again: measured 5.7 s a call on
 # average over 21 requests, against 1.8 s with the full list every time, with the same 21 of 21 right. So the model
@@ -75,9 +87,15 @@ you play that", "give me a hint" and "what are the rules" keep their own tools."
 KNOWN = "Games Buddy knows: noughts and crosses, hangman and dots and boxes."
 
 
+def user_message(text: str, situation: str, facts: str = "") -> str:
+    """The newest user message: the situation, the facts (stable head first, volatile tail last, see brain.facts),
+    the player's words."""
+    return f"Situation: {situation}\n" + (f"Facts:\n{facts.strip()}\n" if facts and facts.strip() else "") + f"Player said: \"{text}\""
+
+
 def _seed(situation: str, text: str, *calls: tuple[str, dict], facts: str = "") -> list[dict]:
     """One worked example as real conversation turns, so the model answers with native tool calls."""
-    body = f"Situation: {situation} {KNOWN}\n" + (f"Facts:\n{facts}\n" if facts else "") + f"Player said: \"{text}\""
+    body = user_message(text, f"{situation} {KNOWN}", facts)
     msgs = [{"role": "user", "content": body},
             {"role": "assistant", "content": "",
              "tool_calls": [{"function": {"name": n, "arguments": a}} for n, a in calls]}]
@@ -229,9 +247,7 @@ class Planner:
             end = starts[1] if len(starts) > 1 else len(self.msgs)
             del self.msgs[starts[0]:end]
 
-    @staticmethod
-    def user_message(text: str, situation: str, facts: str = "") -> str:
-        return f"Situation: {situation}\n" + (f"Facts:\n{facts.strip()}\n" if facts else "") + f"Player said: \"{text}\""
+    user_message = staticmethod(user_message)
 
     def plan(self, text: str, situation: str, state: str, facts: str | None = None) -> list[ToolCall] | None:
         if not ENABLED:
@@ -258,8 +274,8 @@ class Planner:
         self.seconds = time.time() - t0
         if calls is None:
             return None
-        # remember the exchange: the player's words (not the facts or the situation, which are stale next time and
-        # would fill the 4096-token context), the assistant's calls and a short result for each
+        # remember the exchange (only when MAX_TURNS > 0): the player's words (not the facts or the situation, which
+        # are stale next time), the assistant's calls and a short result for each
         self.msgs = msgs[:-1] + [{"role": "user", "content": f"Player said: \"{text}\""}]
         self.msgs.append({"role": "assistant", "content": message.get("content") or "",
                           **({"tool_calls": message["tool_calls"]} if message.get("tool_calls") else {})})
