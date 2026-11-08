@@ -41,7 +41,7 @@ def context_from(brain):
     out = {"game": getattr(brain, "game_name", "the game"), "number": getattr(brain, "games", 0)}
     if getattr(brain, "player_name", None):
         out["player_name"] = brain.player_name
-    hangman = getattr(brain, "hangman", None)
+    hangman = getattr(brain, "hangman", None) if L.game_kind(brain) == "hangman" else None
     if hangman is not None:
         out.update(pattern=hangman.pattern, misses=hangman.misses, guessed=sorted(hangman.guessed),
                    wrong=sorted(hangman.guessed - set(hangman.word)))
@@ -49,7 +49,7 @@ def context_from(brain):
             out.update(letter=hangman.last_guess, correct=hangman.last_guess in hangman.word)
         if hangman.result() is not None:
             out["result"] = hangman.result()
-    dots = getattr(brain, "dots", None)
+    dots = getattr(brain, "dots", None) if L.game_kind(brain) == "dots" else None
     if dots is not None and dots.state is not None:
         out.update(score_player=dots.state.score("P"), score_buddy=dots.state.score("B"))
     # Event history is part of brain state too. Supply the last move/line and

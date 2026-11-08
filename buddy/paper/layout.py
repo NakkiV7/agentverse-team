@@ -70,25 +70,40 @@ REACH_PATCHES = (Rect(-130, -15, 130, 74), Rect(-98, -34, 98, 74),
                  Rect(-130, 35, -65, 96), Rect(65, 35, 130, 96))
 
 
+def game_kind(brain):
+    """The selected game wins over objects retained from an earlier game."""
+    kind = getattr(getattr(brain, "entry", None), "kind", None)
+    if kind:
+        return kind
+    game = str(getattr(brain, "game_name", "")).lower()
+    if game:
+        return "hangman" if "hangman" in game else "dots" if "dots" in game else "grid"
+    if getattr(brain, "hangman", None) is not None:
+        return "hangman"
+    if getattr(brain, "dots", None) is not None:
+        return "dots"
+    return "none" if getattr(brain, "state", "") in ("IDLE", "CHAT") else "grid"
+
+
 def footprint(brain):
     """Reserve the entire game, including letters/claims not yet drawn."""
-    game = str(getattr(brain, "game_name", "")).lower()
+    kind = game_kind(brain)
     hangman = getattr(brain, "hangman", None)
     dots = getattr(brain, "dots", None)
-    if "hangman" in game or hangman is not None:
+    if kind == "hangman":
         length = len(hangman.word) if hangman is not None else 7
         slots = M.hangman_slots(length)
         return [Rect(-60, 8, -20, 60).padded(4),
                 Rect(slots[0][0], M.HANGMAN_BASELINE_MM - 4,
                      slots[-1][0] + M.CAPITAL_WIDTH_MM,
                      M.HANGMAN_BASELINE_MM + M.CAPITAL_HEIGHT_MM).padded(4)]
-    if "dots" in game or dots is not None:
+    if kind == "dots":
         n = dots.n if dots is not None else 2
         pts = np.asarray(M.dot_positions_mm(n))
         # Also stay outside DotsPlay.board_ink's scribble-detection window.
         pad = max(4, M.dot_spacing(n) * .35 + 1)
         return [Rect(*pts.min(axis=0), *pts.max(axis=0)).padded(pad)]
-    if game or getattr(brain, "state", "") not in ("IDLE", "CHAT"):
+    if kind != "none":
         h = C.GRID_SIZE_MM / 2 + 4
         return [Rect(-h, -h, h, h)]
     return []

@@ -140,7 +140,8 @@ def test_new_sheet_keeps_rules_and_missing_target_requests_rewrite(paper):
 
 
 def test_event_score_snapshot_is_preserved_while_waiting(paper):
-    paper.brain.dots = SimpleNamespace(state=SimpleNamespace(score=lambda who: 1 if who == "P" else 0))
+    paper.brain.game_name, paper.brain.hangman = "dots and boxes", None
+    paper.brain.dots = SimpleNamespace(n=2, state=SimpleNamespace(score=lambda who: 1 if who == "P" else 0))
     assert write(paper, "0:0", id="score") is None
     paper.add_rule({"name": "scores", "when": {"kind": "box"},
                     "do": [{"op": "append_text", "id": "score", "text": " {score_player}:{score_buddy}"}]})
@@ -238,3 +239,10 @@ def test_a_guess_during_writing_is_marked_after_the_item_is_complete(paper, monk
     assert [name for name, strokes in paper.draws] == ["paper alphabet: A", "paper alphabet: B",
                                                      "paper alphabet: C", "paper cross_out: B"]
     assert paper.items["alphabet"].characters[1].marks == {"cross_out"}
+
+
+def test_template_context_does_not_leak_an_old_games_score(paper):
+    paper.brain.dots = SimpleNamespace(state=SimpleNamespace(score=lambda who: 4))
+    assert "score_player" not in context_from(paper.brain)
+    paper.brain.game_name = "noughts and crosses"
+    assert "pattern" not in context_from(paper.brain)

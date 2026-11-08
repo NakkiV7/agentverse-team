@@ -94,3 +94,14 @@ def test_annotation_stays_in_the_reserved_character_box():
                 assert cell.box.x0 - 1e-8 <= x <= cell.box.x1 + 1e-8
                 assert cell.box.y0 - 1e-8 <= y <= cell.box.y1 + 1e-8
     assert len(cell.cross()) == 1
+
+
+def test_selected_game_footprint_ignores_old_hangman_and_dots_objects():
+    b = brain("noughts and crosses")
+    expected = L.footprint(b)
+    b.hangman = Hangman("APPLE")
+    b.dots = SimpleNamespace(n=2)
+    assert L.footprint(b) == expected
+    b.entry = SimpleNamespace(kind="grid")
+    b.game_name = "a taught game with dots in its name"
+    assert L.footprint(b) == expected
