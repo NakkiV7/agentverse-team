@@ -66,8 +66,10 @@ def main():
         app = App(voice=False, mic=False)
         b = app.brain
         b.rng = random.Random(3)
-        p = b.paper = Paper(b)
-        b.listeners.append(p.on_event)
+        p = b.paper                      # installed by the brain (paper_glue); a bare brain would need Paper(b)
+        if p is None:
+            p = b.paper = Paper(b)
+            b.listeners.append(p.on_event)
         # Demonstrate the coordinator's one-line guard without editing brain.py.
         hangman_act = b._hangman_act
 
