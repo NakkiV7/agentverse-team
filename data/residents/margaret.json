@@ -1,0 +1,11 @@
+{
+  "name": "Margaret",
+  "age": 84,
+  "way_to_play": "write_for_me",
+  "level": "gentle",
+  "voice_speed": "slow",
+  "favourite_game": "noughts and crosses",
+  "taught_games": ["Footsteps"],
+  "captions": false,
+  "short_sessions": false
+}

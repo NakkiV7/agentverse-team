@@ -43,3 +43,22 @@ def test_difficulty_levels():
     d.update("loss"); assert d.strength == 1.0                          # fixed levels do not move
     d.set_level("adaptive"); d.strength = 0.75; d.update("loss"); assert d.strength < 0.75
     assert set(LEVELS) == {"easy", "medium", "hard", "impossible"}
+
+
+def test_a_broken_games_file_is_set_aside_and_bad_entries_skipped(tmp_path):
+    from buddy.game.library import Library
+    path = tmp_path / "games.json"
+    path.write_text('{"games": [{"name": "Chains", "spec"')            # half-written
+    lib = Library(path, hidden=())
+    assert lib.find("hangman") is not None and not path.exists()
+    assert list(tmp_path.glob("games.json.broken-*"))
+    path.write_text('{"games": [{"spec": null}, {"name": "Chains", "spec": null}], "builtin_history": [{"plays": 2}]}')
+    lib = Library(path, hidden=())
+    assert lib.find("Chains") is not None                              # the good entry survives the bad one
+
+
+def test_save_leaves_no_temporary_file(tmp_path):
+    from buddy.game.library import Library
+    lib = Library(tmp_path / "games.json", hidden=())
+    lib.record(lib.find("hangman"), "win")
+    assert [p.name for p in tmp_path.iterdir()] == ["games.json"]

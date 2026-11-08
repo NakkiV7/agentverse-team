@@ -124,8 +124,16 @@ pad.addEventListener("pointerup", () => {
 });
 
 // ---------------------------------------------------------------- header
+const contextCaption = document.createElement("p");
+contextCaption.id = "context-caption";
+contextCaption.setAttribute("aria-live", "polite");
+contextCaption.textContent = "Penny · resting";
+document.querySelector("header.top").after(contextCaption);
 function setDot(id, cls, text) { const d = $(id); d.className = "dot " + cls; d.title = text; d.setAttribute("aria-label", text); }
 function header(s) {
+  const caption = s.caption || "Penny · resting";
+  if (contextCaption.textContent !== caption) contextCaption.textContent = caption;
+  contextCaption.title = contextCaption.textContent;
   const g = s.game || {};
   $("gamename").textContent = g.name || "";
   $("gamename").title = g.known ? "Games Penny knows: " + g.known.join(", ") : "";

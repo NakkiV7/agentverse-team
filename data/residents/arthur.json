@@ -1,0 +1,11 @@
+{
+  "name": "Arthur",
+  "age": 79,
+  "way_to_play": "i_write",
+  "level": "best",
+  "voice_speed": "normal",
+  "favourite_game": "dots and boxes",
+  "taught_games": [],
+  "captions": true,
+  "short_sessions": false
+}

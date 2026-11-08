@@ -85,16 +85,20 @@ class KokoroEngine:
             self.pipe.model.to("mps")
             self.device = "mps"
         self.sr = 24000
+        self.speed = C.TTS_SPEED
         self.label = f"Kokoro-82M {C.TTS_VOICE} on {self.device}"
 
     def synth(self, text: str) -> np.ndarray:
         chunks = [a.detach().cpu().numpy() if hasattr(a, "numpy") else np.asarray(a)
-                  for _, _, a in self.pipe(text, voice=C.TTS_VOICE, speed=C.TTS_SPEED, split_pattern=None)]
+                  for _, _, a in self.pipe(text, voice=C.TTS_VOICE, speed=self.speed, split_pattern=None)]
         return np.concatenate(chunks).astype(np.float32) if chunks else np.zeros(0, np.float32)
 
     def warm(self):
         for _ in range(3 if self.device == "mps" else 1):   # the first MPS call compiles kernels (about 3.7 s)
             self.synth("Hello there.")
+
+    def set_length_scale(self, scale: float):
+        self.speed = C.TTS_SPEED * C.PIPER_LENGTH_SCALE / scale
 
 
 class PiperEngine:
@@ -117,6 +121,10 @@ class PiperEngine:
     def synth(self, text: str) -> np.ndarray:
         chunks = [ch.audio_float_array for ch in self.voice.synthesize(text, self.cfg)]
         return np.concatenate(chunks).astype(np.float32) if chunks else np.zeros(0, np.float32)
+
+    def set_length_scale(self, scale: float):
+        from dataclasses import replace
+        self.cfg = replace(self.cfg, length_scale=scale)
 
     def warm(self):
         self.synth("Hello there.")
@@ -148,6 +156,9 @@ class SayEngine:
 
     def warm(self):
         self.synth("Hello there.")
+
+    def set_length_scale(self, scale: float):
+        self.rate = round(C.SAY_RATE * C.PIPER_LENGTH_SCALE / scale)
 
 
 ENGINES = {"piper": PiperEngine, "kokoro": KokoroEngine, "say": SayEngine}
@@ -193,6 +204,12 @@ class Speaker:
     # the old name, used by scripts
     def synth(self, text: str) -> np.ndarray:
         return self.engine.synth(text)
+
+    def set_length_scale(self, scale: float):
+        """Change the pace for subsequent speech without reloading the voice."""
+        if not np.isfinite(scale) or scale <= 0:
+            raise ValueError("Speech length scale must be positive and finite")
+        self.engine.set_length_scale(scale)
 
     def say(self, text: str) -> threading.Event:
         """Queue text; returns an Event set when it has finished playing."""
