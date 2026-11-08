@@ -147,7 +147,5 @@ Also state the hardware (laptop model, RAM, GPU or Apple chip) and that nothing 
 
 - **Video (1 min, one take, from the sim stream):** a move read with confidences on screen, Buddy replies, a
   teammate slides the sheet mid-stroke, Buddy re-plans and finishes.
-- **Pitch (5 min):** see [pitch-plan.md](pitch-plan.md), with the three modes as the "how it works" section and
-  Teach mode as the ambition moment.
 - **Real arm (optional):** only if it is an SO-101 like our simulated one, so the same code can draw a grid on
   real paper next to the sim. One person, a hard deadline, a backup recording, organisers' OK first.

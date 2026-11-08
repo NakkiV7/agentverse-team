@@ -161,8 +161,8 @@ docs/              design, pitch and planning documents (below)
 |---|---|
 | [docs/concept.md](docs/concept.md) | The idea in depth: modes, resident profiles, failure modes, latency plan |
 | [docs/ideas-for-consideration.pdf](docs/ideas-for-consideration.pdf) | Design ideas with status: ways to play, unreadable marks, language model vs code, fresh paper |
-| [docs/pitch-plan.md](docs/pitch-plan.md) | The 5-minute pitch mapped to the judging weights, the video plan, deliverables |
-| [docs/pitch.md](docs/pitch.md) | Earlier 3-minute demo script (needs the fixes listed in pitch-plan.md) |
+| [docs/technical-summary.pdf](docs/technical-summary.pdf) | The one-page technical summary for the judges |
+| [docs/evidence.md](docs/evidence.md) | Sourced figures for the story, with how strong each one is |
 | [docs/games/footsteps.pdf](docs/games/footsteps.pdf) | Rules and solver-checked strategy for Footsteps, the first game we teach Penny |
 | [docs/architecture.md](docs/architecture.md) | Architecture and tech stack |
 | [docs/DEMO.md](docs/DEMO.md) | Step-by-step demo walkthrough |
@@ -171,8 +171,8 @@ docs/              design, pitch and planning documents (below)
 | [docs/STATUS.md](docs/STATUS.md) | Every change, newest first, with what was measured |
 | [docs/round3.md](docs/round3.md) | How the conversation, paper routines and request compiler fit together |
 
-`docs/concept.md` and `docs/pitch-plan.md` are earlier drafts that call the robot Buddy and lead with loneliness;
-the story above (entertainment, inactivity, nostalgia, games that spread) replaces that framing.
+`docs/concept.md` is an earlier draft that calls the robot Buddy and leads with loneliness; the story above
+(entertainment, inactivity, nostalgia, games that spread) replaces that framing.
 
 ## Known issues
 
