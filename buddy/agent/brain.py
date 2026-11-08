@@ -517,11 +517,26 @@ class Brain:
         if calls is not None:
             self.run_tools(calls, text)
             return
+        if self.planner.seconds > 0 and self._is_information_question(text):
+            # the planner timed out (a busy Ollama); the Gemma 3 intent path cannot answer a question from the
+            # facts and would read it as a letter or small talk, so ask for it again rather than guess
+            self.app.trace("decide", "a question with no planner answer: asking the player to repeat it")
+            self.say("I'm sorry, I lost my train of thought there. Could you ask me that again?")
+            return
         u = self.conv.understand(text, sit)
         extra = f", cell={NAMES[u.cell]}" if u.cell is not None else ""
         self.app.trace("understand", f"Gemma 3 4B: intent={u.intent}" + (f", game={u.game}" if u.game != "none" else "")
                        + (f", side={u.side}" if u.side != "none" else "") + extra + f" ({u.seconds:.1f} s)")
         self._act(u, text, sit)
+
+    QUESTION_WORDS = re.compile(r"^(?:and |so |buddy,? |buddy |ok |okay |right |now )*(?:what|which|how many|how much|how long|how far|who|whose|"
+                                r"when|where|why|did i|have i|what've|what's|whats|who's|where's)\b", re.I)
+
+    def _is_information_question(self, text: str) -> bool:
+        """'what letters have I asked', 'how many misses do I have left': something only the facts can answer.
+        Yes/no requests ('can I have a hint?') and letters are left to the intent path."""
+        t = " ".join(text.split())
+        return len(t.split()) >= 3 and bool(self.QUESTION_WORDS.match(t))
 
     def _chat_reply(self, text, sit, fallback_prompt=""):
         r, dt = reply(text, sit)

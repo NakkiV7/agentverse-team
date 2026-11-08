@@ -367,6 +367,20 @@ def test_what_did_i_say_is_answered_from_the_log_even_through_repeat(brain):
     assert fresh.what_player_said() == "You haven't said anything to me yet."
 
 
+def test_a_question_the_planner_could_not_answer_is_asked_for_again(brain):
+    hangman_scene(brain)
+    brain.planner.seconds = 20.0                           # a timed-out call; plan() returned None
+    brain._plan_tools = lambda text, sit: None
+    understood = []
+    brain.conv.understand = lambda text, sit: understood.append(text) or (_ for _ in ()).throw(AssertionError("intent path used"))
+    brain._on_text("what letters have I asked so far?", "typed", 0.0)
+    assert brain.last_said.startswith("I'm sorry, I lost my train of thought")
+    assert not understood
+    assert brain._is_information_question("how many misses do I have left") and brain._is_information_question("And which were wrong?")
+    assert not brain._is_information_question("E") and not brain._is_information_question("can I have a hint?")
+    assert not brain._is_information_question("what?")
+
+
 def test_say_keeps_three_sentences(brain):
     long = "One sentence here. " * 40
     brain.run_tools([ToolCall("say", {"text": long})], "")
