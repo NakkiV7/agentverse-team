@@ -359,9 +359,9 @@ def test_what_did_i_say_is_answered_from_the_log_even_through_repeat(brain):
     hangman_scene(brain)
     brain.emit("heard", "player", "what did I say a minute ago?")
     brain.run_tools([ToolCall("repeat", {})], "what did I say a minute ago?")
-    assert brain.last_said == 'A moment ago you said "N", and before that "S".'
+    assert brain.last_said == 'A moment ago you said "N", and before that "I think it might be a fruit".'
     brain.run_tools([ToolCall("repeat", {})], "say that again please")
-    assert brain.last_said == 'A moment ago you said "N", and before that "S".'   # a real repeat repeats
+    assert brain.last_said == 'A moment ago you said "N", and before that "I think it might be a fruit".'   # a real repeat repeats
     fresh = brain.__class__.__new__(brain.__class__)
     fresh.app, fresh.events = brain.app, []
     assert fresh.what_player_said() == "You haven't said anything to me yet."
