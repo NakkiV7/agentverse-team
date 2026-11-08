@@ -208,3 +208,21 @@ games (dots and boxes, hangman), card and board games; a real SO-101 running the
 From the commit history: **Hakim** built the simulation, perception, voice and the app; **Nakki** the scaffold,
 teaching, the game library and the planning docs; **Misha** environment configuration and voice; **Elias** the
 concept, the story, the pitch plan and Footsteps.
+
+## Running the games and the checks
+
+```bash
+.venv/bin/python -m buddy                      # the simulator with voice: say "Buddy", then name a game or teach one
+.venv/bin/python -m buddy --no-mic             # the same, typing on the page at http://localhost:8860
+.venv/bin/python tools/dry_run.py              # noughts and crosses, scripted
+.venv/bin/python tools/menu_dry_run.py         # the menu, difficulty by voice, Footsteps, the record on disk
+.venv/bin/python tools/teach_full_dry_run.py   # teach Buddy Footsteps, it draws the board and plays it (--new, --misere)
+.venv/bin/python tools/dots_full_dry_run.py    # dots and boxes through the conversation
+.venv/bin/python tools/hangman_dry_run.py      # hangman on paper, letters typed
+.venv/bin/python tools/teach_eval.py           # how well each local model turns an explanation into rules
+.venv/bin/python -m pytest -q tests            # the whole suite
+```
+
+Voice needs whisper.cpp (`brew install whisper-cpp`) and the `small.en` model in `~/.cache/whisper.cpp/`; teaching
+needs `ollama pull gemma4`. Run Ollama with `OLLAMA_MAX_LOADED_MODELS=2` so both Gemmas stay resident. Status and
+open points: [docs/STATUS.md](docs/STATUS.md); who does what: [docs/TASKS.md](docs/TASKS.md).

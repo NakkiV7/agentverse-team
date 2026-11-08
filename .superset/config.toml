@@ -1,0 +1,25 @@
+# Paradev workspaces for Buddy: each worktree gets its own venv and a check that Ollama and the models are there.
+# Personal tweaks go in .superset/config.local.toml (gitignored). Docs: docs/TASKS.md, docs/STATUS.md.
+
+[install]
+run = [
+  "command -v uv >/dev/null || brew install uv",
+]
+
+[setup]
+# per workspace; safe to run again
+run = [
+  "uv venv --python 3.12 .venv",
+  "uv pip install --python .venv/bin/python -r requirements.txt",
+  "sh ./.superset/check.sh",
+]
+
+[terminals.demo]
+run = ".venv/bin/python -m buddy --no-mic"
+
+[terminals.tests]
+run = ".venv/bin/python -m pytest -q tests"
+
+[ports.web]
+default = 8860
+label = "Buddy demo page"

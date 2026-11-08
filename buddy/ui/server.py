@@ -1,9 +1,10 @@
 """The demo page server: http://localhost:8860
 
-GET  /             the page (buddy/ui/index.html)
-GET  /overhead.jpg overhead camera with the perception overlay
-GET  /scene.jpg    3/4 view of the arm
-GET  /sheet.jpg    the sheet straightened top-down, with the mark classifier's reading of each cell
+GET  /             the page (buddy/ui/index.html; style.css and app.js next to it, all read from disk per request)
+GET  /overhead.jpg overhead camera with the perception overlay      (each image is rendered and encoded only
+GET  /scene.jpg    3/4 view of the arm                                while the page has fetched it in the last
+GET  /sheet.jpg    the sheet straightened top-down, with the mark     two seconds: app.polled / app.page_wants)
+                   classifier's reading of each cell
 GET  /state.json   state machine, pipeline trace, conversation, sensors
 POST /say          {"text": ...}  typed input, same path as the microphone
 POST /scene        {"action": new_sheet | slide | rotate | far | remove | back | reach | player_mark, "arg": cell}
@@ -14,10 +15,14 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-PAGE = Path(__file__).resolve().parent / "index.html"
+UI = Path(__file__).resolve().parent
+PAGE = UI / "index.html"
+FILES = {"/": (PAGE, "text/html; charset=utf-8"), "/index.html": (PAGE, "text/html; charset=utf-8"),
+         "/style.css": (UI / "style.css", "text/css; charset=utf-8"), "/app.js": (UI / "app.js", "text/javascript; charset=utf-8")}
 
 
 def serve(app, port: int):
@@ -35,14 +40,15 @@ def serve(app, port: int):
 
         def do_GET(self):
             path = self.path.split("?")[0]
-            if path in ("/", "/index.html"):
-                self._send(PAGE.read_bytes(), "text/html; charset=utf-8")
-            elif path == "/overhead.jpg":
-                self._send(app.overhead_jpg, "image/jpeg")
-            elif path == "/scene.jpg":
-                self._send(app.scene_jpg, "image/jpeg")
-            elif path == "/sheet.jpg":
-                self._send(app.sheet_jpg, "image/jpeg")
+            if path in FILES:                           # read from disk every time: edit the page, reload, done
+                f, ctype = FILES[path]
+                self._send(f.read_bytes(), ctype)
+            elif path in ("/overhead.jpg", "/scene.jpg", "/sheet.jpg"):
+                name = path[1:-4]
+                polled = getattr(app, "polled", None)      # the app renders an image only while the page fetches it
+                if polled is not None:
+                    polled[name] = time.time()
+                self._send(getattr(app, f"{name}_jpg"), "image/jpeg")
             elif path == "/state.json":
                 self._send(json.dumps(app.state()).encode(), "application/json")
             else:

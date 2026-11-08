@@ -14,6 +14,18 @@ Verified on Nakkiv's Mac (M5, Homebrew Ollama 0.40): all 6 tests pass (52 s); th
 completes (one Buddy win in 78 s wall, one draw in 92 s); Gemma 3 4B intents in 0.9 to 1.5 s; structured
 output (`format`) works with `gemma3:4b`. Not verified on a second machine: microphone in, Kokoro out.
 
+**Teach-a-game (7 Nov, late evening): working end to end in the simulation.** Say "let me teach you a game";
+Buddy runs the interview with Gemma 4 (`buddy/agent/teach.py`), asks when a rule is missing, reads the rules back,
+solves the game (`buddy/game/solver.py`), says what it found ("whoever goes first can always win, but only from a
+corner or the centre"), draws the board, and plays it on the paper with the solver choosing its moves; the camera
+still reads every move. `tools/teach_full_dry_run.py` does the whole thing scripted (Footsteps in about 100 s of
+wall time; `--misere` too). The family it can learn is in `buddy/game/rules.py`: 3x3 or 4x4, X and O, marks
+anywhere or next to the last mark, ending by k in a row wins / loses or "can't move, you lose"; the arm draws 3x3
+only for now, so 4x4 games are understood but declined. Measured: Gemma 4 extracted 7 of 8 explanations first
+time (`tools/teach_eval.py`); Gemma 3 4B guesses missing rules, so it stays on the in-game intents. Solver results
+match `docs/games/footsteps.pdf`. Left here: a rules panel on the demo page, and the "example game drawn on the
+paper" idea from `docs/concept.md`.
+
 **Claim your role here** (edit this file on GitHub or open a PR):
 
 | Role | Owns | Name |
@@ -54,7 +66,7 @@ code base. The milestones, rules and integration checkpoints still apply.
 **Status (7 Nov, evening):** hours 1 to 9 are done in Hakim's build: grid drawn and checked, boards read by
 a small CNN trained on simulator images, a full typed game on the demo page, sheet moved / hand in area /
 unclear mark / wrong symbol all handled. Hour 11 (voice in and out) exists in code and is unverified on a
-second machine. Left: the voice check, polish, the pitch, and whichever stretch goal the team picks.
+second machine. Left: the voice check, the teach-a-game panel on the demo page, polish, and the pitch.
 
 ---
 
