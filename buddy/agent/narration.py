@@ -145,6 +145,12 @@ def explain_last_move(brain) -> str:
         return "I haven't chosen a move in this game yet."
     if getattr(brain, "busy", False):
         return "Let me finish checking my drawing first."
+    if kind == "grid" and (not 0 <= choice.cell < len(brain.board)
+                           or brain.board[choice.cell] != tictactoe.other(brain.player_sym)):
+        return "I haven't played a checked move in this game yet."
+    if kind == "dots" and (getattr(getattr(brain, "dots", None), "state", None) is None
+                           or not brain.dots.state.drawn(choice.cell)):
+        return "I haven't played a checked move in this game yet."
     scores = choice.scores
     if choice.cell not in scores:
         return "I haven't kept enough detail to explain that move for certain."

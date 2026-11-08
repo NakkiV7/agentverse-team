@@ -2,6 +2,31 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov 2026: game narration, faint-stroke redraw and hangman difficulty (task D2-narration)
+
+- `narration.py` supplies pure `score_text`, `explain_last_move` and `hint_text` helpers for checked grid,
+  taught-game, dots and hangman state. Examples: "You've found two of five letters, with six misses left.
+  It's your turn to choose a letter."; "The centre was my only way to avoid losing with best play.";
+  "You could try the top side of the top left box, if you like. It won't leave a box ready for me."
+  Explanations use saved scores, qualify bounded search and admit missing evidence; hints leave the board,
+  random state and live solver untouched. Pending ink and the robot's turn do not produce a suggested move.
+- `App.redraw_last(name=None)` queues copied strokes as `again: <name>`, using the normal controller and
+  current camera sheet track. It returns `None` before a drawing exists and keeps the original source on retries.
+- Hangman has local word pools and `word_for_level(level, rng)`: easy uses familiar four/five-letter words and
+  hints an unused answer letter; medium keeps the original dictionary hint and `APPLE` default; hard uses
+  six/seven-letter words and hints only "a vowel" or "a consonant"; impossible uses rare seven-letter words
+  and no hints. Seven letters fit the existing drawing layout. Both adaptive names map strength below .4/.7/.9
+  to easy/medium/hard, otherwise impossible. Last-guess records explain only committed hangman drawings.
+- Measured: `.venv/bin/python -m pytest -q tests -k "not gemma"`: **165 passed, 2 deselected in 137.68 s**.
+  The 81 added cases cover fake-brain narration, game endings, solver immutability, difficulty boundaries and
+  redraw jobs with a fake controller, including live sheet tracking and keeping a paused controller paused.
+  The existing simulator/perception checks passed; no new live speech or model check was needed for these helpers.
+- Executor handoff: call the three narration helpers after the existing camera checks, and `app.redraw_last()`
+  through the usual drawing worker. In `_hangman_setup`, create `Hangman.for_difficulty(self.difficulty, self.rng)`
+  for a new game, retaining it on retries; `hint_text(self)` honours later level changes. `word_for_level` also
+  accepts the difficulty object directly. `brain.py`, `dots_brain.py`, `toolcall.py` and `tools.py` are untouched.
+  `app.py` has only an added method after `draw`; this status entry is the only shared documentation addition.
+
 ## 8 Nov, 03:00: change your mind at any point (branch `games/switch-anytime`, in PR #14)
 
 - "Let's play dots and boxes instead", "let me teach you a game", "start again" and "stop" are honoured in every
