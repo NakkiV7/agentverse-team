@@ -2,8 +2,8 @@
 
 ``run`` is synchronous: call it from a separate orchestration thread, never
 from a busy brain drawing worker or its input loop. ``on_event`` only enqueues
-and is safe inside ``brain.emit``. Each character releases the drawing worker,
-so game moves and a requested switch can run between characters. Install a
+and is safe inside ``brain.emit``. Each row (at most six characters per job)
+releases the drawing worker so game moves and switches can run between jobs. Install a
 routine's rules before starting ``run`` to capture guesses made during writing.
 """
 from __future__ import annotations
@@ -34,6 +34,19 @@ TEMPLATES = {"letter", "correct", "misses", "pattern", "wrong", "guessed", "scor
 MARK_OK_COVERAGE = .8
 MARK_HALF_WIDTH_MM = .65
 GLYPH_MIN_INK = .025
+MAX_WRITE_GROUP = 6
+
+
+def writing_groups(characters):
+    """Keep reading order, row boundaries and a six-character response bound."""
+    group = []
+    for cell in characters:
+        if group and (cell.box.y0 != group[-1].box.y0 or len(group) == MAX_WRITE_GROUP):
+            yield group
+            group = []
+        group.append(cell)
+    if group:
+        yield group
 
 
 def context_from(brain):
@@ -237,7 +250,7 @@ class Paper:
         if self.drawing and getattr(understanding, "intent", None) == "say_letter":
             with self._lock:
                 self._guesses.append(understanding)
-            self._trace(f"queued guess {understanding.letter} until this character is checked")
+            self._trace(f"queued guess {understanding.letter} until this writing job is checked")
             return True
         return False
 
@@ -378,38 +391,23 @@ class Paper:
         crop = rect[max(0, int(a[1])):int(np.ceil(b[1])), max(0, int(a[0])):int(np.ceil(b[0]))]
         return float((cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY) < 140).mean()) if crop.size else 0.0
 
-    def _draw_checked(self, name, strokes, generation, cell=None):
-        if not strokes:
-            return
+    def _draw_job(self, name, strokes, generation, check):
+        """One arm job and one fresh verification frame, then yield to guesses."""
         self._boundary(generation)
         done = threading.Event()
-        errors = []
+        errors, results = [], []
 
         def draw():
             try:
-                for attempt in range(2):
-                    look = self._look()
-                    self._reachable(look.track.pose, strokes)
-                    job = self.app.draw(name, strokes)
-                    while not job.done.wait(.2):
-                        if self._closed or not getattr(self.app, "running", True):
-                            raise ValueError("the drawing session has stopped")
-                    if not job.ok:
-                        raise ValueError(f"I could not finish that stroke: {job.error}")
-                    look = self._look()
-                    coverage = check_lines(look.rgb, self.app.cam, look.track.pose, M.stroke_segments(strokes),
-                                           half_width_mm=1.5 if cell is not None else MARK_HALF_WIDTH_MM)
-                    ink = self.glyph_ink(look, self.app, cell) if cell is not None else None
-                    self._trace(f"{name}: {len(coverage)} segments, minimum coverage {min(coverage, default=1):.1%}"
-                                + (f", glyph ink {ink:.1%}" if ink is not None else ""))
-                    # Tiny strokes are judged by the glyph crop, with segment
-                    # evidence still measured and traced for every action.
-                    if ((ink is not None and ink >= GLYPH_MIN_INK)
-                            or (ink is None and min(coverage, default=1) >= MARK_OK_COVERAGE)):
-                        return
-                    if not attempt:
-                        self._trace("faint ink: retrying once")
-                raise ValueError("I could not see the ink clearly after one retry")
+                look = self._look()
+                self._reachable(look.track.pose, strokes)
+                job = self.app.draw(name, strokes)
+                while not job.done.wait(.2):
+                    if self._closed or not getattr(self.app, "running", True):
+                        raise ValueError("the drawing session has stopped")
+                if not job.ok:
+                    raise ValueError(f"I could not finish that stroke: {job.error}")
+                results.append(check(self._look()))
             except Exception as exc:
                 errors.append(exc)
             finally:
@@ -424,8 +422,60 @@ class Paper:
             self._wait_idle()
         finally:
             self.drawing = False
+        # Also drain a guess made during the final job, even if there is no
+        # following action. A faint character's retry is a separate boundary.
+        self._boundary(generation)
         if errors:
             raise ValueError(str(errors[0]))
+        return results[0]
+
+    def _check_characters(self, name, look, cells):
+        failed = []
+        for cell in cells:
+            coverage = check_lines(look.rgb, self.app.cam, look.track.pose, M.stroke_segments(cell.strokes()),
+                                   half_width_mm=1.5)
+            ink = self.glyph_ink(look, self.app, cell)
+            self._trace(f"{name}: {cell.char} [{cell.index}], {len(coverage)} segments, "
+                        f"minimum coverage {min(coverage, default=1):.1%}, glyph ink {ink:.1%}")
+            # Preserve the tiny-glyph criterion: segment evidence is measured
+            # for every character, while its ink crop decides faintness.
+            if ink >= GLYPH_MIN_INK:
+                cell.written = True
+            else:
+                failed.append(cell)
+        return failed
+
+    def _draw_checked(self, name, strokes, generation, cell=None, cells=None):
+        if not strokes:
+            return
+        characters = cells if cells is not None else ([cell] if cell is not None else None)
+        if characters is not None:
+            characters = [c for c in characters if c.char != " "]
+            failed = self._draw_job(name, strokes, generation,
+                                    lambda look: self._check_characters(name, look, characters))
+            missing = []
+            for character in failed:
+                self._trace(f"faint ink: retrying {character.char} [{character.index}] once")
+                retry_name = f"{name}: retry {character.char} [{character.index}]"
+                missing.extend(self._draw_job(
+                    retry_name, character.strokes(), generation,
+                    lambda look, c=character, n=retry_name: self._check_characters(n, look, [c])))
+            if missing:
+                raise ValueError("I could not see the ink clearly after one retry")
+            return
+
+        def check_mark(look):
+            coverage = check_lines(look.rgb, self.app.cam, look.track.pose, M.stroke_segments(strokes),
+                                   half_width_mm=MARK_HALF_WIDTH_MM)
+            self._trace(f"{name}: {len(coverage)} segments, minimum coverage {min(coverage, default=1):.1%}")
+            return min(coverage, default=1) >= MARK_OK_COVERAGE
+
+        for attempt in range(2):
+            if self._draw_job(name, strokes, generation, check_mark):
+                return
+            if not attempt:
+                self._trace("faint ink: retrying once")
+        raise ValueError("I could not see the ink clearly after one retry")
 
     def _action(self, action, context, generation, from_rule):
         if not isinstance(action, dict) or action.get("op") not in OPS:
@@ -489,9 +539,12 @@ class Paper:
                     self._recipes[item_id]["text"] = item.text
             if len(item.characters) - start >= 20:
                 self.brain.say("Writing all those letters will take a few minutes; you can keep guessing as I write.")
-            for cell in item.characters[start:]:
-                self._draw_checked(f"paper {item.id}: {cell.char}", cell.strokes(), generation, cell=cell)
-                cell.written = True
+            for group in writing_groups(item.characters[start:]):
+                strokes = [s for cell in group for s in cell.strokes()]
+                self._draw_checked(f"paper {item.id}: {''.join(c.char for c in group)}", strokes,
+                                   generation, cells=group)
+                for cell in group:
+                    cell.written = True
             item.complete = True
             with self._lock:
                 if generation == self._generation:

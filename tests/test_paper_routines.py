@@ -25,7 +25,8 @@ def paper(monkeypatch):
                         games=1, dots=None, say=said.append, switch_to=None)
     p = Paper(b)
     monkeypatch.setattr(p, "_look", lambda: SimpleNamespace(track=SimpleNamespace(pose=(.21, 0, 1.5708))))
-    monkeypatch.setattr(p, "_draw_checked", lambda name, strokes, generation, cell=None: draws.append((name, strokes)))
+    monkeypatch.setattr(p, "_draw_checked", lambda name, strokes, generation, cell=None, cells=None:
+                        draws.append((name, strokes)))
     p.traces, p.said, p.draws = traces, said, draws
     yield p
     p.close()
@@ -229,15 +230,14 @@ def test_a_guess_during_writing_is_marked_after_the_item_is_complete(paper, monk
     paper.add_rule(rule())
     draw = paper._draw_checked
 
-    def emit_mid_letter(name, strokes, generation, cell=None):
-        draw(name, strokes, generation, cell=cell)
-        if cell is not None and cell.char == "A":
+    def emit_mid_group(name, strokes, generation, cell=None, cells=None):
+        draw(name, strokes, generation, cell=cell, cells=cells)
+        if cells is not None and any(c.char == "A" for c in cells):
             paper.on_event(event(letter="B", correct=False))
-    monkeypatch.setattr(paper, "_draw_checked", emit_mid_letter)
+    monkeypatch.setattr(paper, "_draw_checked", emit_mid_group)
     assert write(paper) is None
     wait(lambda: not paper.pending)
-    assert [name for name, strokes in paper.draws] == ["paper alphabet: A", "paper alphabet: B",
-                                                     "paper alphabet: C", "paper cross_out: B"]
+    assert [name for name, strokes in paper.draws] == ["paper alphabet: ABC", "paper cross_out: B"]
     assert paper.items["alphabet"].characters[1].marks == {"cross_out"}
 
 
@@ -260,3 +260,23 @@ def test_rewrite_restores_saved_text_on_a_fresh_sheet_without_old_marks(paper):
     assert not any(c.marks for c in paper.items["alphabet"].characters)
     assert not paper.needs_rewrite("alphabet")
     assert "don't have saved writing" in paper.rewrite("unknown")
+
+
+def test_writing_jobs_follow_rows_and_never_exceed_six_characters(paper):
+    assert write(paper, "ABCDEFGHIJKLM\nNOPQRSTUVWXYZ") is None
+    assert [name for name, _ in paper.draws] == [f"paper alphabet: {text}" for text in
+                                               ("ABCDEF", "GHIJKL", "M", "NOPQRS", "TUVWXY", "Z")]
+    assert all(c.written for c in paper.items["alphabet"].characters)
+
+
+def test_append_groups_only_new_characters_and_respects_existing_row_breaks(paper, monkeypatch):
+    from buddy.paper import layout as L
+
+    region = L.Rect(2, 8, 25.5, 44)  # three characters per row, with a little edge clearance
+    monkeypatch.setattr(paper, "_choose", lambda text, place, size, pose:
+                        (region, L.layout_text(text, region, size)))
+    assert write(paper, "AB") is None
+    boxes = paper.items["alphabet"].boxes[:]
+    assert paper.run([{"op": "append_text", "id": "alphabet", "text": "CDEFG"}]) is None
+    assert [name for name, _ in paper.draws] == [f"paper alphabet: {text}" for text in ("AB", "C", "DEF", "G")]
+    assert paper.items["alphabet"].boxes[:2] == boxes
