@@ -66,9 +66,26 @@ OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")   # env over
 LLM_MODEL = os.environ.get("LLM_MODEL", "gemma3:4b")
 WHISPER_CLI = "/opt/homebrew/bin/whisper-cli"
 WHISPER_MODEL = Path.home() / ".cache" / "whisper.cpp" / "ggml-small.en.bin"
+# the voice (buddy/voice/tts.py): piper is the default (about 50 ms to the first audio, CPU only, so it never queues
+# behind Gemma on the GPU); kokoro is the nicer voice (Kokoro-82M, 150 ms a sentence on the GPU, 0.4 to 4 s on the
+# CPU); say is Apple's built-in voice (nothing to install). Env overrides: TTS_ENGINE=kokoro TTS_DEVICE=cpu ...
+TTS_ENGINE = os.environ.get("TTS_ENGINE", "piper")
+TTS_DEVICE = os.environ.get("TTS_DEVICE", "mps")             # Kokoro: mps (Apple GPU) or cpu
 TTS_VOICE = "bm_george"       # Kokoro British English male voice; "bf_emma" for a female voice
 TTS_LANG = "b"                # Kokoro language code: b = British English
 TTS_SPEED = 0.92              # a little slower than default: clearer for older players
+PIPER_VOICE = os.environ.get("PIPER_VOICE", "en_GB-alan-medium")   # Piper: a clear British male voice;
+                              # en_GB-northern_english_male-medium, en_GB-aru-medium (female) also downloaded
+PIPER_DIR = Path.home() / ".cache" / "piper"                 # voices are fetched here on first use (about 60 MB)
+PIPER_LENGTH_SCALE = 1.1      # 1.0 = the voice's own pace; 1.1 is 10% slower: unhurried for older players
+PIPER_VOLUME = 0.9            # below full scale so the normalised output never clips
+SAY_VOICE = os.environ.get("SAY_VOICE", "Daniel")            # Apple's British male voice ("Eddy (English (UK))" too)
+SAY_RATE = 165                # words per minute (Apple's default is about 175)
+# the ears (buddy/voice/stt.py): whisper.cpp resident in the process through pywhispercpp (Metal); a small model
+# gives partial text every STT_PARTIAL_S while the player speaks, small.en transcribes the finished utterance
+STT_PARTIAL_MODEL = Path.home() / ".cache" / "whisper.cpp" / "ggml-base.en.bin"
+STT_PARTIAL_S = 0.7           # seconds between partial transcriptions while speech is active
+STT_MIN_PARTIAL_S = 0.6       # no partial before this much speech has been heard
 WAKE_WORDS = ("buddy", "buddie", "budy", "bodie", "body")   # Whisper's spellings of "Buddy"
 UI_PORT = int(os.environ.get("UI_PORT", "8860"))
 
