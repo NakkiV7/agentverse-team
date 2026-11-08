@@ -2,6 +2,32 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov 2026: C3 final authorised accuracy pass (done)
+
+- Applied the coordinator's final-pass decision: `num_ctx` **8192**, **10** compact worked examples
+  (**8,526** prompt characters), explicit failed paraphrases and complete JSON answers, with separate
+  past/future actions and erase-versus-written-tick examples. The schema, Python validation, 25 s deadline,
+  32-case corpus and strict scorer are unchanged. The evaluator now records the context size.
+- One additional full `.venv/bin/python tools/request_eval.py --output /tmp/c3-request-eval-final8192.json`:
+  **27/32 = 84.38%**, versus **24/32 = 75.00%** originally; exit **1** because its 85% gate is unchanged.
+  Per instruction, stopped after this pass without another tune or rerun. p50 **2.513 s**,
+  p95 **5.622 s**, max **8.126 s**, total **88.162 s**;
+  no excluded warm-up and **0 timeouts**. Load averages **7.21/8.20/8.42 -> 6.31/7.58/8.15**; two other
+  agents had finished. Remaining failures: the three alphabet routines use literal ET instead of `{wrong}`
+  for the immediate cross-out; two impossible requests emit a malformed refusal shape. All eight impossible
+  requests still return safe `Refusal` objects; six had valid model refusal shapes. No malformed action escapes.
+- `.venv/bin/python -m pytest -q tests/test_requests.py`: **128 passed in 0.12 s** (first check **0.34 s**).
+  Full pytest status: **all green except the 6 inherited rating fixture failures** (**325 passed**, **6 failed**,
+  **164.18 s**, retained full run). The coordinator confirms these fixtures are fixed on the conversation
+  branch, so they are not a C3 blocker. No unowned fixture or brain file was edited.
+- Planner descriptions and tools were unchanged during this pass. Retained full `tools/tool_eval.py` result:
+  **130/137 = 94.89%**, exit **0**; native **117/137 = 85.40%**; stop **8/8**, named switches **15/15**,
+  letters **14/14**. All current measurements and raw-report paths are in `docs/requests.md`.
+- Exact API: `buddy.agent.requests.compile(request: str, facts: str, state: str) -> Routine | Refusal`.
+  Call `compile(request=player_words, facts=brain.facts(), state=brain.state)` with the original player words.
+  `Routine`: `say: str`, `now: list[dict]`, `rules: list[dict]`, `cancel: list[str | dict]`.
+  `Refusal`: `reason: str`, `say: str`. The coordinator still wires execution and rule registration.
+
 ## 8 Nov 2026: C3 paper request compiler (implementation in; acceptance pending)
 
 - Added `buddy.agent.requests.compile(request, facts, state) -> Routine | Refusal`: local Gemma 4 via

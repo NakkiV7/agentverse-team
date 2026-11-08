@@ -3,8 +3,9 @@
 `buddy.agent.requests.compile(request: str, facts: str, state: str) -> Routine | Refusal`
 turns the player's complete words into checked paper actions. It uses local
 `config.TEACH_MODEL` through Ollama `POST /api/chat`, `think: false`, temperature 0,
-with a stable prompt containing the contract and eight worked examples. Facts and
-state go in the user message. No `format` grammar is sent: the MLX runner rejects it.
+with a stable prompt containing the contract and ten worked examples, including
+failed paraphrases and erase/written-tick contrasts. The compiler sets `num_ctx`
+to **8192**; facts and state go in the user message. No `format` grammar is sent: the MLX runner rejects it.
 
 ## Coordinator handoff
 
@@ -100,13 +101,54 @@ latency never gates. Reports retain every raw answer, expected/actual structure,
 input/prompt hashes, timings and machine load. `--only` is a development subset,
 not evidence of a full-suite pass.
 
-## Measurements: 8 November 2026, shared M5 / Ollama
+## Final coordinator-authorised pass: 8 November 2026
 
-Acceptance remains pending. The one full request run scored **24/32 (75.00%)**,
-below the 85% target. The revised prompt passed **6/8** previously failed cases,
-including the player's exact alphabet request, but that selected subset does not
-establish final full-corpus accuracy. The user requested one full request run, so
-it was not repeated. The full pytest run has six inherited fixture failures.
+**27/32 (84.38%)**, up from 24/32 (75.00%), with the same fixed cases and strict
+scorer. This remains below the 85% target; work stops after the one additional
+pass as the coordinator instructed. `tools/request_eval.py` exits **1** on its
+unchanged 85% gate. There are no timeouts and no additional tuning or reruns.
+
+The compiler now sets **num_ctx 8192**. Its **8,526-character** prompt has ten
+worked examples: the original eight, explicit failed paraphrases, and two added
+contrasts for erasing ink and ticking a written name. Examples use complete root
+JSON objects; past and future marking are explained separately. These are
+measurements on the development corpus used for prompt tuning.
+
+Latency: **p50 2.513 s**, **p95 5.622 s**,
+**maximum 8.126 s**, summed call time **88.162 s**.
+No warm-up is excluded. Load averages (1/5/15 minutes) were
+**7.21/8.20/8.42 -> 6.31/7.58/8.15**, with two other agents finished according to
+the coordinator. These are lighter-load measurements, not an idle benchmark.
+
+The five strict failures are:
+
+- `alphabet-01`, `alphabet-02`, `alphabet-03`: valid routines use literal **ET**
+  for the immediate cross-out instead of **{wrong}**. They all write the alphabet
+  and retain the future wrong-guess rule with **{letter}**.
+- `impossible-03` (change the rules so I win) and `impossible-05` (red flower):
+  model refusals use an unknown `refusal` key instead of `reason`. Python rejects
+  them and returns a safe `Refusal`; no action is exposed. The strict evaluator
+  does not credit malformed model output. All eight impossible requests ultimately
+  return `Refusal`, six with a correctly shaped model refusal.
+
+The coordinator confirms the six inherited rating-fixture failures are already
+fixed on the conversation branch. C3's pytest status is **all green except the
+6 inherited rating fixture failures** (last full run: **325 passed, 6 failed**).
+The current offline request checks pass **128/128 in 0.12 s**. Planner code and
+descriptions were unchanged in this pass; the retained full planner result is
+**130/137 (94.89%)**, exit **0**, with every mandatory gate perfect.
+
+Report: `/tmp/c3-request-eval-final8192.json` (measured 2026-11-08T05:59:12.456197+00:00).
+Final prompt SHA-256: `22c30b070653b936c59a0603bbfe14376a131f52d712493d929f261da3392367`.
+
+## Earlier measurements: 8 November 2026, shared M5 / Ollama
+
+The initial full request run scored **24/32 (75.00%)**, below the 85% target.
+The first revision passed **6/8** previously failed cases, including the player's
+exact alphabet request; that selected subset did not establish full-corpus
+accuracy. The coordinator subsequently authorised the final full pass above and
+confirmed the six inherited pytest fixture failures are fixed on the conversation
+branch. The measurements below are retained as development history.
 
 Final full planner: **130/137 (94.89%) accepted; 117/137 (85.40%) native**, exit **0**. Mandatory gates: **stop 8/8, switch_game 15/15, say_letter 14/14**.
 Remaining strict misses: line-05, done-02, done-04, teach-01, tricky-09, tricky-11, custom-request-01. Report: `/tmp/c3-tool-eval-final.json`.
@@ -186,15 +228,17 @@ answer is used in offline tests.
 
 ## Tests and retained reports
 
-Offline request checks: **128 passed in 0.67 s** after the final compiler prompt
-change (earlier clean run: **0.09 s**). The full command
+Offline request checks after the final 8192-context change: **128 passed in
+0.12 s** (first check of this prompt: **0.34 s**). The preceding revision passed
+in **0.67 s**, with an earlier clean check at **0.09 s**. The full command
 `.venv/bin/python -m pytest -q tests` reported **325 passed, 6 failed in 164.18 s**.
 Every failure is one of the six parameter combinations of
 `test_both_brain_finish_paths_record_rating_and_explanation` in
 `tests/test_rating.py`: its `Brain.__new__` fixture has no `events` or `listeners`,
 but round 3's `Brain.say()` calls `emit()`. Both files are unchanged from base
-commit 3345069 and outside this task's ownership. The coordinator needs to
-initialise those fixture fields and rerun. The isolated reproduction with
+commit 3345069 and outside this task's ownership. The coordinator confirmed those fixtures are already fixed on the conversation
+branch. Report this branch as **all green except the 6 inherited rating fixture
+failures**; no fixture change is required in C3. The isolated reproduction with
 `-k both_brain_finish --maxfail=1` failed in **3.48 s**, with **20 deselected**.
 The local setup check confirmed MuJoCo **3.17.0** in the Python environment.
 
@@ -202,12 +246,13 @@ Full request corpus SHA-256:
 `b83d8104b978ace2fcec4af861a7183a0ff507793528ad4fd1427ba6a1c99a75`.
 Original request prompt SHA-256:
 `f3d770764164e596e8338b504e75380dee97cb663bfcb9f7e37760e813224654`.
-Final request prompt SHA-256:
+First-revision request prompt SHA-256:
 `fd3bf8431946d63233679c20e29266c4bfbefe7e162fd43ab2b492bb92ad6f2d`.
 
 Reports are retained on the shared machine:
 
-- `/tmp/c3-request-eval.json`, `/tmp/c3-request-focused.json`.
+- `/tmp/c3-request-eval-final8192.json`, `/tmp/c3-request-eval.json`,
+  `/tmp/c3-request-focused.json`.
 - `/tmp/c3-tool-eval.json`, `/tmp/c3-tool-eval-aborted.log`,
   `/tmp/c3-tool-eval-aborted-letters.log`.
 - `/tmp/c3-tool-letters.json`, `/tmp/c3-tool-letters-final.json`,
