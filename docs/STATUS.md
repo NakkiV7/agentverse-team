@@ -71,6 +71,44 @@ Updated after every big change. Newest first. Numbers are measured on Nakkiv's M
 - **Open**: tell_score / explain_last_move / give_hint use short built-in lines until `buddy/agent/narration.py` lands
   (imported inside a try, so either merge order works); "finish my line" takes any line at least 15% inked; a new size
   said mid-game restarts the board; the planner's seconds are only as good as a shared Ollama allows.
+## 8 Nov: C2-tool-eval completed under the coordinator's updated rules
+
+- Added `--accept-text-names`, on by default, with `--no-accept-text-names` for strict scoring.
+  Explicit known tool names and argument/call forms accepted by B2 now count after the same
+  state, order and argument checks. The table and JSON report retain both native and accepted scores.
+  Ordinary prose, empty replies and malformed calls still fail. The request shape and cases are unchanged.
+- Fresh full run: **128/134 (95.52%) accepted**, **118/134 (88.06%) native-only**. Stop **8/8**,
+  named switches **15/15** and letters **14/14** meet the perfect-score requirements. The command
+  `.venv/bin/python tools/tool_eval.py --accept-text-names --output /tmp/tool-eval-coordinator.json`
+  exited **0**. The six remaining failures and before/after results are in `docs/tool-eval.md`.
+- Measured **0.706 s p50, 4.967 s p95**, maximum 6.187 s; earlier retained p95 was 5.389 s.
+  The coordinator confirmed three agents and two simulators were running. Latency is now reported
+  without blocking acceptance; the coordinator will re-measure on an idle Mac.
+- `.venv/bin/python -m pytest -q tests -k "not gemma"`: **84 passed, 2 deselected**, 102.71 s.
+  Targeted parser and saved-response CLI checks passed, including default-on behaviour, native-only
+  mode and the non-blocking latency rule. No brain or executor file changed. This is an additive
+  status update outside the task's owned files; the earlier blocked entry below is historical.
+
+## 8 Nov: spoken tool evaluation (task C2-tool-eval, acceptance blocked)
+
+- Added 134 fixed cases in `tests/data/tool_eval.jsonl`, across 24 categories with 12 tricky cases.
+  `tools/tool_eval.py` calls local Gemma 4 with native, state-filtered tools, `think: false` and
+  temperature zero. Cases are stateless. It checks ordered calls and arguments, prints category
+  accuracy and p50/p95 latency, supports `--only`, and can save full JSON reports.
+- Tuned only description and parameter text in `buddy/agent/tools.py`. Names, states, enums and
+  the Tool class are unchanged. Overall accuracy improved from **108/134 (80.60%)** to
+  **119/134 (88.81%)** using the same final scorer. Named switches reached **15/15** and letters
+  **14/14**, including spoken names. Stop was **7/8**: goodbye returned plain text `stop`.
+- **Acceptance remains blocked.** The retained full run measured **0.507 s p50, 5.389 s p95**.
+  Ten failures printed tool syntax instead of native calls; three replies were empty; one vague
+  request changed difficulty instead of asking; one equivalent line paraphrase fails the conservative
+  comparator. `docs/tool-eval.md` records every remaining failure and the measurement limits.
+  A shorter candidate regressed two letters and was discarded. The shared local inference setup
+  needs a quiet measurement window and native-call contract alignment with the executor work.
+- Checks: `.venv/bin/python -m pytest -q tests -k "not gemma"`: **84 passed, 2 deselected**, 62.47 s.
+  Scorer checks cover wrong arguments, call order, types, swapped dimensions and extra lines.
+  An AST comparison confirms description-only edits to the tool definitions. No brain or executor
+  file was edited. This section is an additive status update outside the task's owned files.
 
 ## 8 Nov, 03:00: change your mind at any point (branch `games/switch-anytime`, in PR #14)
 
