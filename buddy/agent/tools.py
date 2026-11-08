@@ -110,7 +110,8 @@ TOOLS: list[Tool] = [
          "that is not a game move or an existing tool: write the alphabet and cross out wrong letters, keep a "
          "tally, write the score, underline letters, write a name, or stop crossing letters out. Pass even "
          "unsupported drawing requests for the paper compiler to check. Questions ABOUT what is already "
-         "written or crossed out are say. A chosen game square/line/letter, faint stroke, pause or new board "
+         "written or crossed out are say. A game name alone ('Dots and boxes please') uses switch_game. "
+         "A chosen game square/line/letter, faint stroke, pause or new board "
          "uses its existing tool. Stopping a paper rule is custom_request; stopping play is stop.",
          {"request": {"type": "string", "description": "EXACT copy of the entire player utterance, preserving every word, case and punctuation. This is quoted input for another compiler, not a description of the task. Do not summarise, shorten or rephrase."}},
          ("request",), GAME_ON + ("CHAT", "CHOOSE_GAME", "ASK_LEVEL", "ASK_SIDE", "OFFER_TAUGHT", "WAIT_SHEET",
