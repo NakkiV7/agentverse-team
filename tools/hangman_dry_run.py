@@ -48,7 +48,7 @@ def main():
 
         app = App(voice=False, mic=False)
         b = app.brain
-        b.rng.seed(139)  # APPLE: two P slots exercise repeated-letter drawing.
+        b.rng.seed(184)  # APPLE: two P slots exercise repeated-letter drawing.
         expected = "loss" if args.lose else "win"
         output = C.RUNTIME / f"hangman_{expected}"
         result = {"ok": False, "expected": expected}

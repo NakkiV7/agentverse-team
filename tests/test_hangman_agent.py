@@ -1,5 +1,6 @@
 """Hangman accepts spoken letters only after known ink is checked by the camera."""
 import json
+import random
 import threading
 from types import SimpleNamespace
 
@@ -62,7 +63,7 @@ def brain(tmp_path, monkeypatch):
     b.level_asked = True          # these tests start games directly; the difficulty question is covered elsewhere
     b.library = Library(tmp_path / "games.json")
     b._select(b.library.find("hangman"))
-    b.rng = SimpleNamespace(choice=lambda words: "APPLE")
+    b.rng = random.Random(184)    # with the adaptive strength this seed picks, the word is APPLE (see tools/hangman_dry_run.py)
 
     def run(fn, *args):
         try:

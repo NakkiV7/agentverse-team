@@ -45,7 +45,7 @@ from ..motion.drawing import grid_lines_mm, sheet_to_world
 from ..perception.sheet import check_lines, ink_fraction
 from .llm import Conversation, Understanding, reply
 from .teach import Teacher
-from ..game.hangman import Hangman, WORDS, letter as hangman_letter
+from ..game.hangman import Hangman, letter as hangman_letter
 from .dots_brain import STATES as DOTS_STATES, DotsPlay
 from copy import deepcopy
 from ..game import dotsboxes as D
@@ -937,7 +937,10 @@ class Brain:
     def _hangman_setup(self, retry=False):
         self.set_state("HANGMAN_SETUP", "preparing the word on paper")
         if not retry:
-            self.hangman = Hangman(self.rng.choice(WORDS))
+            # The word's length and rarity follow the chosen level (adaptive play uses its current strength).
+            self.app.trace("decide", "difficulty: " + self.difficulty.start_game(self.game_name, self.rng))
+            self.hangman = Hangman.for_difficulty(self.difficulty, self.rng)
+            self.app.trace("plan", f"hangman word list: {self.hangman.level}, {len(self.hangman.word)} letters")
             self._hangman_strokes = []
             self._hangman_pending = None
         look = self._hangman_look()
@@ -1309,7 +1312,8 @@ class Brain:
         self._worker(self._redraw, name, strokes)
 
     def _redraw(self, name, strokes):
-        job = self.app.draw(name, strokes)
+        again = getattr(self.app, "redraw_last", None)       # the saved drawing, through live sheet tracking
+        job = (again(name) if again else None) or self.app.draw(name, strokes)
         job.done.wait()
         self._seen = None
         self._maybe_switch()

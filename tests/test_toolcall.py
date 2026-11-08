@@ -298,7 +298,7 @@ def test_score_hint_and_why_have_built_in_lines(brain):
     run(brain, "tell_score")
     assert "your turn" in brain.last_said
     run(brain, "explain_last_move")
-    assert "haven't played" in brain.last_said
+    assert "haven't" in brain.last_said      # the narration module's line, or the built-in one
     brain.last_choice = SimpleNamespace(cell=4, reason="best move (100% strength)")
     run(brain, "explain_last_move")
     assert "the centre" in brain.last_said and "best move" in brain.last_said
