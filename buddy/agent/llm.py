@@ -8,6 +8,7 @@ The situation (what Buddy just asked, whose turn it is, which squares are free) 
 from __future__ import annotations
 
 import json
+import re
 import time
 import urllib.request
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ from .. import config as C
 
 INTENTS = ["play_game", "choose_game", "yes", "no", "explain_rules", "repeat", "stop", "smalltalk", "choose_side",
            "move", "done", "new_game", "teach_game", "choose_difficulty", "list_games", "unclear"]
+INTENTS += ["say_letter", "hangman_hint"]
 GAMES = ["tic_tac_toe", "other", "none"]
 SIDES = ["crosses", "noughts", "none"]
 LEVELS = ["easy", "medium", "hard", "impossible", "adaptive", "none"]
@@ -34,6 +36,9 @@ SCHEMA = {
     },
     "required": ["intent", "game", "side", "cell", "game_name", "level"],
 }
+LETTERS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ") + ["none"]
+SCHEMA["properties"]["letter"] = {"type": "string", "enum": LETTERS}
+SCHEMA["required"].append("letter")
 
 SYSTEM = """You are the language understanding of Buddy, a friendly robot arm that plays noughts and crosses \
 (tic-tac-toe) on paper with older adults. Read what the player said, in the situation given, and return JSON.
@@ -78,6 +83,16 @@ Examples:
 "play your best, no holding back" -> {"intent":"choose_difficulty","game":"none","side":"none","cell":"none","game_name":"","level":"impossible"}"""
 
 
+SYSTEM += """\nHangman additions:
+- say_letter: in hangman, the player names one letter. Set letter to its capital A to Z.
+  Examples: "E" or "the letter e please" -> say_letter, letter E; "bee" -> B; "sea" -> C;
+  "why" -> Y; "eye" -> I; "queue" -> Q; "double you" -> W; "A for apple" -> A.
+  Multiple letters or an uncertain letter -> unclear, letter none. Never choose a letter yourself.
+- hangman_hint: asks for a hint in hangman. Set letter none; the game code chooses the hint.
+- "let's play hangman" -> choose_game, game other, game_name hangman, letter none.
+Always include letter, using none except for say_letter. All earlier examples have letter none.
+"""
+
 REPLY_SYSTEM = """You are Buddy, a friendly robot arm that plays noughts and crosses on paper with older adults. \
 Answer the player in one warm sentence of plain British English, at most 20 words, no slang, no emoji. You only \
 know noughts and crosses. Never describe actions or moves that the situation does not mention."""
@@ -92,6 +107,7 @@ class Understanding:
     seconds: float
     game_name: str = ""
     level: str = "none"
+    letter: str | None = None
 
 
 def _chat(body: dict) -> str:
@@ -117,15 +133,18 @@ class Conversation:
             self.reset()
         self.msgs.append({"role": "user", "content": f"Situation: {situation}\nPlayer said: \"{utterance}\""})
         body = {"model": C.LLM_MODEL, "stream": False, "format": SCHEMA, "keep_alive": "60m",
-                "options": {"temperature": 0.0, "num_predict": 40}, "messages": self.msgs}
+                "options": {"temperature": 0.0, "num_predict": 96}, "messages": self.msgs}
         t0 = time.time()
         content = _chat(body)
         self.msgs.append({"role": "assistant", "content": content})
         d = json.loads(content)
         cell = d.get("cell", "none")
+        if d.get("intent") == "say_letter" and re.search(r"\b(?:or|and)\b|\b[A-Za-z]\s*[,/]\s*[A-Za-z]\b", utterance, re.I):
+            d["intent"], d["letter"] = "unclear", "none"
         return Understanding(d.get("intent", "unclear"), d.get("game", "none"), d.get("side", "none"),
                              CELLS.index(cell) if cell in CELLS[:9] else None, time.time() - t0,
-                             str(d.get("game_name") or "").strip(), d.get("level") or "none")
+                             str(d.get("game_name") or "").strip(), d.get("level") or "none",
+                             d.get("letter") if d.get("letter") in LETTERS[:26] else None)
 
 
 def reply(utterance: str, situation: str) -> tuple[str, float]:

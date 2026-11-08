@@ -44,6 +44,8 @@ from ..motion.drawing import grid_lines_mm, sheet_to_world
 from ..perception.sheet import check_lines, ink_fraction
 from .llm import Conversation, reply
 from .teach import Teacher
+from ..game.hangman import Hangman, WORDS, letter as hangman_letter
+from copy import deepcopy
 
 if TYPE_CHECKING:
     from ..app import App
@@ -85,6 +87,9 @@ class Brain:
         self.library = Library()                # built-in games plus the ones players taught (runtime/games.json)
         self.entry = self.library.find("noughts and crosses")   # the library entry of the current game
         self.pending_spec = None                # a taught game waiting for its name
+        self.hangman = None
+        self._hangman_strokes = []
+        self._hangman_pending = None
         threading.Thread(target=self._loop, daemon=True, name="brain").start()
         threading.Thread(target=self._watch, daemon=True, name="board-watch").start()
 
@@ -140,6 +145,8 @@ class Brain:
         self.say("Let me think... " + a.speak(entry.spec) + f" Shall we play {entry.name}?")
 
     def rules_text(self) -> str:
+        if self.entry is not None and self.entry.kind == "hangman":
+            return self.entry.describe()
         return self.spec.describe() if self.spec else RULES
 
     def situation(self) -> str:
@@ -166,6 +173,9 @@ class Brain:
             "SETUP": f"Buddy is drawing the board for {self.game_name} on the paper.",
             "ASK_SIDE": "The board is drawn. Buddy asked: crosses or noughts? Crosses go first.",
             "GAME_OVER": "The game has ended. Buddy asked whether they would like another game.",
+            "HANGMAN_SETUP": "Buddy is preparing hangman on paper. Say yes to retry, or stop to finish.",
+            "HANGMAN_TURN": "The player is guessing a hangman word. Say one letter, or ask for a hint. "
+                            "Do not choose a letter for the player.",
         }.get(st, "") + known
 
     def _worker(self, fn, *args):
@@ -340,6 +350,8 @@ class Brain:
                 self.end_session()
             else:
                 self._chat_reply(text, sit, "Shall we play another?")
+        if st in ("HANGMAN_SETUP", "HANGMAN_TURN"):
+            self._hangman_act(u)
 
     def end_session(self):
         self.set_state("IDLE", "the player wants to stop")
@@ -395,6 +407,9 @@ class Brain:
         self._worker(self._setup)
 
     def _setup(self):
+        if self.entry is not None and self.entry.kind == "hangman":
+            self._hangman_setup()
+            return
         app = self.app
         asked = None
         while True:
@@ -678,3 +693,147 @@ class Brain:
         self.app.trace("decide", "difficulty: " + self.difficulty.update(result))
         self._record(result)
         self.say("Shall we play another? Pop a fresh sheet down and say yes.")
+
+    # ------------------------------------------------------------------ hangman: spoken letters, checked ink
+    def _hangman_act(self, u):
+        if u.intent == "stop":
+            self.end_session()
+            return
+        if self.busy:
+            self.say("Let me finish checking the paper first.")
+            return
+        if self.state == "HANGMAN_SETUP":
+            if u.intent in ("yes", "done"):
+                self.busy = True
+                self._worker(self._hangman_setup, True)
+            else:
+                self.say("Please clear the paper, then say yes to try again, or stop to finish.")
+            return
+        if u.intent == "hangman_hint":
+            self.busy = True
+            self._worker(self._hangman_hint)
+            return
+        c = hangman_letter(u.letter) if u.intent == "say_letter" else None
+        if c is None:
+            self.say("I did not catch one letter. Please say a single letter, such as A for apple.")
+        elif c in self.hangman.guessed:
+            self.say(f"You have already tried {c}. Please choose another letter.")
+        elif self._hangman_pending is not None and c != self._hangman_pending[0]:
+            self.say(f"I still need to check {self._hangman_pending[0]}. Please say that letter again, or stop.")
+        else:
+            self.busy = True
+            self._worker(self._hangman_turn, c)
+
+    def _hangman_look(self):
+        look = self.app.look(timeout=20)
+        if (look is None or look.sheet is None or look.sheet.cut_off or look.sheet.confidence < .6
+                or look.track is None or not look.track.visible or not look.track.stable
+                or not self.app.view_clear()):
+            return None
+        return look
+
+    def _hangman_coverage(self, look, strokes):
+        lines = M.stroke_segments(strokes)
+        coverage = check_lines(look.rgb, self.app.cam, look.track.pose, lines)
+        self.app.trace("check", f"hangman: {len(lines)} segments, minimum ink coverage "
+                       f"{min(coverage, default=1):.0%}")
+        return all(c >= C.LINE_OK_COVERAGE for c in coverage)
+
+    def _hangman_draw_checked(self, name, strokes):
+        for attempt in range(2):
+            if self.state not in ("HANGMAN_SETUP", "HANGMAN_TURN"):
+                return False
+            job = self.app.draw(name, strokes)
+            job.done.wait()
+            if not job.ok:
+                self.app.trace("check", f"hangman drawing failed: {job.error}")
+                return False
+            look = self._hangman_look()
+            if look is None:
+                return False
+            if self._hangman_coverage(look, self._hangman_strokes + strokes):
+                return self.state in ("HANGMAN_SETUP", "HANGMAN_TURN")
+            self.app.trace("check", "hangman ink was unclear; retrying the drawing once")
+        return False
+
+    def _hangman_setup(self, retry=False):
+        self.set_state("HANGMAN_SETUP", "preparing the word on paper")
+        if not retry:
+            self.hangman = Hangman(self.rng.choice(WORDS))
+            self._hangman_strokes = []
+            self._hangman_pending = None
+        look = self._hangman_look()
+        if self.state != "HANGMAN_SETUP":
+            return
+        if look is None:
+            self.say("I cannot see a clear sheet. Please place the paper in view, then say yes.")
+            return
+        reachable, why = self.app.grid_reachable(look.track.pose)
+        self.app.trace("plan", f"hangman drawing area: {why}")
+        if not reachable:
+            self.say("I cannot reach the paper. Please slide it closer, then say yes.")
+            return
+        dashes = M.hangman_dashes(len(self.hangman.word))
+        # A failed setup may have drawn some dashes; retry on a fresh sheet to avoid accepting unrelated ink.
+        if ink_fraction(look.rgb, self.app.cam, look.track.pose, C.GRID_SIZE_MM / 2 + 5) > .001:
+            self.say("Please put down a fresh sheet, then say yes.")
+            return
+        self.say(self.rules_text() + f" The word has {len(self.hangman.word)} letters.")
+        if not self._hangman_draw_checked("the word dashes", dashes):
+            if self.state == "HANGMAN_SETUP":
+                self.say("I could not check the dashes. Please put down a fresh sheet, then say yes.")
+            return
+        self._hangman_strokes = dashes
+        self.games += 1
+        self.set_state("HANGMAN_TURN", "the camera checked the word dashes")
+        self.say("The dashes are ready. Say one letter whenever you are ready.")
+
+    def _hangman_paper_ready(self):
+        look = self._hangman_look()
+        if self.state != "HANGMAN_TURN":
+            return False
+        if look is None or not self._hangman_coverage(look, self._hangman_strokes):
+            self.say("I cannot check our drawing. Please clear the view and try again, or say stop.")
+            return False
+        reachable, _ = self.app.grid_reachable(look.track.pose)
+        if not reachable:
+            self.say("I cannot reach the paper. Please slide it closer and try again.")
+            return False
+        return True
+
+    def _hangman_hint(self):
+        if self._hangman_pending is not None:
+            self.say(f"Please say {self._hangman_pending[0]} again so I can check its drawing first.")
+        elif self._hangman_paper_ready():
+            self.say(f"You could try {self.hangman.hint()}. It is common in words that fit our clues.")
+
+    def _hangman_turn(self, c):
+        if not self._hangman_paper_ready():
+            return
+        if self._hangman_pending is None:
+            candidate = deepcopy(self.hangman)
+            positions = candidate.guess(c)
+            strokes = ([s for i in positions for s in M.hangman_letter(c, i, len(candidate.word))]
+                       if positions else M.gallows_part(candidate.misses))
+            self._hangman_pending = (c, candidate, strokes)
+        _, candidate, strokes = self._hangman_pending
+        self.say(f"Let me draw {c}." if c in candidate.word else
+                 f"There is no {c}. Let me draw the next gallows part.")
+        if not self._hangman_draw_checked(f"hangman letter {c}", strokes):
+            if self.state == "HANGMAN_TURN":
+                self.say(f"I could not check that drawing. Please clear the view, then say {c} again, or stop.")
+            return
+        self.hangman = candidate
+        self._hangman_strokes.extend(strokes)
+        self._hangman_pending = None
+        self.app.trace("decide", f"hangman: {candidate.pattern}, {candidate.misses}/6 misses")
+        result = candidate.result()
+        if result is not None:
+            self._record(result)
+            self.set_state("GAME_OVER", f"hangman: {result}")
+            self.say(f"You found it. The word is {candidate.word}. Well done." if result == "win" else
+                     f"That is six misses. The word was {candidate.word}. Thank you for playing.")
+            self.say("Shall we play another? Pop a fresh sheet down and say yes.")
+        else:
+            self.say(f"{c} is in the word. {candidate.remaining} misses left. Say another letter." if c in candidate.word
+                     else f"{candidate.remaining} misses left. Say another letter.")

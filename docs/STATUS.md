@@ -16,6 +16,14 @@ Updated after every big change. Newest first. Numbers are measured on Nakkiv's M
 - Measured: 7 rule/geometry tests pass. Alphabet run: 26 letters, 40 strokes, 100% minimum
   camera segment coverage, 0.81 N median contact pressure, 51.5 s wall. The saved overhead
   image was visually checked: all capitals are legible. MuJoCo needs macOS graphics access.
+- Step 3: the game menu includes hangman, with spoken/typed letters and hints, setup/turn states,
+  duplicate and ambiguous-letter prompts, and saved win/loss history. Existing grid games retain
+  their own route. The camera checks all expected ink before a turn and after drawing; unclear
+  or failed drawings never commit a guess. Retries retain the pending letter. No handwriting is read.
+- Measured: 39 focused and existing non-simulator checks passed (2 Gemma teaching checks skipped
+  inside the network sandbox). A separate local Gemma check passed 6/6 menu, letter, spoken-letter,
+  hint and ambiguity cases in 0.98 to 1.23 s each. The model initially chose A from "A or E";
+  an input guard now asks for clarification, with four regression cases.
 
 ## 7 Nov, night: game menu, memory, difficulty levels (branch `games/menu-memory-difficulty`)
 
