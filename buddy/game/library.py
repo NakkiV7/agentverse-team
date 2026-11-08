@@ -101,16 +101,26 @@ class Library:
             return
         try:
             data = json.loads(self.path.read_text())
-        except (OSError, json.JSONDecodeError):
+            if not isinstance(data, dict):
+                raise ValueError("not a JSON object")
+        except (OSError, ValueError):
+            # A half-written or hand-edited file: keep it for inspection, start from the built-in games.
+            if self.path.exists():
+                self.path.rename(self.path.with_name(f"{self.path.name}.broken-{time.strftime('%Y%m%d-%H%M%S')}"))
             return
-        for d in data.get("games", []):
-            spec = GameSpec(**d["spec"]) if d.get("spec") else None
-            e = Entry(d["name"], spec, tuple(d.get("aliases", ())), False, d.get("taught_at", 0.0),
-                      d.get("plays", 0), d.get("player_wins", 0), d.get("robot_wins", 0), d.get("draws", 0))
+        for d in data.get("games", []) if isinstance(data.get("games"), list) else []:
+            try:
+                spec = GameSpec(**d["spec"]) if d.get("spec") else None
+                e = Entry(d["name"], spec, tuple(d.get("aliases", ())), False, d.get("taught_at", 0.0),
+                          d.get("plays", 0), d.get("player_wins", 0), d.get("robot_wins", 0), d.get("draws", 0))
+            except (KeyError, TypeError, AttributeError, ValueError):
+                continue                                       # one malformed game must not lose the others
             e.kind = d.get("kind", "grid")
             e.taught_by = d.get("taught_by")
             self._upsert(e)
-        for d in data.get("builtin_history", []):
+        for d in data.get("builtin_history", []) if isinstance(data.get("builtin_history"), list) else []:
+            if not isinstance(d, dict) or "name" not in d:
+                continue
             e = self.find(d["name"], include_hidden=True)
             if e is not None and e.builtin:
                 e.plays, e.player_wins, e.robot_wins, e.draws = (d.get(k, 0) for k in
@@ -127,7 +137,10 @@ class Library:
         hist = [{"name": e.name, "plays": e.plays, "player_wins": e.player_wins, "robot_wins": e.robot_wins,
                  "draws": e.draws, "taught_by": e.taught_by, "taught_at": e.taught_at}
                 for e in self.entries if e.builtin and (e.plays or e.taught_by or e.taught_at)]
-        self.path.write_text(json.dumps({"games": learned, "builtin_history": hist}, indent=2))
+        # Write a temporary file next to it and swap it in, so stopping Penny mid-save never leaves half a file.
+        tmp = self.path.with_name(f".{self.path.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps({"games": learned, "builtin_history": hist}, indent=2) + "\n")
+        os.replace(tmp, self.path)
 
     # -- lookup ------------------------------------------------------------------------------------
     def _upsert(self, e: Entry) -> Entry:
