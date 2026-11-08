@@ -27,13 +27,13 @@ from buddy.perception.board import rectify                                      
 from buddy.perception.edges import drawn_mask, read_dots, read_edges                # noqa: E402
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--boxes", type=int, default=2, choices=(2, 3))
+ap.add_argument("--boxes", default="2", help="boxes per side, or ROWSxCOLS such as 3x4")
 ap.add_argument("--level", default="impossible", choices=("easy", "medium", "hard", "impossible"))
 ap.add_argument("--seed", type=int, default=11)
 ap.add_argument("--first", default="player", choices=("player", "buddy"))
 args = ap.parse_args()
 
-N = args.boxes
+N = int(args.boxes) if "x" not in args.boxes else tuple(int(v) for v in args.boxes.lower().split("x"))
 PLAYER, BUDDY = "P", "B"
 app = App(voice=False, mic=False)
 b = app.brain
@@ -97,7 +97,7 @@ def setup():
     if sheet is None or sheet.confidence < 0.6 or sheet.cut_off:
         raise RuntimeError("no usable sheet in view")
     ok, why = app.dots_reachable(sheet.as_tuple(), N)
-    app.trace("plan", f"{N + 1}x{N + 1} dots, {M.dot_spacing(N):.0f} mm apart"
+    app.trace("plan", f"{D.size_words(N)} boxes, dots {M.dot_spacing(N):.0f} mm apart"
                       + (f", {M.dot_shift(N):.0f} mm toward me" if M.dot_shift(N) else ", centred on the sheet") + f": {why}")
     if not ok:
         raise RuntimeError(why)

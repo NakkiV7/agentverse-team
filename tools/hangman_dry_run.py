@@ -18,6 +18,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
+
+def _wait_level(b, timeout=20):
+    """Buddy asks how hard to play before the first game; give it a moment to ask."""
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        if b.state == "ASK_LEVEL":
+            return True
+        if b.state not in ("CHOOSE_GAME", "OFFER_TAUGHT", "CHAT", "IDLE"):
+            return False
+        time.sleep(0.1)
+    return False
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lose", action="store_true", help="Play six misses to check the loss ending.")
@@ -63,6 +75,8 @@ def main():
             try:
                 wait(lambda: app.tracker.track is not None, "camera to find the sheet")
                 say("Buddy, let's play hangman.")
+                if _wait_level(b):
+                    say("authentic please")
                 wait(lambda: b.state == "HANGMAN_TURN" and not b.busy, "the checked dashes")
                 assert b.hangman.word == "APPLE"
                 say("Can I have a hint?")

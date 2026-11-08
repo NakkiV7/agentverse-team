@@ -47,7 +47,8 @@ intent:
 - play_game: wants to play a game. choose_game: names a game (set game, and copy the game's name into game_name). \
 new_game: wants another game. list_games: asks which games Buddy knows.
 - choose_difficulty: asks Buddy to play easier or harder, or names a level (set level: easy, medium, hard, impossible, \
-or adaptive for "adjust to me"). "go easy on me" is easy, "play your best" / "don't hold back" is impossible.
+or adaptive). "go easy on me" is easy, "play your best" / "don't hold back" is impossible, "authentic" / "realistic" / \
+"match me" / "learn my level" / "adapt to me" is adaptive. A bare level word as an answer to Buddy's question counts.
 - teach_game: ONLY when the player offers to teach or explain a game of THEIR OWN ("let me teach you one", "I know a \
 different game", "here's how mine works") or starts stating rules ("we take turns putting..."). "Let's play a game" \
 or "shall we play" is play_game, never teach_game.
@@ -80,7 +81,10 @@ Examples:
 "let's play footsteps" -> {"intent":"choose_game","game":"other","side":"none","cell":"none","game_name":"footsteps","level":"none"}
 "what games do you know" -> {"intent":"list_games","game":"none","side":"none","cell":"none","game_name":"","level":"none"}
 "go easy on me" -> {"intent":"choose_difficulty","game":"none","side":"none","cell":"none","game_name":"","level":"easy"}
-"play your best, no holding back" -> {"intent":"choose_difficulty","game":"none","side":"none","cell":"none","game_name":"","level":"impossible"}"""
+"play your best, no holding back" -> {"intent":"choose_difficulty","game":"none","side":"none","cell":"none","game_name":"","level":"impossible"}
+"authentic please" -> {"intent":"choose_difficulty","game":"none","side":"none","cell":"none","game_name":"","level":"adaptive"}
+"medium" -> {"intent":"choose_difficulty","game":"none","side":"none","cell":"none","game_name":"","level":"medium"}
+"three across and two down please" -> {"intent":"unclear","game":"none","side":"none","cell":"none","game_name":"","level":"none"}"""
 
 
 SYSTEM += """\nHangman additions:

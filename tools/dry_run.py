@@ -8,12 +8,17 @@ Buddy's first move a hand reaches over the paper (safety stop); during its secon
 Buddy only ever learns the player's moves by reading the paper with the camera.
 """
 import random
+import os
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+os.environ.setdefault("BUDDY_GAMES_FILE", os.path.join(tempfile.mkdtemp(), "games.json"))   # keep the real library and ratings
+os.environ.setdefault("BUDDY_PROFILE_FILE", os.path.join(tempfile.mkdtemp(), "profile.json"))
 
 from buddy.app import App                                              # noqa: E402
 from buddy.game.tictactoe import NAMES, winner                         # noqa: E402
@@ -37,11 +42,26 @@ def say(text):
     b.hear(text)
 
 
+
+def _wait_level(timeout=20):
+    """Buddy asks how hard to play before the first game; give it a moment to ask."""
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        if b.state == "ASK_LEVEL":
+            return True
+        if b.state not in ("CHOOSE_GAME", "OFFER_TAUGHT", "CHAT"):
+            return False
+        time.sleep(0.1)
+    return False
+
+
 def player():
     time.sleep(2.0)
     say("Buddy, let's play a game")
     wait(lambda: b.state == "CHOOSE_GAME", "the offer")
     say("yes please")
+    if b.state == "ASK_LEVEL" or _wait_level():
+        say("authentic please")
     wait(lambda: b.state == "ASK_SIDE", "the board")
     say("crosses please")
     wait(lambda: b.state == "PLAYER_TURN", "my turn")

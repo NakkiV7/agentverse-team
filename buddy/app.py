@@ -52,6 +52,11 @@ class BoardSnapshot:
     usable: bool              # arm parked, no hand over the paper, sheet visible and steady
 
 
+def _board(n):
+    """A dots-and-boxes board from a scene action: an int, or [rows, cols] from JSON."""
+    return int(n) if isinstance(n, (int, float, str)) else (int(n[0]), int(n[1]))
+
+
 class App:
     def __init__(self, voice: bool = True, mic: bool = True):
         C.RUNTIME.mkdir(exist_ok=True)
@@ -323,16 +328,29 @@ class App:
         elif action == "strokes" and arg:
             w.hand_strokes(arg)
             action = "the player draws on the paper"
-        elif action in ("player_edge", "player_box") and self.brain.state != "DOTS_PLAYER_TURN":
+        elif action in ("player_edge", "player_box", "player_short_edge", "player_scribble") and self.brain.state != "DOTS_PLAYER_TURN":
             self.trace("system", f"ignored a line from the page: it is not the player's turn (state {self.brain.state})")
             return
         elif action == "player_edge" and arg is not None:         # dots and boxes: arg = (boxes per side, edge)
             n, e = arg
-            w.hand_strokes(M.hand_edge(int(n), int(e), np.random.default_rng()))
+            w.hand_strokes(M.hand_edge(_board(n), int(e), np.random.default_rng()))
             action = "the player joins two dots"
+        elif action == "player_short_edge" and arg is not None:   # dots and boxes: a line only 40% drawn
+            n, e = arg
+            pts = M.hand_edge(n, int(e), np.random.default_rng())[0]
+            w.hand_strokes([pts[: max(3, int(0.4 * len(pts)))]])
+            action = "the player draws a short line"
+        elif action == "player_scribble" and arg is not None:     # dots and boxes: a squiggle inside a box
+            n, k = arg
+            c = M.box_centre_mm(n, int(k))
+            t = np.linspace(0, 4 * np.pi, 40)
+            r = 0.3 * M.dot_spacing(_board(n))
+            pts = np.column_stack([c[0] + r * np.cos(t) * (0.5 + t / (8 * np.pi)), c[1] + r * np.sin(1.7 * t)])
+            w.hand_strokes([pts])
+            action = "the player scribbles in a box"
         elif action == "player_box" and arg is not None:          # dots and boxes: arg = (boxes per side, box)
             n, b = arg
-            w.hand_strokes(M.hand_box_claim(int(n), int(b), np.random.default_rng()))
+            w.hand_strokes(M.hand_box_claim(_board(n), int(b), np.random.default_rng()))
             action = "the player marks the box they won"
         else:
             return

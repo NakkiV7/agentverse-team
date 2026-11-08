@@ -2,6 +2,28 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov, 02:30: dots and boxes at a real table, difficulty asked before each session (branch `games/dots-mxn`, in PR #14)
+
+- **Board size by voice**: "three by four", "five across and two down", or "the usual". Any size from 2 boxes up to
+  5 down by 6 across; every one of them passes the reach check in the sim (every dot at paper, hover and lift
+  height). Bigger boards would put dots under 20 mm apart, which the pen and camera cannot do, so Buddy declines and
+  says the biggest it can draw.
+- **Talking during play**: rules, score, difficulty and chat work mid-game, and a line can be named: "the left side
+  of the top right box" or "row two, column three"; Buddy draws it for the player.
+- **Short line**: a line 30 to 60 percent inked is finished by Buddy and credited to the player.
+- **Scribble or illegal line**: ink that is not a line between neighbouring dots (seen four looks in a row) means
+  "let's take a fresh sheet"; Buddy redraws the dots, every line so far and every claimed box, and play resumes
+  from the last proper move with the score kept.
+- **Difficulty before the first game of a session**: easy / medium / hard / impossible / authentic. Authentic is the
+  rating mode (Elo per player and game, strength drawn from a spread around the matching level, floor 10%, draw
+  compensation kept so players win real games in draw-heavy noughts and crosses). Saying a level earlier skips the
+  question.
+- Verified: `tools/dots_full_dry_run.py` (2x3 board: spoken line, short line finished, scribble recovery with six
+  lines redrawn, played to the end, 325 s wall); Hakim's game, the teach run and hangman all pass with the level
+  question; 84 tests. Scripted runs no longer write to `runtime/profile.json` or `runtime/games.json`.
+- Open: the solver on 4x4 and larger is a lookahead (about 1 s a move, not perfect); hangman has no difficulty dial;
+  one rating profile per machine.
+
 ## 8 Nov, 01:30: everything in one simulator, voice on (branch `games/integration`, PR to main)
 
 - One app, six games on the menu: noughts and crosses, Footsteps, backwards noughts and crosses, Footsteps with

@@ -1,6 +1,6 @@
-"""Dots and boxes: rules and a solver for small boards (2x2 boxes = 3x3 dots, 3x3 boxes = 4x4 dots).
+"""Dots and boxes: rules and a solver for small boards (2x2 boxes = 3x3 dots, up to 5 down by 6 across).
 
-Board: n x n boxes. Edges are numbered: first the horizontal ones row by row from the player's top-left
+Board: `n` is an int (n x n boxes) or (rows, cols). Edges are numbered: first the horizontal ones row by row from the player's top-left
 (h(r, c) = r * n + c for r in 0..n, c in 0..n-1), then the vertical ones (v(r, c) = n * (n + 1) + r * (n + 1) + c
 for r in 0..n-1, c in 0..n). Boxes are numbered row by row from the top-left, like the tic-tac-toe cells.
 
@@ -19,6 +19,7 @@ friendlier edge that does not hand the player a box.
 from __future__ import annotations
 
 import random
+import re
 import time
 from dataclasses import dataclass
 from functools import lru_cache
@@ -33,37 +34,56 @@ BOX_NAMES = {
 
 
 # ------------------------------------------------------------------ geometry
-def n_edges(n: int) -> int:
-    return 2 * n * (n + 1)
+# A board is `n`: an int for a square of n x n boxes, or (rows, cols) for a rectangle. Everything below accepts both.
+MAX_ROWS, MAX_COLS = 5, 6        # what fits on A4 within the arm's reach with lines the camera can still read
+NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
 
 
-def h_edge(n: int, r: int, c: int) -> int:
-    """Horizontal edge above box row r (r = n is the bottom border), in column c."""
-    return r * n + c
+def rc(n) -> tuple[int, int]:
+    """(rows, cols) of boxes."""
+    return (int(n), int(n)) if isinstance(n, int) else (int(n[0]), int(n[1]))
 
 
-def v_edge(n: int, r: int, c: int) -> int:
-    """Vertical edge left of box column c (c = n is the right border), in row r."""
-    return n * (n + 1) + r * (n + 1) + c
+def n_boxes(n) -> int:
+    r, c = rc(n)
+    return r * c
+
+
+def n_edges(n) -> int:
+    r, c = rc(n)
+    return (r + 1) * c + r * (c + 1)
+
+
+def h_edge(n, r: int, c: int) -> int:
+    """Horizontal edge above box row r (r = rows is the bottom border), in column c."""
+    rows, cols = rc(n)
+    return r * cols + c
+
+
+def v_edge(n, r: int, c: int) -> int:
+    """Vertical edge left of box column c (c = cols is the right border), in row r."""
+    rows, cols = rc(n)
+    return (rows + 1) * cols + r * (cols + 1) + c
 
 
 @lru_cache(maxsize=None)
-def box_edges(n: int) -> tuple:
+def box_edges(n) -> tuple:
     """For each box: (top, bottom, left, right) edge indices."""
+    rows, cols = rc(n)
     out = []
-    for r in range(n):
-        for c in range(n):
+    for r in range(rows):
+        for c in range(cols):
             out.append((h_edge(n, r, c), h_edge(n, r + 1, c), v_edge(n, r, c), v_edge(n, r, c + 1)))
     return tuple(out)
 
 
 @lru_cache(maxsize=None)
-def box_masks(n: int) -> tuple:
+def box_masks(n) -> tuple:
     return tuple(sum(1 << e for e in edges) for edges in box_edges(n))
 
 
 @lru_cache(maxsize=None)
-def edge_boxes(n: int) -> tuple:
+def edge_boxes(n) -> tuple:
     """For each edge: the boxes it borders (one on the outside border, two inside)."""
     out = [[] for _ in range(n_edges(n))]
     for b, edges in enumerate(box_edges(n)):
@@ -72,32 +92,89 @@ def edge_boxes(n: int) -> tuple:
     return tuple(tuple(x) for x in out)
 
 
-def edge_dots(n: int, e: int) -> tuple:
-    """The two dots an edge joins, as (row, col) in the (n+1) x (n+1) dot grid, row 0 at the top."""
-    if e < n * (n + 1):
-        r, c = divmod(e, n)
+def edge_dots(n, e: int) -> tuple:
+    """The two dots an edge joins, as (row, col) in the (rows+1) x (cols+1) dot grid, row 0 at the top."""
+    rows, cols = rc(n)
+    if e < (rows + 1) * cols:
+        r, c = divmod(e, cols)
         return (r, c), (r, c + 1)
-    r, c = divmod(e - n * (n + 1), n + 1)
+    r, c = divmod(e - (rows + 1) * cols, cols + 1)
     return (r, c), (r + 1, c)
 
 
-def edge_name(n: int, e: int) -> str:
+@lru_cache(maxsize=None)
+def box_names(n) -> tuple:
+    """Spoken box names: the familiar nine for squares up to 3x3, else 'row 2, column 3'."""
+    rows, cols = rc(n)
+    if rows == cols and rows in BOX_NAMES:
+        return tuple(name + " box" for name in BOX_NAMES[rows])
+    if rows == 1:
+        return tuple(_ordinal(c, cols) + " box" for c in range(cols))
+    if cols == 1:
+        return tuple(_ordinal(r, rows) + " box" for r in range(rows))
+    return tuple(f"box in row {r + 1}, column {c + 1}" for r in range(rows) for c in range(cols))
+
+
+def _ordinal(i: int, total: int) -> str:
+    if total <= 3:
+        return ["left", "middle", "right"][i] if total == 3 else ["left", "right"][i]
+    return ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth"][i]
+
+
+def edge_name(n, e: int) -> str:
     """Spoken name: 'the top side of the top left box'."""
-    names = BOX_NAMES.get(n) or [f"box {i + 1}" for i in range(n * n)]
-    if e < n * (n + 1):
-        r, c = divmod(e, n)
-        if r < n:
-            return f"the top side of the {names[r * n + c]} box"
-        return f"the bottom side of the {names[(n - 1) * n + c]} box"
-    r, c = divmod(e - n * (n + 1), n + 1)
-    if c < n:
-        return f"the left side of the {names[r * n + c]} box"
-    return f"the right side of the {names[r * n + n - 1]} box"
+    rows, cols = rc(n)
+    names = box_names(n)
+    if e < (rows + 1) * cols:
+        r, c = divmod(e, cols)
+        if r < rows:
+            return f"the top side of the {names[r * cols + c]}"
+        return f"the bottom side of the {names[(rows - 1) * cols + c]}"
+    r, c = divmod(e - (rows + 1) * cols, cols + 1)
+    if c < cols:
+        return f"the left side of the {names[r * cols + c]}"
+    return f"the right side of the {names[r * cols + cols - 1]}"
 
 
-def box_name(n: int, b: int) -> str:
-    names = BOX_NAMES.get(n) or [f"box {i + 1}" for i in range(n * n)]
-    return names[b]
+def box_name(n, b: int) -> str:
+    return box_names(n)[b]
+
+
+def parse_size(text: str):
+    """'three by four', '4x3', '2 by 2', 'four across and three down', 'a five grid' -> (rows, cols) or None.
+    Two numbers are read as across by down. Returns None when nothing usable was said."""
+    t = text.lower()
+    for w, v in NUMBER_WORDS.items():
+        t = re.sub(rf"\b{w}\b", str(v), t)
+    m = re.search(r"\b(\d+)\s*down\b.*?\b(\d+)\s*across\b", t)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    m = re.search(r"\b(\d+)\s*across\b.*?\b(\d+)\s*down\b", t)
+    if m:
+        return int(m.group(2)), int(m.group(1))
+    m = re.search(r"\b(\d+)\s*(?:x|by|times|\*)\s*(\d+)\b", t)
+    if m:
+        across, down = int(m.group(1)), int(m.group(2))
+        return down, across
+    m = re.search(r"\b(\d+)\b", t)
+    if m and re.search(r"\b(grid|boxes|box|squares|dots|size)\b", t):
+        k = int(m.group(1))
+        return k, k
+    return None
+
+
+def size_ok(n) -> tuple[bool, str]:
+    rows, cols = rc(n)
+    if rows * cols < 2:
+        return False, "that's only one box; two by two is the smallest game"
+    if rows > MAX_ROWS or cols > MAX_COLS:
+        return False, f"the biggest I can draw is {MAX_ROWS} boxes down and {MAX_COLS} across"
+    return True, ""
+
+
+def size_words(n) -> str:
+    rows, cols = rc(n)
+    return f"{cols} by {rows}" if rows == cols else f"{cols} across and {rows} down"
 
 
 # ------------------------------------------------------------------ rules
@@ -110,8 +187,8 @@ class State:
     players: tuple = ("A", "B")
 
     @staticmethod
-    def start(n: int, players=("A", "B"), first: str | None = None) -> "State":
-        return State(n, 0, ("",) * (n * n), first or players[0], tuple(players))
+    def start(n, players=("A", "B"), first: str | None = None) -> "State":
+        return State(n, 0, ("",) * n_boxes(n), first or players[0], tuple(players))
 
     def other(self, sym: str | None = None) -> str:
         sym = sym or self.to_move
@@ -184,7 +261,7 @@ class _OutOfTime(Exception):
 class Solver:
     """Values are net boxes for the player to move, from the given edges to the end of the game."""
 
-    def __init__(self, n: int, node_budget: int = 150_000, time_limit: float = 0.8):
+    def __init__(self, n, node_budget: int = 150_000, time_limit: float = 0.8):
         self.n = n
         self.full_mask = (1 << n_edges(n)) - 1
         self.exact: dict[int, int] = {}
@@ -249,7 +326,7 @@ class Solver:
     def _chain_sizes(self, mask: int) -> list[int]:
         n = self.n
         masks = box_masks(n)
-        two = {b for b in range(n * n) if bin(mask & masks[b]).count("1") == 2}
+        two = {b for b in range(n_boxes(n)) if bin(mask & masks[b]).count("1") == 2}
         seen, sizes = set(), []
         for start in two:
             if start in seen:
@@ -317,7 +394,7 @@ class Solver:
         remaining = n_edges(n) - bin(mask).count("1")
         moves = self._ordered(mask)
         self.nodes = 0
-        if remaining <= 14 or n <= 2:
+        if remaining <= 14 or n_edges(n) <= 12:
             try:
                 out = {e: (g + self.value(c) if g else -self.value(c)) for e, c, g in moves}
                 self.last_depth, self.last_seconds = 0, time.perf_counter() - t0
@@ -388,13 +465,15 @@ def greedy_player(s: State, rng=random) -> int:
     return rng.choice(safe or moves)
 
 
-def describe(n: int) -> str:
-    dots = n + 1
-    return (f"Here's how it works. I'll draw a grid of {dots} by {dots} dots. We take turns joining two dots next to "
+def describe(n) -> str:
+    rows, cols = rc(n)
+    dots = f"{cols + 1} by {rows + 1}" if rows == cols else f"{cols + 1} across and {rows + 1} down"
+    return (f"Here's how it works. I'll draw a grid of {dots} dots. We take turns joining two dots next to "
             "each other with a line, across or down. Whoever draws the fourth side of a little box wins that box, "
             "puts their mark in it, and goes again. When every line is drawn, the one with more boxes wins.")
 
 
 __all__ = ["State", "Solver", "Choice", "Difficulty", "legal_moves", "play", "result", "completed_by", "is_safe",
+           "rc", "n_boxes", "box_names", "parse_size", "size_ok", "size_words", "MAX_ROWS", "MAX_COLS",
            "third_side_boxes", "n_edges", "h_edge", "v_edge", "box_edges", "edge_boxes", "edge_dots", "edge_name",
            "box_name", "greedy_player", "describe"]

@@ -60,6 +60,19 @@ def say(text):
     wait(lambda: b.last_said != said, "Buddy's reply", 60)
 
 
+
+def _wait_level(timeout=20):
+    """Buddy asks how hard to play before the first game; give it a moment to ask."""
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        if b.state == "ASK_LEVEL":
+            return True
+        if b.state not in ("CHOOSE_GAME", "OFFER_TAUGHT", "CHAT"):
+            return False
+        time.sleep(0.1)
+    return False
+
+
 def player():
     time.sleep(2.0)
     say("Buddy, let me teach you a game I know.")
@@ -73,6 +86,8 @@ def player():
         say(NAME)
         wait(lambda: b.state == "OFFER_TAUGHT", "Buddy to remember the game")
     say("Yes please.")
+    if b.state == "ASK_LEVEL" or _wait_level():
+        say("authentic please")
     wait(lambda: b.state == "ASK_SIDE", "the board")
     say("Crosses please.")
     wait(lambda: b.state in ("PLAYER_TURN", "ROBOT_TURN"), "the game to start")

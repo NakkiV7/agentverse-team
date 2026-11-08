@@ -91,6 +91,9 @@ class Brain:
         self.pending_spec = None                # a taught game waiting for its name
         self.hangman = None
         self.dots = None                        # the running dots-and-boxes game (buddy/agent/dots_brain.py)
+        self.last_heard = ""
+        self.level_asked = False                # the difficulty question is asked once per session, before the first game
+        self._setup_after_level = None
         self._hangman_strokes = []
         self._hangman_pending = None
         threading.Thread(target=self._loop, daemon=True, name="brain").start()
@@ -171,14 +174,16 @@ class Brain:
             "NAME_GAME": "Buddy asked what the game the player just taught is called. Their next words are probably its name.",
             "CHAT": "Chatting. Buddy would like to offer a game of noughts and crosses.",
             "CHOOSE_GAME": "Buddy asked which game they would like to play, or whether they want to teach it one.",
+            "ASK_LEVEL": "Buddy asked how hard it should play: easy, medium, hard, impossible, or authentic (adaptive: it learns the player's level over a few games). Their answer is a choose_difficulty with the level; 'authentic', 'realistic', 'match me' mean adaptive.",
             "TEACH": "The player is teaching Buddy a new game.",
             "OFFER_TAUGHT": f"Buddy learned the player's game and asked whether they want to play it. It said: {self.last_said}",
             "WAIT_SHEET": f"Buddy is waiting for a usable sheet of paper. It said: {self.last_said}",
             "SETUP": f"Buddy is drawing the board for {self.game_name} on the paper.",
             "ASK_SIDE": "The board is drawn. Buddy asked: crosses or noughts? Crosses go first.",
             "GAME_OVER": "The game has ended. Buddy asked whether they would like another game.",
+            "DOTS_SIZE": "Buddy asked how big a dots-and-boxes board the player wants (boxes across and down, up to 6 across and 5 down).",
             "DOTS_SETUP": "Buddy is drawing the dots for dots and boxes.",
-            "DOTS_PLAYER_TURN": "Dots and boxes: it is the player's turn to join two neighbouring dots with a line, on the paper or on the page. Buddy reads it with the camera; the player cannot name a line by voice yet.",
+            "DOTS_PLAYER_TURN": "Dots and boxes: it is the player's turn to join two neighbouring dots with a line, on the paper or on the page, or by naming it ('the top side of the top left box', intent move). Buddy reads the paper with the camera.",
             "DOTS_ROBOT_TURN": "Dots and boxes: Buddy is drawing its line.",
             "HANGMAN_SETUP": "Buddy is preparing hangman on paper. Say yes to retry, or stop to finish.",
             "HANGMAN_TURN": "The player is guessing a hangman word. Say one letter, or ask for a hint. "
@@ -214,6 +219,7 @@ class Brain:
                 return
             self.set_state("CHAT", "woken up by name")
         self.app.transcript_add("Player", text)
+        self.last_heard = text
         if self.state == "TEACH":
             if any(w in text.lower() for w in CANCEL_WORDS):
                 self.spec = None
@@ -244,10 +250,46 @@ class Brain:
             if st == "CHAT":
                 self.set_state("CHOOSE_GAME", "explained the rules and offered a game")
             return
+        if st == "DOTS_SIZE" and self.dots is not None and (self.dots.parse_size_text(text) or intent != "choose_difficulty"):
+            self.dots.act(u, text, sit)          # a size answer wins over anything the model guessed
+            return
         if intent == "choose_difficulty" and u.level in (*LEVELS, "adaptive"):
             words = self.difficulty.set_level(u.level)
+            self.level_asked = True
             self.app.trace("decide", f"difficulty set to {u.level} (strength {100 * self.difficulty.strength:.0f}%)")
+            if st == "ASK_LEVEL":
+                self.say(f"Alright, {words}.")
+                why, self._setup_after_level = self._setup_after_level, None
+                self._start_setup(why or "the level is chosen")
+                return
             self.say(f"Alright, {words}." + (" " + self.last_said if st in ("CHOOSE_GAME", "ASK_SIDE") else ""))
+            return
+        if st == "ASK_LEVEL":
+            t = text.lower()
+            if re.search(r"\b(authentic|realistic|adapt|match|learn|you (choose|decide|pick)|don't mind|whatever|normal)\b", t):
+                u.level = "adaptive"
+            elif re.search(r"\b(impossible|perfect|best|hardest|no mercy)\b", t):
+                u.level = "impossible"
+            elif re.search(r"\b(hard|tough|difficult)\b", t):
+                u.level = "hard"
+            elif re.search(r"\b(medium|middle|moderate)\b", t):
+                u.level = "medium"
+            elif re.search(r"\b(easy|gentle|simple|beginner)\b", t):
+                u.level = "easy"
+            if u.level in (*LEVELS, "adaptive"):
+                words = self.difficulty.set_level(u.level)
+                self.level_asked = True
+                self.app.trace("decide", f"difficulty set to {u.level} from the words (strength {100 * self.difficulty.strength:.0f}%)")
+                self.say(f"Alright, {words}.")
+                why, self._setup_after_level = self._setup_after_level, None
+                self._start_setup(why or "the level is chosen")
+            elif intent in ("no", "stop"):
+                self.level_asked = True
+                self.say("I'll adapt to you, then.")
+                why, self._setup_after_level = self._setup_after_level, None
+                self._start_setup(why or "default level")
+            else:
+                self.say("Easy, medium, hard, impossible, or authentic?")
             return
         if intent == "list_games":
             self.say(f"I know {self.library.spoken_list()}, and you can teach me a new one. Which would you like?")
@@ -410,7 +452,28 @@ class Brain:
         self.say("What shall we call it?")
 
     # ------------------------------------------------------------------ setup: find the sheet, draw the board
+    LEVEL_QUESTION = ("How hard shall I play? Easy, medium, hard or impossible. Or say authentic, and I'll learn your "
+                      "level over a few games and play to match it.")
+
     def start_setup(self, why: str):
+        """Every game starts here. The first time in a session Buddy asks how hard to play, unless a level was
+        already chosen; then the game's own setup runs."""
+        if not self.level_asked:
+            self._setup_after_level = why
+            self.set_state("ASK_LEVEL", "asking how hard to play before the first game")
+            self.say(self.LEVEL_QUESTION)
+            return
+        self._start_setup(why)
+
+    def _start_setup(self, why: str):
+        if self.entry is not None and self.entry.kind == "dots":
+            self.dots = DotsPlay(self)
+            if self.dots.take_size(self.last_heard):
+                self.say(f"Lovely, {self.dots.n[1] if isinstance(self.dots.n, tuple) else self.dots.n} across. Let me have a look at the paper.")
+                self._worker(self.dots.setup)
+            else:
+                self.dots.ask_size()
+            return
         self.set_state("SETUP", why)
         self.say("Lovely. Let me have a look at the paper.")
         self._worker(self._setup)
@@ -418,10 +481,6 @@ class Brain:
     def _setup(self):
         if self.entry is not None and self.entry.kind == "hangman":
             self._hangman_setup()
-            return
-        if self.entry is not None and self.entry.kind == "dots":
-            self.dots = DotsPlay(self, n=2)
-            self.dots.setup()
             return
         app = self.app
         asked = None

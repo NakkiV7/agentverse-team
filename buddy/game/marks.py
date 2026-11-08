@@ -95,39 +95,55 @@ EDGE_INSET_MM = 4.0           # an edge stops this short of each dot
 BOX_MARK_MM = 7.0             # half-height of the mark that claims a box
 
 
-def dot_spacing(n: int) -> float:
-    return DOT_SPACING_MM if n <= 2 else DOT_SPACING_3_MM
+def dot_spacing(n) -> float:
+    """Distance between neighbouring dots. Rows run away from the robot, so they are the reach-limited direction
+    (measured: 3 rows fit at 36 mm with the grid shifted 10 mm toward the robot); columns run sideways."""
+    from .dotsboxes import rc
+    rows, cols = rc(n)
+    if rows == cols == 2:
+        return DOT_SPACING_MM
+    if rows == cols == 3:
+        return DOT_SPACING_3_MM
+    return min(DOT_SPACING_MM, 108.0 / rows, (200.0 if rows <= 2 else 170.0) / cols)   # wide + deep = the far corners
 
 
-def dot_shift(n: int) -> float:
+def dot_shift(n) -> float:
     """How far the grid sits toward the robot (sheet +y) from the sheet centre."""
-    return 0.0 if n <= 2 else DOT_SHIFT_3_MM
+    from .dotsboxes import rc
+    rows, _ = rc(n)
+    return 0.0 if rows <= 2 else DOT_SHIFT_3_MM
 
 
-def dot_positions_mm(n: int, spacing: float | None = None):
-    """The (n+1) x (n+1) dots of an n x n box board, row by row from the player's top-left."""
+def dot_positions_mm(n, spacing: float | None = None):
+    """The (rows+1) x (cols+1) dots of a rows x cols box board, row by row from the player's top-left."""
+    from .dotsboxes import rc
+    rows, cols = rc(n)
     spacing = spacing or dot_spacing(n)
-    h, dy = n * spacing / 2, dot_shift(n)
-    return [(-h + c * spacing, h - r * spacing + dy) for r in range(n + 1) for c in range(n + 1)]
+    w, h, dy = cols * spacing / 2, rows * spacing / 2, dot_shift(n)
+    return [(-w + c * spacing, h - r * spacing + dy) for r in range(rows + 1) for c in range(cols + 1)]
 
 
-def dot_mm(n: int, rc, spacing: float | None = None):
-    r, c = rc
-    return np.asarray(dot_positions_mm(n, spacing)[r * (n + 1) + c], float)
+def dot_mm(n, rc_, spacing: float | None = None):
+    from .dotsboxes import rc
+    rows, cols = rc(n)
+    r, c = rc_
+    return np.asarray(dot_positions_mm(n, spacing)[r * (cols + 1) + c], float)
 
 
-def box_centre_mm(n: int, box: int, spacing: float | None = None):
+def box_centre_mm(n, box: int, spacing: float | None = None):
+    from .dotsboxes import rc
+    rows, cols = rc(n)
     spacing = spacing or dot_spacing(n)
-    r, c = divmod(box, n)
+    r, c = divmod(box, cols)
     return dot_mm(n, (r, c), spacing) + np.array([spacing / 2, -spacing / 2])
 
 
-def dot_grid(n: int, spacing: float | None = None):
+def dot_grid(n, spacing: float | None = None):
     """One tiny circle per dot, in reading order."""
     return [nought(p, DOT_RADIUS_MM, n=12)[0] for p in dot_positions_mm(n, spacing)]
 
 
-def edge_ends_mm(n: int, e: int, spacing: float | None = None, inset: float = EDGE_INSET_MM):
+def edge_ends_mm(n, e: int, spacing: float | None = None, inset: float = EDGE_INSET_MM):
     """Start and end of the straight stroke for edge e: between its two dots, stopping `inset` short of each."""
     from .dotsboxes import edge_dots
     a, b = (dot_mm(n, rc, spacing) for rc in edge_dots(n, e))
@@ -135,12 +151,12 @@ def edge_ends_mm(n: int, e: int, spacing: float | None = None, inset: float = ED
     return a + d * inset, b - d * inset
 
 
-def edge_stroke(n: int, e: int, spacing: float | None = None):
+def edge_stroke(n, e: int, spacing: float | None = None):
     a, b = edge_ends_mm(n, e, spacing)
     return [np.array([a, b])]
 
 
-def hand_edge(n: int, e: int, rng, spacing: float | None = None, n_pts: int = 16):
+def hand_edge(n, e: int, rng, spacing: float | None = None, n_pts: int = 16):
     """The player's line between two dots: a little off to one side, wobbly, not quite the right length."""
     a, b = edge_ends_mm(n, e, spacing)
     d = (b - a) / np.linalg.norm(b - a)
@@ -151,7 +167,7 @@ def hand_edge(n: int, e: int, rng, spacing: float | None = None, n_pts: int = 16
     return [pts]
 
 
-def box_claim(n: int, box: int, style: str = "B", spacing: float | None = None):
+def box_claim(n, box: int, style: str = "B", spacing: float | None = None):
     """Buddy's mark in a box it won: its initial B (two strokes), or a small circle."""
     c = box_centre_mm(n, box, spacing)
     h = BOX_MARK_MM
@@ -167,7 +183,7 @@ def box_claim(n: int, box: int, style: str = "B", spacing: float | None = None):
     return [stem, np.array(bumps)]
 
 
-def hand_box_claim(n: int, box: int, rng, spacing: float | None = None):
+def hand_box_claim(n, box: int, rng, spacing: float | None = None):
     """The player's mark in a box they won: a small wobbly cross."""
     c = box_centre_mm(n, box, spacing) + rng.uniform(-3, 3, 2)
     return cross(c, rng.uniform(0.6, 0.9) * BOX_MARK_MM, rng.uniform(-15, 15), wobble=rng.uniform(0.3, 0.8),

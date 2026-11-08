@@ -59,6 +59,7 @@ class Paper:
 def brain(tmp_path, monkeypatch):
     monkeypatch.setattr(threading.Thread, "start", lambda self: None)
     b = Brain(Paper())
+    b.level_asked = True          # these tests start games directly; the difficulty question is covered elsewhere
     b.library = Library(tmp_path / "games.json")
     b._select(b.library.find("hangman"))
     b.rng = SimpleNamespace(choice=lambda words: "APPLE")

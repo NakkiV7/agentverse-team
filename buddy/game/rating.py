@@ -20,6 +20,7 @@ from buddy import config as C
 INITIAL_RATING = 1000.0
 STRENGTHS = tuple(i / 20 for i in range(21))
 SCORES = {"win": 1.0, "draw": 0.5, "loss": 0.0}
+ADAPTIVE_MIN, ADAPTIVE_MAX = 0.10, 0.95    # the range the adaptive policy may choose from
 
 
 def expected_score(player: float, opponent: float) -> float:
@@ -134,14 +135,17 @@ def select_strength(rating: Rating, rng=random) -> Selection:
     """Aim for 45% player wins, with small, deliberate variation each game.
 
     Elo predicts score, so add half the recent draw rate to the win target.
-    Strength is capped below perfect play to leave room for the existing
-    solvers' friendly moves. A target is an aim, not a promised outcome:
+    Strength stays between ADAPTIVE_MIN and ADAPTIVE_MAX: never worse than the
+    "easy" level, never perfect play. A target is an aim, not a promised outcome:
     forced results and the solvers' safety rules can make it unreachable.
     """
     recent = rating.player.recent
     draw_rate = recent.count("draw") / len(recent) if recent else 0.0
+    # Elo scores a draw as half a point, so in a draw-heavy game (noughts and crosses) the target must rise with the
+    # draw rate or the player never actually wins. The floor keeps Buddy from playing almost at random after a run
+    # of draws (it reached 5% strength before the floor).
     target_score = min(0.95, 0.45 + 0.5 * draw_rate)
-    strengths = STRENGTHS[1:-1]             # adaptive: 0.05 to 0.95; fixed perfect play stays separate
+    strengths = [v for v in STRENGTHS if ADAPTIVE_MIN <= v <= ADAPTIVE_MAX]
     target = min(strengths, key=lambda s: abs(rating.expected(s) - target_score))
     nearby = [s for s in strengths if abs(s - target) <= 0.100001]
     strength = rng.choice(nearby)

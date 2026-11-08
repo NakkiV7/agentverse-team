@@ -63,7 +63,7 @@ def _coverage(ink: np.ndarray, a, b) -> float:
     return float(hit.mean())
 
 
-def read_edges(rect: np.ndarray, n: int, spacing: float | None = None) -> list[Edge]:
+def read_edges(rect: np.ndarray, n, spacing: float | None = None) -> list[Edge]:
     """One Edge per candidate edge of an n x n box board, numbered as in buddy/game/dotsboxes.py."""
     ink = _ink(rect)
     out = []
@@ -76,7 +76,7 @@ def read_edges(rect: np.ndarray, n: int, spacing: float | None = None) -> list[E
     return out
 
 
-def read_dots(rect: np.ndarray, n: int, spacing: float | None = None) -> list[float]:
+def read_dots(rect: np.ndarray, n, spacing: float | None = None) -> list[float]:
     """Fraction of inked pixels within DOT_RADIUS_MM of each planned dot (a drawn dot is well above 0.3)."""
     ink = _ink(rect)
     H, W = ink.shape

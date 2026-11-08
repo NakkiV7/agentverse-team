@@ -13,6 +13,7 @@ from pathlib import Path
 
 os.environ.setdefault("BUDDY_GAMES_FILE", os.path.join(tempfile.mkdtemp(), "games.json"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+os.environ.setdefault("BUDDY_PROFILE_FILE", os.path.join(tempfile.mkdtemp(), "profile.json"))
 
 from buddy.app import App                                              # noqa: E402
 from buddy.game.rules import cell_name, result                         # noqa: E402
