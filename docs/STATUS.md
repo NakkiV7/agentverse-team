@@ -2,6 +2,24 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov, 01:30: everything in one simulator, voice on (branch `games/integration`, PR to main)
+
+- One app, six games on the menu: noughts and crosses, Footsteps, backwards noughts and crosses, Footsteps with
+  diagonals, hangman, dots and boxes, plus every game a player teaches. Say "Buddy", then name a game, or "let me
+  teach you a game". Difficulty by voice: easy / medium / hard / impossible / adapt to me (rating-based).
+- Dots and boxes now runs through the conversation (`buddy/agent/dots_brain.py`): Buddy draws the dots, you draw
+  lines on the paper or on the page, it reads every line, claims boxes, goes again. Scripted:
+  `tools/dots_full_dry_run.py` (2x2, 2 to 2 draw, 130 s wall).
+- Voice on this Mac: whisper.cpp installed with `small.en` (0.5 to 0.9 s a sentence warm; the first call takes ~9 s to
+  compile shaders), Kokoro out. Run `.venv/bin/python -m buddy` and say "Buddy".
+- Verified on the merged branch: 82 tests; scripted games for the menu (Footsteps on impossible), hangman (APPLE,
+  win), dots and boxes (2 to 2), teach-a-game (Chains), and Hakim's original noughts and crosses.
+- Ollama: run it with `OLLAMA_MAX_LOADED_MODELS=2`, otherwise the Gemma 4 runner gets evicted when Gemma 3 loads
+  and later requests hang (seen 7 Nov 23:51; a restart fixes it).
+- Open points: the adaptive policy dropped Buddy to 15% strength after one draw in dots and boxes (too generous;
+  tune the floor); no spoken line names in dots and boxes yet ("the top of the top left box"); hangman has no
+  difficulty dial; Buddy cannot tell players apart (one rating profile per machine).
+
 ## 8 Nov: persistent adaptive skill rating (task D-adaptive-rating)
 
 - `buddy/game/rating.py` keeps a player rating for each game and a Buddy rating for each strength in
