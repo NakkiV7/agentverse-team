@@ -101,7 +101,8 @@ TOOLS: list[Tool] = [
     Tool("say", "Speak through this tool for small talk, thanks, or one question when unsure. Memories about games "
          "are conversation. Questions ABOUT the paper ('what have you written in the corner', 'which letters are "
          "crossed out') are say; requests to change or keep marking the paper are custom_request. "
-         "Use specific tools for clear requests, including spoken letter names in hangman. "
+         "In hangman, a single spoken letter name, including Why (Y), Eye (I), En (N) or E, always uses "
+         "say_letter. Use specific tools for other clear requests. "
          "All replies must be native tool calls; put conversation in this tool's text argument.",
          {"text": {"type": "string", "description": "One or two short, warm sentences in plain British English, no emoji. Ask when unsure."}}, ("text",)),
     Tool("custom_request", "The player asks Buddy to write, draw, mark or keep doing something on the paper "
