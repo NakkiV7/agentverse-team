@@ -79,14 +79,37 @@ def _identifier(value) -> None:
         raise ValueError("invalid written item id")
 
 
-def _text(value) -> None:
+TEMPLATE_ALIASES = {   # names the model reaches for; the paper vocabulary has one spelling of each
+    "player_score": "score_player", "your_score": "score_player", "score_you": "score_player", "points_player": "score_player",
+    "buddy_score": "score_buddy", "robot_score": "score_buddy", "score_robot": "score_buddy", "my_score": "score_buddy",
+    "score_me": "score_buddy", "points_buddy": "score_buddy", "wrong_letters": "wrong", "wrong_guesses": "wrong",
+    "misses_letters": "wrong", "letters_tried": "guessed", "letters": "guessed", "tried": "guessed", "last_letter": "letter",
+    "guess": "letter", "game_number": "number", "player": "player_name", "name_player": "player_name", "line": "name",
+}
+
+
+def _text(value) -> str:
+    """Check text or chars and return it in the pen's alphabet: capitals, digits, space . : - / and templates.
+    The model writes "You: {player_score}" or tally bars "||||"; those become "YOU: {score_player}" and "IIII"
+    rather than a refusal. Anything else unsupported is dropped; an empty result is still refused."""
     _string(value, "text or chars")
-    for name in TEMPLATE_RE.findall(value):
-        if name not in TEMPLATES:
-            raise ValueError(f"unknown template: {name}")
-    literal = TEMPLATE_RE.sub("", value)
-    if not re.fullmatch(r"[A-Z0-9 .:\-/\n]*", literal):
+    out = []
+    for i, part in enumerate(TEMPLATE_RE.split(value)):       # odd parts are template names
+        if i % 2 == 1:
+            name = TEMPLATE_ALIASES.get(part, part)
+            if name not in TEMPLATES:
+                raise ValueError(f"unknown template: {part}")
+            out.append("{" + name + "}")
+        else:
+            if "{" in part or "}" in part:                          # a template the pattern did not match
+                raise ValueError("unsupported text characters or malformed template")
+            literal = part.upper().replace("|", "I").replace("\u2019", "").replace("'", "")
+            literal = re.sub(r"[^A-Z0-9 .:\-/\n]", " ", literal)
+            out.append(re.sub(r"[ ]{2,}", " ", literal))
+    text = "".join(out)
+    if not text.strip():
         raise ValueError("unsupported text characters or malformed template")
+    return text
 
 
 def _actions(actions, *, allow_empty: bool) -> None:
@@ -99,7 +122,7 @@ def _actions(actions, *, allow_empty: bool) -> None:
         if op == "write_text":
             _object(action, {"op", "id", "text", "place"}, {"size_mm"})
             _identifier(action["id"])
-            _text(action["text"])
+            action["text"] = _text(action["text"])
             if action["place"] not in PLACES:
                 raise ValueError("unknown place")
             size = action.get("size_mm", 6)
@@ -108,14 +131,14 @@ def _actions(actions, *, allow_empty: bool) -> None:
         elif op == "append_text":
             _object(action, {"op", "id", "text"})
             _identifier(action["id"])
-            _text(action["text"])
+            action["text"] = _text(action["text"])
         else:
             _object(action, {"op", "target"})
             target = action["target"]
             _object(target, {"id"}, {"chars"})
             _identifier(target["id"])
             if "chars" in target:
-                _text(target["chars"])
+                target["chars"] = _text(target["chars"])
 
 
 def _json_value(value, depth: int = 0) -> None:

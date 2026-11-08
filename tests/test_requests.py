@@ -62,9 +62,6 @@ def test_bad_json_is_a_refusal(raw):
     (("now", 1, "target", "chars"), "{right}"),
     (("now", 0, "text"), "{letter.upper()}"),
     (("now", 0, "text"), "{{letter}}"),
-    (("now", 0, "text"), "hello"),
-    (("now", 0, "text"), "A_B"),
-    (("now", 0, "text"), "CAT 🐱"),
     (("now", 0, "size_mm"), 4.99),
     (("now", 0, "size_mm"), True),
     (("now", 0, "size_mm"), "6"),
@@ -335,3 +332,17 @@ def test_refusal_written_with_the_refusal_key_keeps_its_sentence():
     out = validate({"refusal": "No picture drawing."})
     assert isinstance(out, Refusal) and out.say
     assert isinstance(validate({"refusal": "x", "now": []}), Refusal)   # a refusal never carries actions
+
+
+def test_text_is_normalised_into_the_pen_alphabet_and_template_aliases_are_mapped():
+    """"You: {player_score}" and tally bars are what the model writes; the pen gets capitals and {score_player}."""
+    from buddy.agent.requests import Routine, validate
+    out = validate({"say": "Of course.", "cancel": [], "rules": [],
+                    "now": [{"op": "write_text", "id": "tally", "place": "top right corner",
+                             "text": "You: {player_score} Me: {buddy_score} ||| it's!"}]})
+    assert isinstance(out, Routine)
+    assert out.now[0]["text"] == "YOU: {score_player} ME: {score_buddy} III ITS "
+    out = validate({"say": "x", "cancel": [], "rules": [], "now": [{"op": "write_text", "id": "t", "place": "top edge", "text": "{nonsense}"}]})
+    assert not isinstance(out, Routine)
+    out = validate({"say": "x", "cancel": [], "rules": [], "now": [{"op": "write_text", "id": "t", "place": "top edge", "text": "???"}]})
+    assert not isinstance(out, Routine)
