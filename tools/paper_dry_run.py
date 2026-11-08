@@ -6,6 +6,8 @@
 The JSON below is hand-written in the shared compiler contract. No compiler or
 brain source changes are needed. The dots run places the sheet 30 mm closer to
 the arm: at the default pose its bottom edge is outside the pen's lift reach.
+The alphabet must finish in under four minutes of simulated arm time, measured
+from its first arm job to its last glyph check (also reported in wall seconds).
 """
 import argparse
 import json
@@ -65,6 +67,18 @@ def main():
         brain_module.Hangman = ScriptedHangman
         app = App(voice=False, mic=False)
         b = app.brain
+        writing_starts, writing_checks = [], []
+        trace = app.trace
+
+        def timed_trace(stage, message):
+            trace(stage, message)
+            if message.startswith("paper alphabet:"):
+                stamp = (time.time() - app.t0, app.sim_time)
+                if stage == "act" and message.endswith("moving the pen above the sheet"):
+                    writing_starts.append(stamp)
+                elif stage == "paper" and "glyph ink" in message:
+                    writing_checks.append(stamp)
+        app.trace = timed_trace
         b.rng = random.Random(3)
         p = b.paper                      # installed by the brain (paper_glue); a bare brain would need Paper(b)
         if p is None:
@@ -151,6 +165,14 @@ def main():
                           maximum_unmarked_coverage=max(v for c, v in diagonals.items() if c not in "BCDF"),
                           right_letter_coverage=diagonals["P"],
                           rows=len({c.box.y0 for c in alphabet.characters}), description=p.describe())
+            assert writing_starts and writing_checks, "missing alphabet drawing timing in the trace"
+            write_sim_seconds = writing_checks[-1][1] - writing_starts[0][1]
+            result.update(alphabet_jobs=len(writing_starts),
+                          alphabet_first_job_at=round(writing_starts[0][0], 2),
+                          alphabet_last_check_at=round(writing_checks[-1][0], 2),
+                          alphabet_write_seconds=round(writing_checks[-1][0] - writing_starts[0][0], 2),
+                          alphabet_write_sim_seconds=round(write_sim_seconds, 2))
+            assert write_sim_seconds < 240, f"alphabet took {write_sim_seconds:.2f} s of arm time, expected under 240 s"
             assert min(glyphs.values()) >= GLYPH_MIN_INK, "a written glyph is absent from the camera"
             assert crossed == set("BCDF"), f"camera cross-outs are {crossed}, expected BCDF"
             assert b.hangman.guessed == set("BCDFP")
