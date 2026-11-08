@@ -83,3 +83,78 @@ def win_line(cells):
     a, b = np.asarray(cell_centres_mm()[cells[0]], float), np.asarray(cell_centres_mm()[cells[2]], float)
     d = (b - a) / np.linalg.norm(b - a)
     return [np.array([a - d * 0.35 * CELL, b + d * 0.35 * CELL])]
+
+
+# ---------------------------------------------------------------- dots and boxes (buddy/game/dotsboxes.py)
+DOT_SPACING_MM = 45.0         # between neighbouring dots: 2x2 boxes = 90 mm, 3x3 boxes = 135 mm (the grid size)
+DOT_RADIUS_MM = 1.0           # a dot is a tiny circle; with the 0.7 mm pen it comes out as a 3 mm blob
+EDGE_INSET_MM = 4.0           # an edge stops this short of each dot
+BOX_MARK_MM = 7.0             # half-height of the mark that claims a box
+
+
+def dot_positions_mm(n: int, spacing: float = DOT_SPACING_MM):
+    """The (n+1) x (n+1) dots of an n x n box board, row by row from the player's top-left, centred on the sheet."""
+    h = n * spacing / 2
+    return [(-h + c * spacing, h - r * spacing) for r in range(n + 1) for c in range(n + 1)]
+
+
+def dot_mm(n: int, rc, spacing: float = DOT_SPACING_MM):
+    r, c = rc
+    return np.asarray(dot_positions_mm(n, spacing)[r * (n + 1) + c], float)
+
+
+def box_centre_mm(n: int, box: int, spacing: float = DOT_SPACING_MM):
+    r, c = divmod(box, n)
+    return dot_mm(n, (r, c), spacing) + np.array([spacing / 2, -spacing / 2])
+
+
+def dot_grid(n: int, spacing: float = DOT_SPACING_MM):
+    """One tiny circle per dot, in reading order."""
+    return [nought(p, DOT_RADIUS_MM, n=12)[0] for p in dot_positions_mm(n, spacing)]
+
+
+def edge_ends_mm(n: int, e: int, spacing: float = DOT_SPACING_MM, inset: float = EDGE_INSET_MM):
+    """Start and end of the straight stroke for edge e: between its two dots, stopping `inset` short of each."""
+    from .dotsboxes import edge_dots
+    a, b = (dot_mm(n, rc, spacing) for rc in edge_dots(n, e))
+    d = (b - a) / np.linalg.norm(b - a)
+    return a + d * inset, b - d * inset
+
+
+def edge_stroke(n: int, e: int, spacing: float = DOT_SPACING_MM):
+    a, b = edge_ends_mm(n, e, spacing)
+    return [np.array([a, b])]
+
+
+def hand_edge(n: int, e: int, rng, spacing: float = DOT_SPACING_MM, n_pts: int = 16):
+    """The player's line between two dots: a little off to one side, wobbly, not quite the right length."""
+    a, b = edge_ends_mm(n, e, spacing)
+    d = (b - a) / np.linalg.norm(b - a)
+    nrm = np.array([-d[1], d[0]])
+    a = a + d * rng.uniform(-2.5, 2.5) + nrm * rng.uniform(-1.5, 1.5)
+    b = b + d * rng.uniform(-2.5, 2.5) + nrm * rng.uniform(-1.5, 1.5)
+    pts = a + (b - a) * np.linspace(0, 1, n_pts)[:, None] + _wobble(n_pts, rng.uniform(0.3, 0.9), rng)
+    return [pts]
+
+
+def box_claim(n: int, box: int, style: str = "B", spacing: float = DOT_SPACING_MM):
+    """Buddy's mark in a box it won: its initial B (two strokes), or a small circle."""
+    c = box_centre_mm(n, box, spacing)
+    h = BOX_MARK_MM
+    if style == "circle":
+        return nought(c, 0.6 * h, n=36)
+    x0 = c[0] - 0.4 * h
+    stem = np.array([[x0, c[1] + h], [x0, c[1] - h]])
+    bumps = [np.array([x0, c[1] + h])]
+    for yc, r in ((c[1] + h / 2, 0.5 * h), (c[1] - h / 2, 0.55 * h)):
+        t = np.linspace(math.pi / 2, -math.pi / 2, 14)
+        bumps.extend(np.column_stack([x0 + 0.15 * h + r * np.cos(t), yc + r * np.sin(t)]))
+    bumps.append(np.array([x0, c[1] - h]))
+    return [stem, np.array(bumps)]
+
+
+def hand_box_claim(n: int, box: int, rng, spacing: float = DOT_SPACING_MM):
+    """The player's mark in a box they won: a small wobbly cross."""
+    c = box_centre_mm(n, box, spacing) + rng.uniform(-3, 3, 2)
+    return cross(c, rng.uniform(0.6, 0.9) * BOX_MARK_MM, rng.uniform(-15, 15), wobble=rng.uniform(0.3, 0.8),
+                 overshoot=0.15, rng=rng)
