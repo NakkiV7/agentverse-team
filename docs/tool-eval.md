@@ -1,207 +1,156 @@
 # Gemma 4 tool selection
 
-Measured on 8 November 2026 for task C2-tool-eval, on an Apple M5 with 24 GB RAM.
-**Acceptance is blocked.** The best completed run scores 88.81%, with 5.389 seconds p95.
-It does not meet the 90% accuracy, perfect stop routing, or 2.5-second latency requirements.
+Measured on 8 November 2026, on an Apple M5 with 24 GB RAM.
+**Passed under the coordinator's updated acceptance rules:** 128/134 (95.52%) with text
+names accepted, versus 118/134 (88.06%) native-only. Stop, named switches and letters
+all passed. Measured p95 was 4.967 seconds under contention; idle latency remains for
+the coordinator to measure.
 
-Run the full local evaluation:
+## Run it
 
 ```sh
 .venv/bin/python tools/tool_eval.py --output /tmp/tool-eval.json
+.venv/bin/python tools/tool_eval.py --accept-text-names --output /tmp/tool-eval.json
+.venv/bin/python tools/tool_eval.py --no-accept-text-names
 .venv/bin/python tools/tool_eval.py --only say_letter
 .venv/bin/python -m pytest -q tests -k "not gemma"
 ```
 
-`OLLAMA_URL` defaults to `http://127.0.0.1:11434`. Only local HTTP origins are accepted.
-The model is `gemma4`. Every request uses `POST /api/chat`, `think: false`, temperature
-zero, `stream: false`, and `buddy.agent.tools.schemas(state)`. There is no intent parser,
-fallback model, response repair, or tool execution in this evaluation.
+Text-name acceptance is on by default. Both accuracy numbers are always printed and
+saved, regardless of which mode controls the exit code. Exit 0 requires at least 90%
+overall and 100% on stop, named switches and letters in the selected mode. Exit 1 means
+an accuracy gate failed; exit 2 means the cases or local service could not be used.
+Latency is reported but does not affect the exit code, as the coordinator requested.
+A category-only run does not establish a full-suite pass.
 
-## Cases and scoring
+## Request and scoring
 
-The committed JSONL contains 134 cases in 24 categories. Each has an `id`, `category`,
-`state`, `situation`, `said`, and an ordered `expect` list. Optional `args` maps tool
-names to expected parameter values. For example:
+The JSONL contains 134 fixed cases in 24 categories, including 12 tricky cases. Each
+case has an id, category, state, situation, said, ordered expect list, and optional args
+mapping tool names to expected parameter values. The corpus and system prompt have
+not changed since the original measurements.
 
-```json
-{"expect": ["switch_game", "set_difficulty"], "args": {"switch_game": {"name": "hangman"}, "set_difficulty": {"level": "easy"}}}
-```
+Each case uses a fresh two-message conversation: a system prompt containing the
+situation, then the player's words. The situation includes state, known games, current
+game, score, legal squares where relevant, and Buddy's last words. Every request is
+POST /api/chat with model gemma4, think false, temperature zero, stream false, and
+buddy.agent.tools.schemas(state). OLLAMA_URL defaults to http://127.0.0.1:11434 and must
+be a local HTTP origin. No tool is executed and no arm is moved.
 
-Each case gets its own system message and player message. The situation uses the brain's
-style: state, known games, current game, score, legal squares where relevant, and Buddy's
-last words. No previous case, reply, or expected answer enters the request. The case file
-and system prompt stay fixed during description tuning.
+The coordinator approved the executor's explicit text-call forms. When native calls
+are absent, --accept-text-names recognises known names such as "stop", "switch_game
+hangman", and "say_letter: E". It also recognises B2's function-call spellings such as
+"give_hint()", "say(text=\"Hello\")", and brace-form keyword arguments. Multiple calls
+must occupy separate lines and retain their order. Ordinary prose, empty replies,
+unknown names, incomplete syntax and trailing commentary are not converted into tools.
+The scorer never infers a missing tool from the player's words or expected answer.
 
-A pass requires exactly the expected tool names in order, valid schema arguments and all
-specified argument values. Extra calls fail. Plain text without native tool calls fails,
-even if the prose sounds right. Enum values, game names, letters and booleans are exact.
-For free-form size and line descriptions, the scorer ignores case, punctuation and a
-fixed set of courtesy/filler words, and converts number words to digits. Board sizes
-then use the game's size parser: “three by four” and “three across and four down” are
-equivalent; “the usual” means two by two. Line scoring preserves the order and repetition
-of numbers, directions and location words. It never accepts a
-subset of a description, which could hide an extra line. Free-form `say.text` is checked for a
-nonempty string, but its wording is not scored automatically.
+Native and accepted text calls undergo the same state, argument type, required-field,
+enum and expected-value checks. Invalid native calls cannot be repaired by accompanying
+text. Bare names do not supply missing required arguments. Native-only scoring examines
+the original response; accepted scoring leaves that response unchanged in the report.
 
-The report includes all responses and errors, category totals, the prompt, and SHA-256
-hashes of the case file and schemas. The process exits 1 below 90% overall accuracy, on
-any failed stop, named-game switch or letter case, or at p95 latency of 2.5 seconds or
-more. Exit 2 means the input or local service could not be used. `--only` applies those
-gates to the selected category; it does not establish a full-suite pass.
+A case passes only when tool names and order match exactly and all specified arguments
+match. Size descriptions use the game's parser after removing courtesy words: three by
+four equals three across and four down; the usual equals two by two. Swapped dimensions
+and extra dimensions fail. Line comparison removes case, punctuation and filler words
+but preserves the order and repetition of directions, numbers and locations. It does
+not resolve geometric paraphrases. Free-form say.text must be a nonempty string; its
+wording is not scored automatically.
 
-There is one separate warm-up request. Its time is printed and saved but excluded from
-percentiles. Scored latency is complete HTTP wall time, including prompt processing and
-any service queueing. Percentiles use linear interpolation between sorted samples. The
-runner sends requests sequentially and never carries conversation history between cases.
+The JSON report stores both scores and error lists for every case, category totals,
+critical-case totals, raw responses, prompt, scoring mode, and case/schema SHA-256
+hashes. The --accept-text-names flag changes scoring only, not the Ollama request.
 
-## Before tuning
+## Before and after
 
-The baseline used the original descriptions at `d551049`, with the case file and runner
-already committed. With the final scoring rules it scored **108/134 (80.60%)**. Critical cases scored stop **8/8**,
-named-game switches **14/15** (including the compound request), and letters **7/14**.
-Median latency was **1.102 seconds**, p95 **7.520 seconds**. This run overlapped the
-non-Gemma regression suite and other workers' Ollama requests; its wall times include
-that contention and are not an idle-machine comparison.
+Baseline values below rescore the saved original responses with the same current rules.
+No case, expected tool or expected argument was removed or changed. The description
+changes distinguish game requests from memories, clarify difficulty words and short
+answers, and give spoken-letter examples. Tool names, states, enums, required arguments
+and the Tool class are unchanged.
 
-The first scorer compared every string byte for byte and reported 98/134. That penalised
-ten harmless capitalization/courtesy changes in free-form size and line arguments. The
-scorer was corrected, then the saved responses from both runs were rescored identically.
-No utterance, situation, expected tool, or expected argument was changed.
-
-There were 26 failing cases under the corrected scorer:
-
-- One named game selected `new_board`; “don't hold back” selected hard instead of impossible.
-- Seven letter cases failed, including C becoming S, I becoming E, and M and N becoming E.
-- “The first two dots along the top row” became two lines instead of one.
-- Eleven replies contained no native calls. Several printed pseudo-calls such as
-  `give_hint()` in text, which the runner correctly rejects.
-- The other failures confused a completed turn with a score request, an agreement or
-  refusal with another tool, a school memory with a game switch, or a vague request with
-  a difficulty setting.
-
-## After tuning
-
-Only tool descriptions and parameter descriptions changed in `buddy/agent/tools.py`.
-Names, states, required arguments, enums and the `Tool` class are unchanged. The text
-distinguishes requests from memories, gives spoken-letter examples, separates hints
-from requested moves, explains difficulty words, and resolves short replies from the
-last question. The best completed full run is retained, rather than a later shorter
-candidate that regressed letter recognition.
-
-| Measure | Original descriptions | Retained descriptions |
+| Measure | Original descriptions | Fresh coordinator-approved run |
 |---|---:|---:|
-| Overall, final scoring rules | 108/134 (80.60%) | 119/134 (88.81%) |
-| Stop | 8/8 | 7/8 |
-| Named switches, including compound requests | 14/15 | 15/15 |
-| Letters | 7/14 | 14/14 |
-| p50 HTTP wall time | 1.102 s | 0.507 s |
-| p95 HTTP wall time | 7.520 s | 5.389 s |
-| Maximum HTTP wall time | 9.973 s | 12.461 s |
+| Native-only accuracy | 108/134 (80.60%) | 118/134 (88.06%) |
+| With text names accepted | 116/134 (86.57%) | 128/134 (95.52%) |
+| Stop, accepted | 8/8 | 8/8 |
+| Named switches, accepted, including compound requests | 14/15 | 15/15 |
+| Letters, accepted | 7/14 | 14/14 |
+| HTTP p50 | 1.102 s | 0.706 s |
+| HTTP p95 | 7.520 s | 4.967 s |
 
-The first description revision scored 116/134 (86.57%) under the same final scoring
-rules. A focused check of the retained letter descriptions passed 14/14, p95 0.335 s.
-That focused latency is not the full-suite latency.
+In the fresh run, native-only stop was 7/8; named switches were 15/15 and letters 14/14.
+Ten cases passed through the approved text-name/call handling. The earlier retained
+run measured 119/134 native-only and 5.389 seconds p95; replaying those saved responses
+with text acceptance gives 129/134. Those replay values are separate from the fresh
+128/134 measurement above.
 
-| Category | Before | After |
+| Category | Native only | With text names |
 |---|---:|---:|
-| answer | 5/8 | 8/8 |
+| answer | 8/8 | 8/8 |
 | board_size | 6/6 | 6/6 |
-| difficulty | 7/9 | 8/9 |
-| done | 3/4 | 1/4 |
+| difficulty | 8/9 | 9/9 |
+| done | 1/4 | 1/4 |
 | explain_move | 3/3 | 3/3 |
 | finish_line | 2/2 | 2/2 |
-| hint | 1/3 | 1/3 |
+| hint | 2/3 | 3/3 |
 | line | 4/5 | 4/5 |
 | list | 2/2 | 2/2 |
 | paper | 3/3 | 3/3 |
-| redraw | 3/3 | 2/3 |
+| redraw | 2/3 | 3/3 |
 | repeat | 2/2 | 2/2 |
 | restart | 4/4 | 4/4 |
-| rules | 1/2 | 2/2 |
-| say_letter | 7/14 | 14/14 |
-| score | 2/4 | 3/4 |
+| rules | 2/2 | 2/2 |
+| say_letter | 14/14 | 14/14 |
+| score | 3/4 | 4/4 |
 | side | 3/3 | 3/3 |
-| smalltalk | 5/6 | 5/6 |
+| smalltalk | 5/6 | 6/6 |
 | square | 9/9 | 9/9 |
-| stop | 8/8 | 7/8 |
-| switch_game | 13/14 | 14/14 |
-| teach | 2/2 | 2/2 |
-| tricky | 7/12 | 8/12 |
+| stop | 7/8 | 8/8 |
+| switch_game | 14/14 | 14/14 |
+| teach | 1/2 | 1/2 |
+| tricky | 7/12 | 11/12 |
 | wait | 6/6 | 6/6 |
 
-## Remaining failures
+## Six remaining failures
 
-Ten failures are text containing the intended tool name instead of native calls:
-
-| Case | Player says | Returned text form |
+| Case | Player says | Why it still fails |
 |---|---|---|
-| difficulty-08 | Match my level | `set_difficulty` with authentic |
-| stop-05 | Goodbye Buddy | bare `stop` |
-| score-03 | Who won that one? | `tell_score()` |
-| redraw-02 | Can you go over your last line? I can barely see it | `redraw_last_stroke()` |
-| smalltalk-05 | Do you ever get tired? | `say(...)` |
-| hint-02 | Which line would be a good one? | `give_hint{}` |
-| hint-03 | I'm stuck, any clues? | `give_hint{}` |
-| tricky-04 | My granddaughter loves noughts and crosses | `say(...)` |
-| tricky-05 | We used to play hangman at school | `say(...)` |
-| tricky-08 | A or E, I cannot decide | `say{...}` |
+| line-05 | Join the first two dots along the top row for me | Returns the top side of the top left box. This is geometrically equivalent, but the conservative line comparator does not recognise that paraphrase. |
+| done-02 | That's my line done | Empty response. |
+| done-03 | There you are, have a look | Empty response. |
+| done-04 | Your turn now | Empty response. |
+| teach-01 | Let me teach you a game my dad made up | Replies "tell me the rules and I will learn it." This is ordinary prose, not an explicit teach_game call. |
+| tricky-09 | Something easier than this | Selects easy difficulty instead of asking whether the player means another game or lower difficulty. |
 
-These suggest correct tool selection but fail the native-call contract. Three more
-responses are empty: `done-02` (“That's my line done”), `done-03` (“There you are, have
-a look”), and `done-04` (“Your turn now”). The evaluator does not invent calls from them.
+## Latency, checks and handoff
 
-`tricky-09`, “Something easier than this”, selects easy difficulty instead of asking
-whether the player wants another game or lower difficulty. This is the remaining
-semantic ambiguity.
+The coordinator confirmed three agents and two simulators were running on this Mac.
+The regression suite also overlapped the end of this run.
+The fresh run measured p50 0.706 s, p95 4.967 s and maximum 6.187 s. Its separate warm-up
+was 3.681 s and is excluded from percentiles. Requests are sequential and timed as
+complete HTTP wall time, including prompt processing and service queueing. Percentiles
+use linear interpolation. The earlier 5.389 s p95 is also retained above. These are
+contended measurements, not evidence that the idle-machine 2.5 s target has been met.
+The coordinator owns that idle rerun; latency no longer blocks completion.
 
-`line-05` selects the correct tool but translates “Join the first two dots along the
-top row for me” to “the top side of the top left box”. That is geometrically equivalent
-on this board. The conservative line comparator does not resolve geometric paraphrases,
-so it still counts this as a failure. The baseline response instead requested two lines;
-it was genuinely wrong. Neither response was silently accepted or repaired.
+Ollama was 0.40.14, using the local Gemma 4 8.1B nvfp4 model on the MLX runner. Changing
+the state-filtered tool list can reduce prompt-prefix reuse. The evaluator still uses
+the requested state-filtered, stateless request shape; it does not substitute all tools,
+conversation history, a fallback model, or a different system prompt.
 
-## Latency and handoff
+The fresh command exited 0 and saved /tmp/tool-eval-coordinator.json. Previous reports
+remain at /tmp/tool-eval-before.json and /tmp/tool-eval-after-2.json. The unchanged case
+corpus has SHA-256 75a2c3ad4f4a06b4dc46a23fb2c41bb7328aa7e708ca8c50e191d750ee184d62.
 
-Ollama is 0.40.14, with the local `gemma4` 8.1B nvfp4 model on the MLX runner (digest
-`eb2177adf7646d15faead94fdad6d3e170dc8015653418a3b7d5d52a6380be5b`). The service is shared.
-State changes alter the offered tool list and reduce prompt-prefix reuse. In the retained
-full run, Ollama's reported prompt-plus-generation p95 was 5.102 s, so queueing alone
-does not explain the 5.389 s HTTP p95.
+Validation: the required non-Gemma suite passed 84 tests, with 2 deselected, in 102.71 s.
+Targeted parser checks covered bare names, positional and keyword arguments, boolean
+arguments, call syntax, ordered calls, malformed input, prose rejection, and unchanged
+native validation. Saved-response CLI checks verified that default and explicit text
+acceptance pass, native-only mode fails the old native score, and slow latency does not
+change the exit code. The final parser recheck preserved the fresh run's 118/128 totals.
 
-A later shorter-description candidate was tried after unloading and reloading only Gemma 4
-while no requests were active. Its separate warm-up took 26.864 s; scored requests reached
-49.167 s. The Mac reported 7–10% memory free during that attempt. It also regressed I and M
-to E, so the attempt was stopped and its descriptions were discarded. These observations
-do not isolate a single performance cause. The server and Gemma 3 remained running.
-
-The next integration step needs a decision about the native-call contract and a quiet
-local inference window. Fixed native-call examples or the production planner's text
-normalization may help emission, but their results must be measured separately from this
-strict, stateless evaluation. Offering all tools instead of `schemas(state)` would also
-change the requested benchmark. This task does not make either substitution to pass.
-
-Raw local reports are `/tmp/tool-eval-before.json` and `/tmp/tool-eval-after-2.json`;
-the former's original exact-string score can be rescored with the final `check` function.
-The case corpus is unchanged from `0b3cc47`; its SHA-256 is
-`75a2c3ad4f4a06b4dc46a23fb2c41bb7328aa7e708ca8c50e191d750ee184d62`.
-The original runner is `d551049`; scoring normalization first landed in `a85a652`.
-
-Validation: `.venv/bin/python -m pytest -q tests -k "not gemma"` passed **84 tests**, with
-2 deselected, in 62.47 s on the final check. Offline scorer checks reject wrong order, unavailable tools,
-wrong letters, boolean strings, swapped dimensions, and extra lines. Schema AST comparison
-confirms that the tools edit changes only descriptions. No brain or executor file changed.
-
-## Interpretation boundaries
-
-- A named game request selects that game. A game mentioned in a family memory stays
-  small talk. “Same again” restarts the current game.
-- Brief pauses use `wait`. Ending the session uses `stop`.
-- A vague request for “something easier” asks a question. A request to play more gently
-  changes difficulty. “Don't hold back” selects impossible; “match my level” selects authentic.
-- A hint invokes the solver. A draw request carries only a square or line chosen by the
-  player. Ambiguous letters ask a question instead of selecting one.
-- “I've drawn it” and “fresh sheet is down” request camera checks. They do not establish
-  that a board, mark, sheet, or reach is valid.
-
-The evaluation measures language routing only. It neither moves the arm nor validates
-executor confirmation, camera checks or safety. The parallel executor task owns those paths.
+This evaluates language routing. It does not execute tools, choose moves, establish
+board facts, bypass reach or safety checks, or validate the executor's camera and
+confirmation paths. The only file outside the owned files is an additive STATUS section.

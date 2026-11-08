@@ -2,6 +2,24 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov: C2-tool-eval completed under the coordinator's updated rules
+
+- Added `--accept-text-names`, on by default, with `--no-accept-text-names` for strict scoring.
+  Explicit known tool names and argument/call forms accepted by B2 now count after the same
+  state, order and argument checks. The table and JSON report retain both native and accepted scores.
+  Ordinary prose, empty replies and malformed calls still fail. The request shape and cases are unchanged.
+- Fresh full run: **128/134 (95.52%) accepted**, **118/134 (88.06%) native-only**. Stop **8/8**,
+  named switches **15/15** and letters **14/14** meet the perfect-score requirements. The command
+  `.venv/bin/python tools/tool_eval.py --accept-text-names --output /tmp/tool-eval-coordinator.json`
+  exited **0**. The six remaining failures and before/after results are in `docs/tool-eval.md`.
+- Measured **0.706 s p50, 4.967 s p95**, maximum 6.187 s; earlier retained p95 was 5.389 s.
+  The coordinator confirmed three agents and two simulators were running. Latency is now reported
+  without blocking acceptance; the coordinator will re-measure on an idle Mac.
+- `.venv/bin/python -m pytest -q tests -k "not gemma"`: **84 passed, 2 deselected**, 102.71 s.
+  Targeted parser and saved-response CLI checks passed, including default-on behaviour, native-only
+  mode and the non-blocking latency rule. No brain or executor file changed. This is an additive
+  status update outside the task's owned files; the earlier blocked entry below is historical.
+
 ## 8 Nov: spoken tool evaluation (task C2-tool-eval, acceptance blocked)
 
 - Added 134 fixed cases in `tests/data/tool_eval.jsonl`, across 24 categories with 12 tricky cases.
