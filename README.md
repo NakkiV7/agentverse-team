@@ -161,7 +161,6 @@ docs/              design, pitch and planning documents (below)
 |---|---|
 | [docs/concept.md](docs/concept.md) | The idea in depth: modes, resident profiles, failure modes, latency plan |
 | [docs/ideas-for-consideration.pdf](docs/ideas-for-consideration.pdf) | Design ideas with status: ways to play, unreadable marks, language model vs code, fresh paper |
-| [docs/pitch.md](docs/pitch.md) | Earlier 3-minute demo script, written for the scaffold |
 | [docs/games/footsteps.pdf](docs/games/footsteps.pdf) | Rules and solver-checked strategy for Footsteps, the first game we teach Penny |
 | [docs/architecture.md](docs/architecture.md) | Architecture and tech stack |
 | [docs/DEMO.md](docs/DEMO.md) | Step-by-step demo walkthrough |
