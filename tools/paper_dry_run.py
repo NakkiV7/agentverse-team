@@ -105,11 +105,11 @@ def main():
             b.say(spec["say"])
             for name in spec["cancel"]:
                 p.cancel(name)
+            for rule in spec["rules"]:
+                p.add_rule(rule)
             error = p.run(spec["now"], context_from(b))
             if error:
                 raise AssertionError(error)
-            for rule in spec["rules"]:
-                p.add_rule(rule)
 
         def save(look):
             for suffix, rgb in (("overhead", look.rgb), ("sheet", rectify(look.rgb, app.cam, look.track.pose))):

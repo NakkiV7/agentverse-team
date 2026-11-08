@@ -3,7 +3,8 @@
 ``run`` is synchronous: call it from a separate orchestration thread, never
 from a busy brain drawing worker or its input loop. ``on_event`` only enqueues
 and is safe inside ``brain.emit``. Each character releases the drawing worker,
-so game moves and a requested switch can run between characters.
+so game moves and a requested switch can run between characters. Install a
+routine's rules before starting ``run`` to capture guesses made during writing.
 """
 from __future__ import annotations
 

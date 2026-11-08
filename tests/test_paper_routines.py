@@ -222,3 +222,19 @@ def test_full_item_refuses_append_with_a_workable_place_for_another_note(paper):
     error = paper.run([{"op": "append_text", "id": "alphabet", "text": "B"}])
     assert "would work for a new note" in error
     assert item.text == "A" and len(paper.draws) == before
+
+
+def test_a_guess_during_writing_is_marked_after_the_item_is_complete(paper, monkeypatch):
+    paper.add_rule(rule())
+    draw = paper._draw_checked
+
+    def emit_mid_letter(name, strokes, generation, cell=None):
+        draw(name, strokes, generation, cell=cell)
+        if cell is not None and cell.char == "A":
+            paper.on_event(event(letter="B", correct=False))
+    monkeypatch.setattr(paper, "_draw_checked", emit_mid_letter)
+    assert write(paper) is None
+    wait(lambda: not paper.pending)
+    assert [name for name, strokes in paper.draws] == ["paper alphabet: A", "paper alphabet: B",
+                                                     "paper alphabet: C", "paper cross_out: B"]
+    assert paper.items["alphabet"].characters[1].marks == {"cross_out"}
