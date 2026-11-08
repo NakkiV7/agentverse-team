@@ -123,13 +123,12 @@ class Brain:
         self.player_name = None                 # "I'm Margaret": remembered for the session and used in replies
         self.game_started_at = None             # when the current game's play began (set_state), for the facts
         self.paper = None                       # paper routines (buddy/paper, task B) once the coordinator attaches them
+        paper_glue.install(self)                # buddy/paper routines + the custom_request tool (docs/round3.md)
         threading.Thread(target=self._loop, daemon=True, name="brain").start()
         threading.Thread(target=self._watch, daemon=True, name="board-watch").start()
         threading.Thread(target=self._warm_planner, daemon=True, name="planner-warm-up").start()
 
     # ------------------------------------------------------------------ helpers
-        paper_glue.install(self)                # buddy/paper routines + the custom_request tool (docs/round3.md)
-
     def set_state(self, new: str, why: str):
         if new != self.state:
             self.app.trace("decide", f"{self.state} -> {new}: {why}")

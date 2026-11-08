@@ -18,7 +18,7 @@ import urllib.request
 
 from buddy import config as C
 
-TIMEOUT = 25.0
+TIMEOUT = 60.0   # the showcase sentence hit 25 s under load; compile runs off the game thread, Buddy has said "let me think"
 NUM_CTX = 8192
 MAX_RESPONSE = 65536
 PLACES = (
@@ -142,6 +142,10 @@ def _json_value(value, depth: int = 0) -> None:
 def validate(value) -> Routine | Refusal:
     """Validate the entire object atomically. Never salvage a valid subset."""
     try:
+        if isinstance(value, dict) and "refusal" in value and set(value) <= {"refusal", "say", "reason"}:
+            # the model sometimes writes {"refusal": "..."} or {"refusal": ..., "say": ...}: keep its kind sentence
+            value = {"reason": value.get("reason") or value["refusal"],
+                     "say": value.get("say") or "I can't do that on the paper, I'm afraid. I can write a tally or mark something I've written."}
         if isinstance(value, dict) and set(value) == {"reason", "say"}:
             _string(value["reason"], "refusal reason", 320)
             _string(value["say"], "refusal sentence", 320)
@@ -331,7 +335,7 @@ def _chat(request: str, facts: str, state: str) -> str:
 
 
 def compile(request: str, facts: str, state: str) -> Routine | Refusal:
-    """Return a checked routine or kind refusal within 25 s, including queueing.
+    """Return a checked routine or kind refusal within TIMEOUT seconds, including queueing.
 
     The socket has the same timeout. A daemon worker also bounds total wall time
     (a socket timeout alone only limits individual blocking I/O operations).
@@ -353,5 +357,5 @@ def compile(request: str, facts: str, state: str) -> Routine | Refusal:
     try:
         return result.get(timeout=TIMEOUT)
     except queue.Empty:
-        return Refusal("request timed out after 25 s", "Sorry, that took too long to work out. "
+        return Refusal(f"request timed out after {TIMEOUT:.0f} s", "Sorry, that took too long to work out. "
                        "Please try again; I can write a tally or mark a written item.")

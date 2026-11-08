@@ -217,7 +217,7 @@ def test_http_contract(monkeypatch):
     request = "write my name; it's Margaret"
     assert isinstance(R.compile(request, "Known facts", "CHAT"), R.Routine)
     assert seen["url"] == "http://127.0.0.1:11434/api/chat"
-    assert seen["timeout"] == 25
+    assert seen["timeout"] == 60
     body = seen["body"]
     assert body["model"] == "test-gemma" and body["think"] is False and body["stream"] is False
     assert body["options"]["temperature"] == 0
@@ -325,3 +325,13 @@ def test_scorer_checks_literal_selection():
     result = R.parse(SAVED_ALPHABET)
     case = {"expect": E.structure(result), "literals": [{"action": 1, "field": "chars", "value": "AE"}]}
     assert E.check(case, result, SAVED_ALPHABET)
+
+
+def test_refusal_written_with_the_refusal_key_keeps_its_sentence():
+    """The model sometimes answers {"refusal": ...}: the kind sentence is kept, the shape is not an error."""
+    from buddy.agent.requests import Refusal, validate
+    out = validate({"refusal": "Ink cannot be erased.", "say": "I can't rub anything out, but I can cross it through."})
+    assert isinstance(out, Refusal) and out.reason == "Ink cannot be erased." and "cross it through" in out.say
+    out = validate({"refusal": "No picture drawing."})
+    assert isinstance(out, Refusal) and out.say
+    assert isinstance(validate({"refusal": "x", "now": []}), Refusal)   # a refusal never carries actions

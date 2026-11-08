@@ -64,7 +64,7 @@ item. Existing-item lookup, template substitution, layout, reach, drawing and
 camera verification remain the executor's checks. A known template can still
 lack a value at execution time; the executor must skip it with a traced reason.
 
-The socket timeout is 25 seconds. A daemon worker and bounded queue impose the
+The socket timeout is 60 seconds (raised from 25 after the alphabet sentence timed out under load). A daemon worker and bounded queue impose the
 same limit on total wall time, including service queueing and response reading.
 Late output is discarded; it cannot execute a routine. There are no automatic
 retries. Ollama must be a loopback HTTP origin. Model output is capped at 64 KiB.
