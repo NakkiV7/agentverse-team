@@ -3,6 +3,7 @@
 
 A library entry is a GameSpec with a name and a little history. Noughts and crosses is special: it has
 no GameSpec here (spec None) because brain.py plays it with Hakim's original code and win-line drawing.
+Hangman also has spec None; its kind selects the separate spoken-letter game.
 """
 from __future__ import annotations
 
@@ -23,7 +24,7 @@ GAMES_FILE = Path(os.environ.get("BUDDY_GAMES_FILE", str(C.RUNTIME / "games.json
 @dataclass
 class Entry:
     name: str
-    spec: GameSpec | None               # None = noughts and crosses (Hakim's path)
+    spec: GameSpec | None               # None = a built-in with its own rules, selected by kind.
     aliases: tuple[str, ...] = ()
     builtin: bool = False
     taught_at: float = 0.0
@@ -31,8 +32,12 @@ class Entry:
     player_wins: int = 0
     robot_wins: int = 0
     draws: int = 0
+    kind: str = "grid"                  # Non-grid built-ins also have spec None.
 
     def describe(self) -> str:
+        if self.kind == "hangman":
+            return ("I choose a familiar word. Say or type one letter at a time. I write every matching letter. "
+                    "A wrong letter adds one gallows part. Find the word before six misses. You can ask for a hint.")
         if self.spec is None:
             return ("We take turns putting our mark in one of the nine squares. The first to get three in a row, "
                     "across, down or corner to corner, wins.")
@@ -44,6 +49,7 @@ BUILTIN = [
     Entry("Footsteps", FOOTSTEPS, ("footsteps", "the trail game", "trails"), True),
     Entry("backwards noughts and crosses", MISERE, ("misere", "misère", "reverse noughts and crosses", "backwards tic tac toe", "inverse tic tac toe"), True),
     Entry("Footsteps with diagonals", FOOTSTEPS_DIAG, ("diagonal footsteps", "footsteps diagonals"), True),
+    Entry("hangman", None, ("hang man", "the word game"), True, kind="hangman"),
 ]
 
 
@@ -69,6 +75,7 @@ class Library:
             spec = GameSpec(**d["spec"]) if d.get("spec") else None
             e = Entry(d["name"], spec, tuple(d.get("aliases", ())), False, d.get("taught_at", 0.0),
                       d.get("plays", 0), d.get("player_wins", 0), d.get("robot_wins", 0), d.get("draws", 0))
+            e.kind = d.get("kind", "grid")
             self._upsert(e)
         for d in data.get("builtin_history", []):
             e = self.find(d["name"])
