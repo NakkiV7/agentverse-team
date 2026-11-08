@@ -2,6 +2,47 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov, 06:40: Buddy knows what is going on, and does new things on paper (round 3 merged, branch `agent/tools`)
+
+- **The two things the player asked for.** (1) "What letters have I asked so far" and any other question about the
+  game or the session is answered from the live facts, not a fixed line: `brain.facts()` gives the model the whole
+  picture (board, word pattern, letters tried right and wrong, misses left, lines and boxes, level, rating and
+  record, whose turn, the move history, games this session, the last conversation turns, what is written on the
+  paper) and the planner answers with `say` from it. (2) "On the corner, write every letter of the alphabet and
+  cross every letter I have got wrong from now on out, and cross out the previous wrong letters too" works end to
+  end: the planner picks `custom_request` with the whole sentence, Gemma 4 compiles it into a routine (write the
+  alphabet in the top right corner, cross out {wrong}, and a standing rule: on a wrong guess, cross out {letter}),
+  `buddy/paper` lays it out in a free, reachable part of the sheet, writes one letter per arm job with a camera
+  check each, and the rule keeps crossing. Rules survive a fresh sheet; at the next game Buddy asks "shall I write
+  the alphabet on this sheet again?".
+- **How it fits together** (docs/round3.md): `brain.emit` records every event (heard, said, game_start, move,
+  guess, line, box, game_over, switch) for the facts and the rules; `buddy/agent/paper_glue.py` joins the planner
+  tool, `buddy/agent/requests.compile` and `buddy.paper.Paper` off the game thread; a letter said while Buddy is
+  writing a note is queued, not refused; `app.close` stops the paper worker. Built by three agents in parallel
+  (A3 conversation, Claude; B3 paper, GPT-6; C3 requests, GPT-6; their own entries follow below) and wired here.
+- **Measured on the merged branch** (M5, other agents finished, one simulator running):
+  `pytest`: **399 passed**. `tools/question_eval.py` (46 live questions over hangman, grid and dots):
+  **45/46 = 97.8%** (21/46 without the facts), p50 1.4 to 2.0 s, prompt 3660 tokens, so the planner now asks for an
+  8192-token context (Ollama's default is 4096). `tools/request_eval.py` (32 requests): **27/32 = 84.4%**, p50 2.5 s;
+  the misses are paraphrases of the alphabet request that name the wrong letters literally instead of `{wrong}`
+  (they still work for the letters wrong at that moment). `tools/tool_eval.py` with the new tool in the list:
+  **130/137 = 94.9%**, critical cases 100%. `tools/alphabet_dry_run.py` (the sentence above, typed, in the
+  simulator): the routine compiled in 20 s, **26 letters written in two rows in 15 minutes**, every glyph read
+  back at 100% segment coverage, **exactly B, C, D crossed** (D by the standing rule after it was guessed), P not;
+  questions answered along the way: "what letters have I asked so far" -> "B and C", "how many misses do I have
+  left" -> "four", "which letters have I got wrong" -> "B, C, and D", "what have you written in the corner" ->
+  "the alphabet in the top right corner, and B, C, and D are crossed out" (4 of 4; the script's own check had
+  wanted the digit 4 and is fixed). 1006 s wall. Pictures: `runtime/alphabet_sheet.png`, `runtime/alphabet_overhead.png`.
+  B3's own `tools/paper_dry_run.py` (alphabet and a dots score strip) and all earlier scripted games pass.
+- **Known limits**: with the simulator running flat out (scripted runs, `realtime=False`) a planner call took 8 to
+  12 s and one hit the 20 s timeout (the old intent path answered); measure in the live demo, which runs the
+  simulator in real time. Writing is slow (about 20 s a letter) because every letter is its own checked arm job;
+  Buddy says so first and the player can keep guessing. The paper vocabulary is write, append, cross out,
+  underline, circle, tick on written items; it cannot erase, draw pictures, or mark game squares or boxes
+  (Buddy says what it can do instead). The request compiler is at 84%, below its 85% target.
+- **Run it**: `OLLAMA_MAX_LOADED_MODELS=2 ollama serve`, then `.venv/bin/python -m buddy`, open
+  http://localhost:8860, say "Buddy". Ask anything; ask for anything on the paper.
+
 ## 8 Nov, 06:00: Buddy answers any question from the live facts (task A3-conversation, branch `agent/conversation`)
 
 - **What is in**: `brain.facts()` is the whole picture in plain sentences the model can quote: the game and its

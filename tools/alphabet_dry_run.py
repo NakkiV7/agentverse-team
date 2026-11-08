@@ -75,11 +75,15 @@ def main():
             say(letter)
             wait(lambda: letter in b.hangman.guessed and settled(), f"checked guess and any rule for {letter}")
 
+        WORDS = {"3": "three", "4": "four", "5": "five", "6": "six"}
+
+        def has(word, text):          # a number may be said as a word ("four misses left")
+            return any(re.search(rf"\b{re.escape(w)}\b", text, re.I) for w in {word, WORDS.get(word, word)})
+
         def ask(question, must, must_not=()):
             wait(settled, "drawing to finish")
             replies = " ".join(say(question))
-            ok = all(re.search(rf"\b{re.escape(m)}\b", replies, re.I) for m in must) and \
-                not any(re.search(rf"\b{re.escape(m)}\b", replies, re.I) for m in must_not)
+            ok = all(has(m, replies) for m in must) and not any(has(m, replies) for m in must_not)
             result["answers"][question] = {"reply": replies, "ok": ok}
             app.trace("system", f"(answer check {'ok' if ok else 'WRONG'}: {replies!r})")
             return ok
