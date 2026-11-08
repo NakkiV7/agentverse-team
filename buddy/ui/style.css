@@ -1,0 +1,167 @@
+/* Buddy's demo page. Plain CSS, no build step. Light and dark follow the system; the header button overrides. */
+:root {
+  --bg: #f3f1ec; --card: #ffffff; --fg: #1b1b19; --muted: #5f5f59; --line: #e1dfd7; --accent: #2457c5;
+  --accent-ink: #ffffff; --buddy: #e9eefb; --player: #efeee9; --ok: #2a8f4b; --warn: #c7860a; --bad: #d11a2a;
+  /* trace stages */
+  --hear: #2f6fd6; --understand: #8248c9; --decide: #d07a12; --see: #2a8f4b; --plan: #128a8a; --act: #cf3f2f;
+  --sense: #c2387f; --check: #2f7d32; --say: #55554f; --adapt: #b8860b; --safety: #e0152f; --system: #8a8a84;
+  --head: 60px; --gap: 16px; --radius: 12px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141413; --card: #1e1e1c; --fg: #ecebe6; --muted: #a3a29b; --line: #34332f; --accent: #8ab0ff;
+    --accent-ink: #0d1a3a; --buddy: #26304a; --player: #2a2a27; --ok: #4cc26e; --warn: #e3a52a; --bad: #ff5a66;
+    --say: #9a9992; --system: #8a8a84; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141413; --card: #1e1e1c; --fg: #ecebe6; --muted: #a3a29b; --line: #34332f; --accent: #8ab0ff;
+  --accent-ink: #0d1a3a; --buddy: #26304a; --player: #2a2a27; --ok: #4cc26e; --warn: #e3a52a; --bad: #ff5a66;
+  --say: #9a9992; --system: #8a8a84; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+button { font: inherit; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 8px 12px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+b { font-weight: 650; }
+
+/* ---------- header: game, state in words, level, three status dots */
+.top {
+  height: var(--head); display: flex; align-items: center; gap: 20px; padding: 0 var(--gap);
+  border-bottom: 1px solid var(--line); background: var(--card);
+}
+.brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.brand h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+.game { color: var(--muted); font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+.state { font-size: 18px; font-weight: 650; padding: 4px 12px; border-radius: 999px; background: var(--buddy); white-space: nowrap; }
+.state.yours { background: var(--ok); color: #fff; }
+.state.alarm { background: var(--bad); color: #fff; }
+.level { color: var(--muted); font-size: 15px; white-space: nowrap; }
+.dots { display: flex; align-items: center; gap: 12px; }
+.dot { width: 14px; height: 14px; border-radius: 50%; background: var(--line); border: 2px solid transparent; display: inline-block; cursor: help; }
+.dot.ok { background: var(--ok); }
+.dot.warn { background: var(--warn); }
+.dot.bad { background: var(--bad); }
+.dot.on { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.dot.off { background: transparent; border-color: var(--muted); }
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 50%, transparent); } 50% { box-shadow: 0 0 0 6px transparent; } }
+.theme { padding: 2px 8px; font-size: 16px; line-height: 1.4; margin-left: 6px; color: var(--muted); }
+
+/* ---------- three columns on a wide screen, two on a medium one, one on a phone */
+main { display: grid; gap: var(--gap); padding: var(--gap); max-width: 2100px; margin: 0 auto; }
+.col { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; min-width: 0; }
+.card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; font-weight: 650; }
+.cap { color: var(--muted); font-size: 14px; margin: 8px 0 0; line-height: 1.35; }
+
+@media (min-width: 1180px) {
+  main { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 0.9fr); height: calc(100vh - var(--head)); }
+  .col { overflow-y: auto; min-height: 0; }
+  .chatcard { height: 100%; display: flex; flex-direction: column; }
+  #chat { flex: 1; min-height: 200px; }
+  /* the trace takes the room the Test it card leaves, so nothing in the column is cut off */
+  @supports selector(::details-content) {
+    .think { overflow: hidden; }
+    details.card[open] { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+    details.card[open]::details-content { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+    details.card[open] #trace { flex: 1; height: auto; min-height: 140px; }
+    .test { flex: none; }
+  }
+}
+@media (min-width: 860px) and (max-width: 1179.98px) {
+  main { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+  .think { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start; }
+  #chat { height: clamp(280px, 52vh, 640px); }
+}
+@media (max-width: 859.98px) {
+  main { grid-template-columns: 1fr; }
+  #chat { height: clamp(240px, 45vh, 520px); }
+  .top { gap: 10px; }
+  .game { display: none; }
+}
+
+/* ---------- the conversation */
+#chat { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 12px 4px 2px; scrollbar-gutter: stable; }
+.msg { max-width: 86%; padding: 10px 14px; border-radius: 14px; font-size: 17px; line-height: 1.4; word-wrap: break-word; }
+.msg small { display: block; color: var(--muted); font-size: 13px; margin-bottom: 2px; }
+.msg.Buddy { background: var(--buddy); align-self: flex-start; border-bottom-left-radius: 4px; }
+.msg.Player { background: var(--player); align-self: flex-end; border-bottom-right-radius: 4px; }
+.msg.Buddy.latest { font-size: 19px; box-shadow: inset 4px 0 0 var(--accent); padding-left: 16px; }
+.msg .speaking { color: var(--accent); font-weight: 600; }
+.empty { color: var(--muted); font-size: 16px; margin: auto 0; text-align: center; padding: 20px; }
+.next { display: flex; gap: 10px; align-items: baseline; margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--bg); font-size: 16px; line-height: 1.4; min-height: 44px; }
+.next .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); font-weight: 700; flex: none; }
+.next.warn { background: color-mix(in srgb, var(--warn) 16%, var(--bg)); }
+.hearing { display: flex; align-items: center; gap: 10px; height: 26px; margin-top: 8px; color: var(--muted); font-size: 15px; font-style: italic; overflow: hidden; }
+.hearing.gone { display: none; }
+.lvl { flex: none; width: 56px; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.lvl i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .12s linear; }
+.partial { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#say { display: flex; gap: 8px; margin-top: 8px; }
+.inputwrap { position: relative; flex: 1; min-width: 0; }
+#text { width: 100%; font-size: 18px; padding: 12px 14px; border-radius: 10px; border: 2px solid var(--line); background: var(--card); color: var(--fg); }
+#text:focus { border-color: var(--accent); outline: none; }
+.inputwrap.hearing-ghost #text::placeholder { color: transparent; }
+.ghost { position: absolute; left: 16px; right: 16px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 18px; font-style: italic; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#say .primary { font-size: 17px; padding: 0 20px; }
+#micbtn { font-size: 15px; white-space: nowrap; }
+#micbtn.gone { display: none; }
+
+/* ---------- what Buddy sees: the paper is the main picture, the cameras are small */
+.frame { position: relative; overflow: hidden; border-radius: 8px; background: color-mix(in srgb, var(--fg) 6%, var(--card)); }
+.frame::after { content: "waiting for the camera…"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 14px; }
+.frame.live::after { content: none; }
+.frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; }
+.frame.live img { opacity: 1; }
+.paper { aspect-ratio: 297 / 210; background: #fff; }
+.paper canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+.paper.candraw { outline: 3px solid var(--ok); outline-offset: 2px; }
+.paper.candraw canvas { cursor: crosshair; }
+.r43 { aspect-ratio: 4 / 3; }
+.hint { color: var(--muted); font-size: 15px; margin: 6px 0 0; min-height: 1.4em; line-height: 1.4; }
+.hint.draw { color: var(--ok); font-weight: 600; }
+.hint.warn { color: var(--warn); font-weight: 600; }
+.cells { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+.cells[hidden] { display: none; }
+.cells button { padding: 9px 4px; font-size: 15px; aspect-ratio: auto; }
+.cells button.off { opacity: .4; cursor: not-allowed; }
+.cells button.legal { border-color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
+.cells button .m { display: block; font-size: 20px; line-height: 1; margin-top: 2px; }
+.thumbs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.thumbs figure { margin: 0; min-width: 0; }
+.thumbs figcaption { color: var(--muted); font-size: 13.5px; margin-top: 5px; line-height: 1.3; }
+
+/* ---------- how Buddy decided: collapsible, filterable; legend lives in tooltips */
+details.card { padding: 0; }
+details summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 14px 16px; }
+details summary::-webkit-details-marker { display: none; }
+details summary h2 { margin: 0; flex: none; }
+details summary::after { content: "▸"; margin-left: auto; color: var(--muted); transition: transform .15s; flex: none; }
+details[open] summary::after { transform: rotate(90deg); }
+.last { color: var(--muted); font-size: 13px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; }
+details[open] .last { visibility: hidden; }
+.count { color: var(--muted); font-size: 12.5px; flex: none; font-variant-numeric: tabular-nums; }
+.filters { display: flex; gap: 6px; padding: 0 16px 10px; flex-wrap: wrap; }
+.filters button { padding: 4px 11px; font-size: 13px; border-radius: 999px; color: var(--muted); }
+.filters button.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+#trace { height: 420px; overflow-y: auto; font-size: 13px; line-height: 1.4; padding: 0 16px; }
+.row { display: grid; grid-template-columns: 44px 84px 1fr; gap: 6px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.row .t { color: var(--muted); font-variant-numeric: tabular-nums; }
+.badge { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; color: #fff; border-radius: 4px; padding: 2px 6px; height: fit-content; text-align: center; cursor: help; }
+#trace.f-see .row:not([data-g="see"]), #trace.f-plan .row:not([data-g="plan"]),
+#trace.f-decide .row:not([data-g="decide"]), #trace.f-say .row:not([data-g="say"]) { display: none; }
+.sensors { color: var(--muted); font-size: 12.5px; margin: 0; padding: 8px 16px 12px; border-top: 1px solid var(--line); line-height: 1.5; }
+.sensors b { color: var(--fg); font-weight: 600; }
+
+/* ---------- test it */
+.scene { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.scene button { font-size: 14.5px; }
