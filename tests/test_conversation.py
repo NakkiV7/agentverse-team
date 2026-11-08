@@ -215,7 +215,7 @@ def brain(tmp_path, monkeypatch):
 def test_hangman_facts_tell_the_letters_right_wrong_and_misses(brain):
     hangman_scene(brain)
     f = brain.facts()
-    assert "Game: hangman, on, game 2 of this session, started 4 minutes ago" in f
+    assert "Game: hangman, on, game 2 of this session. Rules:" in f and "This game started 4 minutes ago." in f
     assert "Word so far: _ P P _ E (5 letters, 3 found, 2 still blank)" in f
     assert "Letters tried so far: P, T, E, S, N (5 letters). Right letters: E, P. Wrong letters: N, S, T." in f
     assert "Misses: 3 of 6 used, 3 misses left. Gallows parts drawn: the upright post, the beam, the rope." in f
@@ -336,6 +336,14 @@ def test_user_message_carries_the_facts_after_the_situation():
     assert toolcall.Planner.user_message("hi", "Chatting.") == 'Situation: Chatting.\nPlayer said: "hi"'
 
 
+def test_facts_put_the_stable_lines_first_and_the_volatile_ones_last(brain):
+    hangman_scene(brain)
+    f = brain.facts()
+    order = [f.index(k) for k in ("Game: hangman", "Level:", "Games this session", "The player's name", "Whose turn",
+                                  "Word so far", "Buddy last said", "This game started", "Moves this game", "Conversation so far")]
+    assert order == sorted(order), f
+
+
 def test_history_keeps_the_words_not_the_facts_and_trims(monkeypatch):
     monkeypatch.setattr(toolcall, "ENABLED", True)
     answers = iter([{"message": {"content": "", "tool_calls": [{"function": {"name": "say", "arguments": {"text": f"answer {i}"}}}]}}
@@ -350,8 +358,11 @@ def test_history_keeps_the_words_not_the_facts_and_trims(monkeypatch):
     assert not any("FACTS" in m.get("content", "") for m in history)
     users = [m for m in history if m["role"] == "user"]
     assert len(users) == toolcall.MAX_TURNS
-    first = 7 - toolcall.MAX_TURNS
-    assert users[0]["content"] == f'Player said: "question {first}"' and users[-1]["content"] == 'Player said: "question 6"'
+    if toolcall.MAX_TURNS:
+        first = 7 - toolcall.MAX_TURNS
+        assert users[0]["content"] == f'Player said: "question {first}"' and users[-1]["content"] == 'Player said: "question 6"'
+    else:
+        assert history == []                      # nothing after the cached prefix but the newest message
     assert p.msgs[:base] == toolcall.Planner().msgs[:base]
 
 

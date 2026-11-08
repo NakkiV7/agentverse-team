@@ -250,18 +250,23 @@ class Brain:
         paper routines wrote. `current` is the player's words being handled now; they are left out of the
         conversation history so the model answers them instead of echoing them. Kept under FACTS_LIMIT characters
         by shortening the oldest history first."""
-        lines = [self._facts_game(), self._facts_level()]
-        lines += self._facts_position()
-        moves, chat = self._facts_moves(), self._facts_chat(current)
-        lines.append(self._facts_session())
+        # Stable first, volatile last: the head is the same for a whole game (the game and its rules, the level and
+        # record, the session, the name), the tail changes at every turn (whose turn, the position, Buddy's last
+        # words, the paper, the time, the moves, the conversation). Ollama processes the planner's request again only
+        # from the first token that differs from the last one, so this order keeps the head cached (toolcall.py).
+        lines = [self._facts_game(), self._facts_level(), self._facts_session()]
         if self.player_name:
             lines.append(f"The player's name is {self.player_name}.")
+        tail = self._facts_position()
         if self.last_said:
-            lines.append(f'Buddy last said: "{self._short(self.last_said, 160)}"')
+            tail.append(f'Buddy last said: "{self._short(self.last_said, 160)}"')
         paper = self._facts_paper()
         if paper:
-            lines.append(paper)
-        head = "\n".join(l for l in lines if l)
+            tail.append(paper)
+        if self._game_kind() != "none" and self.game_started_at:
+            tail.append(f"This game started {self._ago(self.game_started_at)}.")
+        moves, chat = self._facts_moves(), self._facts_chat(current)
+        head = "\n".join(l for l in lines + tail if l)
         # the two histories give way first: moves lose their oldest entries, the chat its oldest turns
         for n_moves, n_chat in ((8, 8), (6, 8), (6, 6), (4, 6), (4, 4), (3, 4), (2, 4), (2, 3), (1, 3), (0, 3), (0, 2), (0, 1), (0, 0)):
             text = "\n".join(x for x in (head, self._moves_line(moves, n_moves), self._chat_line(chat, n_chat)) if x)
@@ -302,9 +307,8 @@ class Brain:
         if kind == "none":
             return f"No game is on. {self.situation()}"
         on = "just finished" if self.state == "GAME_OVER" else "on"
-        when = f", started {self._ago(self.game_started_at)}" if self.game_started_at else ""
         number = f", game {self.games} of this session" if self.games else ""
-        return f"Game: {self.game_name}, {on}{number}{when}. Rules: {self.rules_text()}"
+        return f"Game: {self.game_name}, {on}{number}. Rules: {self.rules_text()}"
 
     def _facts_level(self) -> str:
         d = self.difficulty
