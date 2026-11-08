@@ -44,6 +44,120 @@ Updated after every big change. Newest first. Numbers are measured on Nakkiv's M
   include it. Nothing in `app.py`, `tools.py`, `requests.py` or `buddy/paper` was touched. The level, rating and
   record answers come from `brain.difficulty` and the library entry; the dots facts need `brain.dots.state`.
   Open: "how hard are you playing" sometimes gets a warm non-answer; a seed for it would cost ~100 prefix tokens.
+## 8 Nov 2026: paper routines and fresh-sheet rewrite, camera verified (B3-paper, `agent/paper`)
+
+- **Built**: `buddy/paper` executes the shared routine JSON through `Paper.run`, `add_rule`, `cancel`,
+  `on_event`, `items` and `describe`. All six operations are implemented: writing, appending, crossing out,
+  underlining, circling and ticking. Each character retains its sheet-mm box, checked-writing state and marks.
+  Templates use event data ahead of game facts; queued score events keep their original scores. Matching checks
+  event kind, optional speaker and exact data values. Cancel accepts a name, operation or event kind. Unknown
+  templates are traced and skipped, and marking an already crossed character adds no ink.
+- **Layout and reach**: all ten named places are clipped against the selected game's complete footprint and
+  conservative reach patches, then live IK checks the candidate regions and every planned stroke point at
+  contact, hover and 30 mm lift. Dots notes also avoid the camera's scribble-monitoring window. Old hangman or
+  dots objects retained by the brain do not determine the current game's layout or template facts. Text wraps
+  with 1.3-width pitch; compiler newlines can be reflowed. Default glyph size is 6 mm, minimum 5 mm. The font
+  gained fourteen glyphs (`0`–`9`, `.:-/`). Both `app.py` and `marks.py` retain their entire original contents
+  byte-for-byte (20,825 and 12,441 bytes respectively); additions only.
+- **Scheduling and checks**: listeners enqueue without waiting inside `emit`. Paper waits for the game worker
+  and reserved robot turns, then uses `brain._worker` and `app.draw` one character at a time. Every job gets a
+  fresh camera look and segment coverage; tiny glyphs additionally use ink in their own crop. Faint ink gets
+  one retry. Annotation checks use a 0.65 mm corridor and an operational coverage threshold of 80%; the live
+  alphabet acceptance check requires the stricter `LINE_OK_COVERAGE` of 90%. Blank character margins separate
+  a cross-out from the diagonals already in X and Z. A switch is handled between jobs. `new_sheet()` clears
+  items and stale queued actions while retaining rules; missing targets are traced and exposed by
+  `needs_rewrite(id)`. `rewrite(id, context)` restores the saved text on a fresh sheet with a newly checked
+  layout and no old marks; the caller can reapply marks from the current game afterwards. Saved text includes
+  appends. Register rules before starting a routine so guesses during its writing are retained.
+- **Alphabet acceptance, real MuJoCo**: `.venv/bin/python tools/paper_dry_run.py` exited **0**, **1194.0 s**
+  wall under shared load. APPLE was forced; B and C were guessed before the alphabet, then D, F and P through
+  typed input. All **26** letters were written in **2** rows. Exactly **B, C, D, F** crossed: each diagonal
+  **100%**, maximum of the other **22** letters **85%** (I), right letter P **43.75%**, X **81.25%**, Z
+  **61.25%**. Minimum final glyph ink was **38.64%**. Every written glyph's planned segments read **100%**
+  during drawing; **0** faint-ink retries and **0** motion refusals. Saved `runtime/paper_overhead.png`,
+  `runtime/paper_sheet.png`, and all per-letter measurements in `runtime/paper.json`; trace in
+  `runtime/paper_trace.log`.
+- **Dots acceptance, real MuJoCo**: `.venv/bin/python tools/paper_dry_run.py --game dots` exited **0**,
+  **700.9 s**. A **2x2** game ended **2:2**; all **4** box events appended the captured scores, producing
+  exactly **19** characters: `0:0/0:1/0:2/1:2/2:2`. Minimum segment coverage **100%**, minimum glyph ink
+  **16.62%**, **0** faint-ink retries and **0** motion refusals. The sheet was deliberately placed **30 mm**
+  nearer the arm before setup: measured pose `(0.1799779, -0.0002670, 1.5707963)` in metres/radians. At the
+  default pose there is no reachable bottom strip outside the dots monitoring window; Paper refuses it and
+  suggests another reachable place. Saved `runtime/paper_dots_overhead.png`, `runtime/paper_dots_sheet.png`,
+  `runtime/paper_dots.json` and `runtime/paper_dots_trace.log`. The scripted player observes completion of the
+  brain's camera check, not just its earlier board-state update, before playing another edge.
+- **Tests and regressions**: `.venv/bin/python -m pytest -q tests/test_paper*.py`: **48 passed in 0.81 s**
+  before the final rewrite helper. Final focused command,
+  `.venv/bin/python -m pytest -q tests/test_paper*.py tests/test_hangman_marks.py`: **52 passed in 0.57 s**
+  (**49** paper tests, **3** font tests). The full `.venv/bin/python -m pytest -q tests`, before the approved
+  font-test update, measured **244 passed, 7 failed in 108.17 s**: the obsolete 26-glyph expectation and six
+  rating fixtures constructing `Brain.__new__` without `events` or `listeners`. Proposed compatibility updates
+  passed all **3** font checks and **6** rating cases in memory. The coordinator approved the font test update,
+  committed separately as `b968fe1` (**3 passed in 0.34 s**), and confirmed that the **six inherited rating
+  failures are already fixed on the conversation branch**. The rating tests remain untouched here. Per the
+  coordinator's instruction, the full suite was not repeated for that inherited issue. No brain, dots brain,
+  compiler, tool, narration or request source was edited.
+- **Existing games still pass**: `tools/hangman_dry_run.py` exited **0**, APPLE win after **5** misses,
+  minimum coverage **100%**, **218.0 s** reported by the script (**222.15 s** including startup).
+  `tools/dry_run.py` exited **0**, a draw with its hand intrusion and moved-sheet recovery, **173 s** wall,
+  **185 s** simulated (**177.57 s** including startup). The full-suite process took **109.49 s** including
+  startup. Commands, exit codes and timings are in `runtime/paper_regressions.json` and
+  `runtime/paper_regression_{hangman,grid,pytest}.log`.
+- **Load and discarded attempts**: Ollama was shared with the other round-3 agents. Starting several local
+  simulators at once pushed swap use to **20,123.81 MB** and caused an initial hangman timeout at **379.6 s**;
+  an initial suite run was interrupted at **181 passed / 7 failed, 166.87 s**. Subsequent simulator checks ran
+  sequentially. Two preliminary dots runs were stopped (resource pressure, then the scripted-hand timing race).
+  Their traces and the overloaded regression logs remain in `runtime/`; these timings are not quiet-machine
+  latency benchmarks.
+
+Coordinator wiring (run the routine on a separate orchestration thread, **not** inside `brain._worker` or the
+blocking input loop; Paper itself owns the per-character drawing workers):
+
+```python
+from buddy.paper import Paper, context_from
+import threading
+
+brain.paper = Paper(brain)
+brain.listeners.append(brain.paper.on_event)
+
+def apply_paper_routine(routine):
+    for name in routine.cancel:
+        brain.paper.cancel(name)
+    if routine.say:
+        brain.say(routine.say)
+    for rule in routine.rules:
+        brain.paper.add_rule(rule)
+    reason = brain.paper.run(routine.now, context_from(brain))
+    if reason:
+        brain.say(reason)
+
+threading.Thread(target=apply_paper_routine, args=(routine,), daemon=True).start()
+```
+
+Before `_hangman_act`'s busy refusal, add `if self.paper.defer_guess(u): return` (guard the `paper` attribute
+if it is optional). Call `brain.paper.new_sheet()` when a fresh sheet is accepted for non-retry hangman setup
+or a dots fresh-sheet restore; `switch` and `game_start` events already reset it. At the next game start,
+`brain.paper.needs_rewrite("alphabet")` tells the coordinator to offer to write it again. Facts use
+`brain.paper.describe()`. On shutdown call `brain.paper.close()`.
+
+Public call signatures: `Paper(brain)`; `run(actions: list[dict], context: dict | None = None) -> str | None`;
+`add_rule(rule: dict) -> None`; `cancel(name: str | dict) -> int` (number cancelled; a selector dict can contain
+`name`, `op`, `kind`); `on_event(ev) -> None`; `new_sheet() -> None`; `needs_rewrite(item_id: str) -> bool`;
+`rewrite(item_id: str, context: dict | None = None) -> str | None`; `describe() -> str`; `close() -> None`.
+`rules` is a list of rule dictionaries, and `items` maps ids to `PaperItem` instances. Both `run` and `rewrite`
+return `None` on success or one refusal sentence and must run outside a busy brain worker.
+
+`context_from(brain) -> dict` supplies `game` and `number`, plus whichever of `letter`, `correct`, `misses`,
+`pattern`, `wrong`, `guessed`, `score_player`, `score_buddy`, `result`, `player_name`, `cells`, and `name` are
+known for the selected game. These are the complete template-key vocabulary. An explicit `run` context
+overrides those state values. Event data overrides state for standing rules, with an event's nested `score`
+also flattened into `score_player` / `score_buddy`. Lists render as space-separated values; booleans as
+`TRUE` / `FALSE`. Unknown or unavailable templates skip that action with a traced reason.
+
+After the player accepts rewriting on a fresh sheet, use the same separate orchestration thread to call
+`reason = brain.paper.rewrite("alphabet", context_from(brain))`. If it succeeds, restoring current hangman
+cross-outs is `brain.paper.run([{"op": "cross_out", "target": {"id": "alphabet", "chars": "{wrong}"}}],
+context_from(brain))`. Standing rules are already retained and need not be added again.
 
 ## 8 Nov, 04:30: ask Buddy for anything, merged (branch `agent/tools`, round 2 of three agents)
 
