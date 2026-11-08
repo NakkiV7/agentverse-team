@@ -59,7 +59,23 @@ def argument_equal(tool: str, key: str, got, expected) -> bool:
         return [numbers.get(word, word) for word in re.findall(r"[a-z0-9]+", value.casefold())
                 if word not in filler]
 
-    return isinstance(got, str) and bool(words(expected)) and words(got) == words(expected)
+    if not isinstance(got, str):
+        return False
+    if tool == "new_board":
+        from buddy.game.dotsboxes import parse_size
+
+        def size(value):
+            text = " ".join(words(value))
+            if len(re.findall(r"\d+", text)) > 2:
+                return None
+            if text in ("usual", "normal", "default", "small", "whatever"):
+                return (2, 2)
+            return parse_size(text)
+
+        expected_size, got_size = size(expected), size(got)
+        if expected_size is not None and got_size is not None:
+            return got_size == expected_size
+    return bool(words(expected)) and words(got) == words(expected)
 
 
 def load_cases(path: Path) -> list[dict]:

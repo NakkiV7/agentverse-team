@@ -2,6 +2,27 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov: spoken tool evaluation (task C2-tool-eval, acceptance blocked)
+
+- Added 134 fixed cases in `tests/data/tool_eval.jsonl`, across 24 categories with 12 tricky cases.
+  `tools/tool_eval.py` calls local Gemma 4 with native, state-filtered tools, `think: false` and
+  temperature zero. Cases are stateless. It checks ordered calls and arguments, prints category
+  accuracy and p50/p95 latency, supports `--only`, and can save full JSON reports.
+- Tuned only description and parameter text in `buddy/agent/tools.py`. Names, states, enums and
+  the Tool class are unchanged. Overall accuracy improved from **108/134 (80.60%)** to
+  **119/134 (88.81%)** using the same final scorer. Named switches reached **15/15** and letters
+  **14/14**, including spoken names. Stop was **7/8**: goodbye returned plain text `stop`.
+- **Acceptance remains blocked.** The retained full run measured **0.507 s p50, 5.389 s p95**.
+  Ten failures printed tool syntax instead of native calls; three replies were empty; one vague
+  request changed difficulty instead of asking; one equivalent line paraphrase fails the conservative
+  comparator. `docs/tool-eval.md` records every remaining failure and the measurement limits.
+  A shorter candidate regressed two letters and was discarded. The shared local inference setup
+  needs a quiet measurement window and native-call contract alignment with the executor work.
+- Checks: `.venv/bin/python -m pytest -q tests -k "not gemma"`: **84 passed, 2 deselected**, 62.47 s.
+  Scorer checks cover wrong arguments, call order, types, swapped dimensions and extra lines.
+  An AST comparison confirms description-only edits to the tool definitions. No brain or executor
+  file was edited. This section is an additive status update outside the task's owned files.
+
 ## 8 Nov, 03:00: change your mind at any point (branch `games/switch-anytime`, in PR #14)
 
 - "Let's play dots and boxes instead", "let me teach you a game", "start again" and "stop" are honoured in every
