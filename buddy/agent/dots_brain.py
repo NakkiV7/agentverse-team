@@ -246,9 +246,12 @@ class DotsPlay:
         for x in new:
             boxes = D.completed_by(self.n, self.state.edges, x)
             self.state = D.play(self.state, x)
+            self.b.emit("line", "player", f"the player drew {D.edge_name(self.n, x)}", edge=x,
+                        name=D.edge_name(self.n, x), boxes=list(boxes), score={"player": self.state.score(PLAYER), "buddy": self.state.score(BUDDY)})
             if boxes:
                 again = True
                 names = " and ".join(D.box_name(self.n, k) for k in boxes)
+                self.b.emit("box", "player", f"the player closed the {names}", boxes=list(boxes))
                 self.app.trace("decide", f"the player closed the {names}: they go again")
                 self.say(f"That closes the {names}. It's yours, mark it, and have another go.")
         _, rect, _ = self.look()
@@ -378,8 +381,12 @@ class DotsPlay:
                 self.say("My line isn't showing up on the paper. Let me try once more later.")
             boxes = D.completed_by(n, self.state.edges, ch.cell)
             self.state = D.play(self.state, ch.cell)
+            b.emit("line", "buddy", f"Buddy drew {D.edge_name(n, ch.cell)} ({ch.reason})", edge=ch.cell,
+                   name=D.edge_name(n, ch.cell), boxes=list(boxes), reason=ch.reason,
+                   score={"player": self.state.score(PLAYER), "buddy": self.state.score(BUDDY)})
             if boxes:
                 names = " and ".join(D.box_name(n, k) for k in boxes)
+                b.emit("box", "buddy", f"Buddy closed the {names}", boxes=list(boxes))
                 app.trace("decide", f"that closes the {names}: Buddy goes again")
                 self.say(f"That closes the {names}, so it's mine. I'll put my B in it and go again.")
                 for k in boxes:

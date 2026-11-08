@@ -25,6 +25,7 @@ States: IDLE -> CHAT -> CHOOSE_GAME -> SETUP (WAIT_SHEET) -> ASK_SIDE -> PLAYER_
 """
 from __future__ import annotations
 
+import collections
 import queue
 import random
 import re
@@ -51,6 +52,18 @@ from copy import deepcopy
 from ..game import dotsboxes as D
 from . import tools
 from .toolcall import Planner, ToolCall
+from dataclasses import dataclass, field
+
+
+@dataclass
+class Event:
+    """One thing that happened in the session, for the facts the language model reads and for paper routines
+    (docs/round3.md). kind: heard, said, game_start, move, guess, line, box, game_over, switch, state."""
+    kind: str
+    who: str                    # "player" or "buddy"
+    text: str                   # one plain sentence, e.g. "the player guessed E: wrong (3 misses)"
+    data: dict = field(default_factory=dict)
+    t: float = 0.0
 
 if TYPE_CHECKING:
     from ..app import App
@@ -81,6 +94,8 @@ class Brain:
         self.pending = None
         self.busy = False                       # a worker (setup / Buddy's move / drawing for the player) runs
         self.difficulty = Difficulty()
+        self.events: collections.deque[Event] = collections.deque(maxlen=400)   # what happened, oldest first
+        self.listeners = []                                                     # callables taking an Event
         self.rng = random.Random()
         self.games = 0
         self._seen, self._since = None, 0.0
@@ -117,12 +132,25 @@ class Brain:
     def say(self, text: str, wait: bool = False):
         self.last_said = text
         self.app.transcript_add("Buddy", text)
+        self.emit("said", "buddy", text)
         done = self.app.say(text)
         if wait and done is not None:
             done.wait(timeout=60)
 
     def hear(self, text: str, source: str = "typed", stt_s: float = 0.0):
         self.inputs.put((text, source, stt_s))
+
+    def emit(self, kind: str, who: str = "buddy", text: str = "", **data) -> Event:
+        """Record an Event and tell the listeners (paper routines, the facts block). Listener errors are traced,
+        never raised into the game."""
+        ev = Event(kind, who, text, data, time.time())
+        self.events.append(ev)
+        for fn in list(self.listeners):
+            try:
+                fn(ev)
+            except Exception as e:
+                self.app.trace("decide", f"listener error on {kind}: {e}")
+        return ev
 
     def free_cells(self):
         return [i for i in range(9) if not self.board[i] and i not in self.ignored]
@@ -201,6 +229,12 @@ class Brain:
                             "Do not choose a letter for the player.",
         }.get(st, "") + known
 
+    def facts(self) -> str:
+        """Everything true now, in plain sentences, for the language model to answer from. This is the stub the
+        round-3 conversation task replaces (docs/round3.md); the other tasks may call it already."""
+        recent = "; ".join(ev.text for ev in list(self.events)[-12:] if ev.kind not in ("said", "heard"))
+        return f"{self.situation()} What happened recently: {recent or 'nothing yet'}."
+
     def _worker(self, fn, *args):
         def run():
             self.busy = True
@@ -231,6 +265,7 @@ class Brain:
             self.set_state("CHAT", "woken up by name")
         self.app.transcript_add("Player", text)
         self.last_heard = text
+        self.emit("heard", "player", text)
         if self.state == "TEACH":
             if any(w in text.lower() for w in CANCEL_WORDS):
                 self.spec = None
@@ -479,6 +514,8 @@ class Brain:
         return True
 
     def _do_switch(self, target, why: str):
+        self.emit("switch", "player", f"the player asked to {'stop' if target == 'stop' else 'teach a game' if target == 'teach' else 'change to ' + target.name}",
+                  target=target if isinstance(target, str) else target.name)
         if self.dots is not None:
             self.dots.running = False
         self.hangman = None
@@ -655,6 +692,9 @@ class Brain:
         self.player_sym, self.robot_sym = player_sym, other(player_sym)
         self.games += 1
         self.app.trace("decide", "difficulty: " + self.difficulty.start_game(self.game_name, self.rng))
+        self.emit("game_start", "buddy", f"game {self.games} of {self.game_name} started: the player is "
+                  f"{SYM[player_sym]}es and goes {'first' if player_sym == 'X' else 'second'}, level {self.difficulty.level}",
+                  game=self.game_name, number=self.games, player_symbol=player_sym, level=self.difficulty.level)
         self.app.trace("decide", f"game {self.games} ({self.game_name}): player {SYM[player_sym]}es, Buddy "
                                  f"{SYM[self.robot_sym]}s, level {self.difficulty.level}, Buddy plays the best move "
                                  f"{100 * self.difficulty.strength:.0f}% of the time")
@@ -741,6 +781,8 @@ class Brain:
         if self.spec is not None:
             self.gstate = State(tuple(self.board), cells[-1], self.robot_sym)
         self.app.trace("decide", "the player played the " + " and ".join(NAMES[c] for c in cells))
+        self.emit("move", "player", "the player put " + SYM[self.player_sym] + " in the " + " and ".join(NAMES[c] for c in cells),
+                  cells=list(cells), symbol=self.player_sym, board=list(self.board))
         self._seen = None
         if not self._game_over():
             self.set_state("ROBOT_TURN", "the player has played")
@@ -798,6 +840,8 @@ class Brain:
         self.board[ch.cell] = self.robot_sym
         if self.spec is not None:
             self.gstate = State(tuple(self.board), ch.cell, self.player_sym)
+        self.emit("move", "buddy", f"Buddy put {SYM[self.robot_sym]} in the {NAMES[ch.cell]} ({ch.reason})",
+                  cells=[ch.cell], symbol=self.robot_sym, reason=ch.reason, board=list(self.board))
         self._seen = None
         if self._maybe_switch():
             return
@@ -844,6 +888,9 @@ class Brain:
         e = self.entry or self.library.find("noughts and crosses")
         self.library.record(e, result)
         self.app.trace("decide", f"{e.name}: {e.plays} played, you {e.player_wins}, me {e.robot_wins}, drawn {e.draws}")
+        self.emit("game_over", "buddy", f"{e.name} over: " + {"win": "the player won", "loss": "Buddy won", "draw": "a draw"}[result]
+                  + f" (record: {e.plays} played, player {e.player_wins}, Buddy {e.robot_wins}, drawn {e.draws})",
+                  game=e.name, result=result, plays=e.plays, player_wins=e.player_wins, robot_wins=e.robot_wins, draws=e.draws)
 
     def _finish_taught(self, r):
         kind, sym, line = r
@@ -1008,6 +1055,10 @@ class Brain:
         self._hangman_strokes.extend(strokes)
         self._hangman_pending = None
         self.app.trace("decide", f"hangman: {candidate.pattern}, {candidate.misses}/6 misses")
+        self.emit("guess", "player", f"the player guessed {c}: " + ("right" if c in candidate.word else "wrong")
+                  + f" (word so far {' '.join(candidate.pattern)}, {candidate.misses} of 6 misses)",
+                  letter=c, correct=c in candidate.word, pattern=candidate.pattern, misses=candidate.misses,
+                  guessed=sorted(candidate.guessed), wrong=sorted(candidate.guessed - set(candidate.word)))
         result = candidate.result()
         if result is not None:
             self._record(result)
