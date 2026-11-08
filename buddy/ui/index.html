@@ -145,7 +145,7 @@ const NEXT = {
   ROBOT_TURN: "Buddy's move: watch it plan, draw and read its own mark back. Try <b>Reach over the paper</b> while it draws.",
   GAME_OVER: "Type <b>yes</b> for another game (press <b>New blank sheet</b> first), or <b>let me teach you a game</b>.",
 };
-const myTurn = () => S && (S.state === "PLAYER_TURN" || S.state === "DOTS_PLAYER_TURN");
+const myTurn = () => S && (S.state === "PLAYER_TURN" || S.state === "DOTS_PLAYER_TURN" || S.example);
 function notNow() {
   const el = document.getElementById("turnhint");
   el.className = "hint warn";
@@ -210,7 +210,7 @@ async function tick() {
   document.getElementById("state").textContent = s.state;
   if (s.game) document.getElementById("gamename").textContent = s.game.name + ` · ${s.game.level || "adaptive"} · rating ${s.game.rating ?? "-"}`;
   if (s.game && s.game.known) document.getElementById("gamename").title = "Buddy knows: " + s.game.known.join(", ");
-  document.getElementById("nexthint").innerHTML = NEXT[s.state] || "";
+  document.getElementById("nexthint").innerHTML = s.example ? "Buddy is watching the paper: draw a short line anywhere on it above, with the mouse, or type <b>skip</b>." : (NEXT[s.state] || "");
   const legal = (s.game && s.game.legal) || [], turn = s.state === "PLAYER_TURN";
   document.querySelectorAll("[data-cell]").forEach(b => {
     const c = +b.dataset.cell, taken = s.board && s.board[c];
