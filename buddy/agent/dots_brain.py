@@ -187,6 +187,8 @@ class DotsPlay:
         if not self.running:
             self.running = True
             threading.Thread(target=self._watch, daemon=True, name="dots-watch").start()
+        if b._maybe_switch():
+            return
         if self.state.to_move == BUDDY:
             b.set_state("DOTS_ROBOT_TURN", "restored; Buddy to move")
             self.say("There we are, back where we were. My turn.")
@@ -354,6 +356,8 @@ class DotsPlay:
         _, rect, _ = self.look()
         if rect is not None:
             self._baseline_ink = self.board_ink(rect)
+        if b._maybe_switch():
+            return
         if D.result(self.state) is not None:
             self.finish()
         elif b.state == "DOTS_ROBOT_TURN":
@@ -389,6 +393,13 @@ class DotsPlay:
             self.b.end_session()
             return
         if st == "DOTS_SIZE":
+            other = self.b._find_game(u, text) if intent in ("choose_game", "play_game") else None
+            if other is not None and other is not self.b.entry:
+                self.b.request_switch(other, f"the player asked for {other.name} instead")
+                return
+            if intent == "teach_game":
+                self.b.request_switch("teach", "the player wants to teach me a game")
+                return
             if intent in ("no",) or (intent == "choose_game" and u.game_name and "dots" not in u.game_name.lower()):
                 self.b.set_state("CHOOSE_GAME", "the player changed their mind about dots and boxes")
                 self.say(f"No problem. Which would you like instead: {self.b.library.spoken_list()}?")

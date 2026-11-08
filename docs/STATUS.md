@@ -2,6 +2,16 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov, 03:00: change your mind at any point (branch `games/switch-anytime`, in PR #14)
+
+- "Let's play dots and boxes instead", "let me teach you a game", "start again" and "stop" are honoured in every
+  state. If the arm is mid-stroke Buddy says "let me finish this stroke, then we'll change to dots and boxes" and
+  switches when the stroke ends (the used sheet makes the next setup ask for a fresh one); while it is waiting on
+  the player it switches at once. A known game named in a sentence beats the intent model's guess, which fixes
+  "no, not noughts and crosses, dots and boxes instead" being read as teaching.
+- Verified: `tools/switch_dry_run.py` (switch during the grid drawing, switch during Buddy's dots turn, a hangman
+  letter, stop: 122 s wall); 84 tests.
+
 ## 8 Nov, 02:30: dots and boxes at a real table, difficulty asked before each session (branch `games/dots-mxn`, in PR #14)
 
 - **Board size by voice**: "three by four", "five across and two down", or "the usual". Any size from 2 boxes up to

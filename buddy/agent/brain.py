@@ -93,6 +93,7 @@ class Brain:
         self.dots = None                        # the running dots-and-boxes game (buddy/agent/dots_brain.py)
         self.last_heard = ""
         self.level_asked = False                # the difficulty question is asked once per session, before the first game
+        self.switch_to = None                   # a game change or stop asked for while the arm was busy; done when it is free
         self._setup_after_level = None
         self._hangman_strokes = []
         self._hangman_pending = None
@@ -296,6 +297,30 @@ class Brain:
             if st in ("CHAT", "GAME_OVER"):
                 self.set_state("CHOOSE_GAME", "listed the games")
             return
+        if st not in ("IDLE", "CHAT", "CHOOSE_GAME", "GAME_OVER", "TEACH", "NAME_GAME", "OFFER_TAUGHT", "DOTS_SIZE"):
+            # a game change, a new game to teach, or stop, asked for in the middle of things
+            if intent == "stop" and st != "PLAYER_TURN":
+                self.request_switch("stop", "the player wants to stop")
+                return
+            if self._wants_to_teach(u, text):
+                self.request_switch("teach", "the player wants to teach me a game")
+                return
+            if intent == "teach_game":
+                intent = "choose_game"
+            if intent in ("choose_game", "new_game") or (intent == "play_game" and self._find_game(u, text) is not None):
+                entry = self._find_game(u, text)
+                if intent == "choose_game" and entry is None and u.game == "other":
+                    self.request_switch("teach", f"asked for a game I don't know ({u.game_name or text!r})")
+                    return
+                if entry is not None and entry is not self.entry:
+                    self.request_switch(entry, f"the player asked for {entry.name}")
+                    return
+                if entry is not None and entry is self.entry and st in ("ASK_SIDE", "ASK_LEVEL", "SETUP", "WAIT_SHEET"):
+                    self.say(f"Yes, {entry.name} is what we're setting up." + (" " + self.last_said if st in ("ASK_SIDE", "ASK_LEVEL") else ""))
+                    return
+                if intent == "new_game" and st in ("PLAYER_TURN", "ROBOT_TURN", "CONFIRM_MARK", "DOTS_PLAYER_TURN", "DOTS_ROBOT_TURN", "HANGMAN_TURN"):
+                    self.request_switch(self.entry, "the player wants to start again")
+                    return
         if st == "NAME_GAME":
             name = (u.game_name or re.sub(r"[^A-Za-z0-9' -]+", "", text)).strip()[:40]
             if intent in ("no", "stop") or not name:
@@ -307,13 +332,13 @@ class Brain:
             self._offer_taught(entry)
             return
         if st in ("CHAT", "CHOOSE_GAME"):
-            if intent == "teach_game" and not re.search(r"\b(teach|show you|explain|my game|a game i know|different game|rules|turns)\b", text.lower()):
-                self.app.trace("decide", "teach_game without any teaching words: treating it as play_game")
-                intent = "play_game"
-            entry = None
-            if intent == "choose_game":
-                entry = self.library.find("noughts and crosses") if u.game == "tic_tac_toe" else \
-                    (self.library.find(u.game_name) or self.library.find(text))
+            if intent == "teach_game" and not self._wants_to_teach(u, text):
+                self.app.trace("decide", "teach_game without teaching words: treating it as choosing or asking for a game")
+                intent = "choose_game" if self._find_game(u, text) is not None else "play_game"
+            entry = self._find_game(u, text) if intent in ("choose_game", "play_game", "new_game") else None
+            if intent == "play_game" and entry is not None and entry is self.library.find("noughts and crosses") \
+                    and not re.search(r"noughts|crosses|tic.?tac|x'?s and o'?s", text.lower()):
+                entry = None                      # "let's play a game" is not a request for noughts and crosses
             if intent == "teach_game" or (intent == "choose_game" and entry is None):
                 self.start_teaching("the player wants to teach me a game" if intent == "teach_game"
                                     else f"asked for a game I don't know ({u.game_name or text!r}): asking to be taught")
@@ -346,9 +371,7 @@ class Brain:
                 self._chat_reply(text, sit, "Shall we play it?")
             return
         if st in ("SETUP", "WAIT_SHEET", "ROBOT_TURN"):
-            if intent == "stop":
-                self.say("Alright. Let me finish this, then we can stop.")
-            elif intent in ("smalltalk", "unclear", "choose_game"):
+            if intent in ("smalltalk", "unclear", "choose_game", "play_game", "yes", "no"):
                 self._chat_reply(text, sit)
             return
         if st == "ASK_SIDE":
@@ -403,6 +426,59 @@ class Brain:
             self._hangman_act(u)
         if st in DOTS_STATES and self.dots is not None:
             self.dots.act(u, text, sit)
+
+    BUSY_STATES = ("SETUP", "ROBOT_TURN", "DOTS_SETUP", "DOTS_ROBOT_TURN", "HANGMAN_SETUP")
+    TEACH_WORDS = re.compile(r"\b(teach|show you|explain|my game|a game i know|different game|game of mine|invented|made up|the rules are|you (take|put|write) turns|we take turns)\b")
+
+    def _wants_to_teach(self, u, text) -> bool:
+        """teach_game only counts when the words are about teaching; a known game named in the sentence wins."""
+        if u.intent != "teach_game":
+            return False
+        if self._find_game(u, text) is not None and not self.TEACH_WORDS.search(text.lower()):
+            return False
+        return True
+
+    def _find_game(self, u, text):
+        """The game the player named, if any: by game_name, by the words, or noughts and crosses by the model's flag."""
+        if u.game == "tic_tac_toe":
+            return self.library.find("noughts and crosses")
+        return self.library.find(u.game_name) or self.library.find(text)
+
+    def request_switch(self, target, why: str):
+        """Change game (an Entry), teach a new one ("teach"), or stop ("stop"), from any state. When the arm is in
+        the middle of something the request waits until that stroke is done."""
+        name = target if isinstance(target, str) else target.name
+        if self.busy or self.state in self.BUSY_STATES:
+            self.switch_to = target
+            self.app.trace("decide", f"{why}: will switch to {name} as soon as this stroke is finished")
+            self.say("Alright. Let me finish this stroke, then we'll " + ("stop." if target == "stop" else
+                     "start on the game you want to teach me." if target == "teach" else f"change to {name}."))
+            return
+        self._do_switch(target, why)
+
+    def _maybe_switch(self) -> bool:
+        """Called by workers when they finish a stroke: carry out a waiting switch. True if one was done."""
+        if self.switch_to is None:
+            return False
+        target, self.switch_to = self.switch_to, None
+        self._do_switch(target, "the player asked while I was busy")
+        return True
+
+    def _do_switch(self, target, why: str):
+        if self.dots is not None:
+            self.dots.running = False
+        self.hangman = None
+        self.pending = None
+        if target == "stop":
+            self.end_session()
+            return
+        if target == "teach":
+            self.start_teaching(why)
+            return
+        self._select(target)
+        self.app.trace("decide", f"{why}: switching to {target.name}")
+        self.say(f"Let's play {target.name} instead." if self.games else f"Let's play {target.name}.")
+        self.start_setup(why)
 
     def end_session(self):
         self.set_state("IDLE", "the player wants to stop")
@@ -548,6 +624,8 @@ class Brain:
         self.board = [""] * 9
         self.ignored = set()
         self.gstate = State.start(self.spec) if self.spec else None
+        if self._maybe_switch():
+            return
         self.say("There we are. Would you like to be crosses or noughts?" + (" Crosses go first." if not self.spec else ""))
         self.set_state("ASK_SIDE", "the board is drawn and checked")
 
@@ -696,6 +774,8 @@ class Brain:
         if self.spec is not None:
             self.gstate = State(tuple(self.board), ch.cell, self.player_sym)
         self._seen = None
+        if self._maybe_switch():
+            return
         if not self._game_over():
             self.set_state("PLAYER_TURN", "Buddy has played")
             self.say("Your turn.")

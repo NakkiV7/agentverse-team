@@ -79,6 +79,8 @@ Examples:
 "it's a different one, you put each mark next to the last" -> {"intent":"teach_game","game":"other","side":"none","cell":"none","game_name":"","level":"none"}
 "how are you today" -> {"intent":"smalltalk","game":"none","side":"none","cell":"none","game_name":"","level":"none"}
 "let's play footsteps" -> {"intent":"choose_game","game":"other","side":"none","cell":"none","game_name":"footsteps","level":"none"}
+"no wait, not noughts and crosses, let's play dots and boxes instead" -> {"intent":"choose_game","game":"other","side":"none","cell":"none","game_name":"dots and boxes","level":"none"}
+"actually can we play hangman instead" -> {"intent":"choose_game","game":"other","side":"none","cell":"none","game_name":"hangman","level":"none"}
 "what games do you know" -> {"intent":"list_games","game":"none","side":"none","cell":"none","game_name":"","level":"none"}
 "go easy on me" -> {"intent":"choose_difficulty","game":"none","side":"none","cell":"none","game_name":"","level":"easy"}
 "play your best, no holding back" -> {"intent":"choose_difficulty","game":"none","side":"none","cell":"none","game_name":"","level":"impossible"}
