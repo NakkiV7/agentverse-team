@@ -45,6 +45,9 @@ def player():
     wait(lambda: b.state == "CHOOSE_GAME", "the list")
     say("Play your best, don't hold back.")
     say("Let's play footsteps.")
+    wait(lambda: b.state == "OFFER_TAUGHT", "the invitation to Margaret's game")
+    assert "Margaret taught me" in b.last_said
+    say("Yes, I'd like to learn it.")
     wait(lambda: b.state == "ASK_SIDE", "the board")
     say("Crosses please.")
     wait(lambda: b.state in ("PLAYER_TURN", "ROBOT_TURN"), "the game to start")

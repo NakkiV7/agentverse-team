@@ -2,6 +2,41 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov 2026, 13:27: resident personas, teacher credit and the video caption (R6-residents)
+
+- **Residents**: committed profiles in `data/residents/` for Margaret (84, write for me, gentle, slow,
+  noughts and crosses, taught Footsteps), Arthur (79, writes himself, best, normal, dots and boxes, captions),
+  and Doreen (91, shared writing, fair, normal, hangman, short sessions). `buddy/agent/residents.py` reads them.
+  "I'm Margaret", "It's Arthur", "My name is Doreen", and a bare name after Penny asks who she is talking to
+  load preferences and produce a personal greeting and favourite-game offer. Known names also work in lowercase
+  and with curly apostrophes. The existing wake-word rule still applies; unknown names keep the ordinary flow.
+- **Level and voice**: gentle/fair/best select easy/medium/hard and answer the session's level question.
+  Slow/normal/brisk select Piper length scales 1.1/0.95/0.85 through `Speaker.set_length_scale`, without reloading
+  the voice (the fallback engines also support pace changes). The full persona joins `facts()`; `state.resident`
+  contains name, way_to_play, preferred level and captions. A hidden favourite stays hidden and gets a teaching
+  invitation in the greeting. `way_to_play` and short-session preferences are available to the other flows.
+- **Teacher credit**: `Entry.taught_by` is seeded for Footsteps from Margaret's `taught_games`. New games and
+  revealed builtins retain the loaded resident's name and teaching date in `games.json`, alongside play history.
+  The menu credits the teacher. Choosing another resident's game asks "Margaret taught me this one. Would you
+  like to learn it?"; yes reads `rules_text()` before setup. The teacher hears "Your game! Shall we play it?".
+  Explicit lesson answers bypass the planner: the real menu check caught Gemma reading "Yes, I'd like to learn
+  it" as `teach_game`, which now cannot happen on this path.
+- **Video caption**: `state.caption` describes resting, learning, or playing, including the game teacher,
+  resident and actual current level. The page renders one prominent line below the header (28 px at 1920 wide),
+  reserving its height while keeping the existing columns and dividers. Visually checked in desktop Chrome using
+  the simulator's state snapshot. The caption only updates its live-region text when the words change.
+- **Verified**: `.venv/bin/python -m pytest -q tests`: **474 passed in 239.85 s**; the resident file covers
+  **42 cases**, including all introduction phrasings, speed applied to Piper synthesis, both selection paths,
+  rules-before-setup, teaching/persistence and exact caption strings. `tools/menu_dry_run.py`: **exit 0, 262 s**,
+  complete Footsteps game on impossible, result and rating saved. `tools/residents_dry_run.py`: **exit 0, 92.8 s**,
+  Arthur's greeting, menu, Margaret's credit, explicit acceptance, rules before setup, two player turns and two
+  camera-verified Penny replies, with temporary game/rating files and the expected caption. `node --check buddy/ui/app.js` and
+  `git diff --check` pass. Simulator logs and the resident state snapshot are in `runtime/residents_*.log` and
+  `runtime/residents.json` (uncommitted).
+- **Handoff**: `brain.resident` is a `Resident` or `None`; the writing preference is
+  `brain.resident.way_to_play`. The move, mark-confirmation and mark-reading code is untouched. The only setup
+  change is the taught-game offer gate at the start of `start_setup`; named and unnamed teaching save the teacher.
+
 ## 8 Nov, 13:10: Penny: a quicker female voice, the redesigned page with live transcript and resizable columns
 
 - **Name**: the robot is now Penny everywhere the player sees or hears it (page, speech, tools, tests); wake words
