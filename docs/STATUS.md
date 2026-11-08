@@ -2,6 +2,52 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov, 12:40: voice: Piper by default, live partial text while the player speaks (task V5-voice, branch `voice/fast-speech`, handed over mid-task)
+
+- **Measured first (step A, Kokoro as it was)**: Kokoro ran on the **CPU** (`KPipeline` loads the model on cpu;
+  `torch.backends.mps.is_available()` is True). Alone, warm: one sentence **335 to 650 ms** to first audio, three
+  sentences 380 to 450 ms to first audio and 1.2 to 1.3 s for all three. Inside the running demo (typed questions
+  through the real path, two other agents' demos on the Mac): **4134 ms** for a 30-word first sentence, **1521 ms**
+  for a 17-word one. Load 2.9 s plus 2.4 s warm-up.
+- **Candidates, first audio for one sentence** (alone / inside the running demo): Kokoro CPU 335 to 650 ms / 1.5 to
+  4.1 s; **Kokoro on MPS** 150 ms after a 3.7 s first-call kernel compile / **1.1 to 2.2 s** (the GPU is shared with
+  Gemma and MuJoCo); Kokoro through **mlx-audio** 150 to 190 ms alone (14 s load; not kept: no gain over torch MPS,
+  one more big dependency); **Piper** `en_GB-alan-medium` **40 to 60 ms / 146 to 313 ms** (CPU, onnxruntime; load 0.7 s;
+  `northern_english_male-medium` and `aru-medium` the same, `cori-high` 450 to 800 ms); Apple **`say`** Daniel or Eddy
+  to a WAV **300 to 700 ms** alone (not measured inside the demo). Chosen: **Piper, alan-medium, length scale 1.1**
+  (unhurried), for being the only engine under the 400 ms target inside the demo and for never queueing behind the
+  language model on the GPU; Kokoro (MPS or CPU) and say stay selectable. Listening comparison not done: samples of
+  every voice are in `runtime/voice_samples/` (kokoro_bm_george, piper_alan, piper_northern_male, piper_aru,
+  piper_cori, say_daniel, say_eddy): listen and switch `PIPER_VOICE` or `TTS_ENGINE` if George is preferred.
+- **Implemented**: `buddy/voice/tts.py` engines `piper`, `kokoro`, `say` behind the unchanged Speaker interface
+  (`say(text) -> Event`, `busy()`, `speaking`, `last_audio_end`); config `TTS_ENGINE` (env too), `TTS_DEVICE`
+  (Kokoro: mps or cpu), `PIPER_VOICE`, `PIPER_DIR`, `PIPER_LENGTH_SCALE`, `PIPER_VOLUME`, `SAY_VOICE`, `SAY_RATE`;
+  the configured engine falls back to the next one if its package or model is missing; one `OutputStream` per
+  reply, a failed write resets PortAudio and reopens once (the trace's "Internal PortAudio error" case), 5 ms fades
+  on every chunk, `busy()` covers the synthesis gap between sentences, a long first sentence is split at commas for
+  Kokoro. `buddy/voice/stt.py`: whisper.cpp resident through **pywhispercpp** (Metal: small.en **250 ms** for a 4.2 s
+  clip against whisper-cli's 650 ms and more; base.en 70 to 85 ms; tiny.en 33 to 76 ms but wrote "Butty"); partial
+  text from **base.en every 0.7 s** while speech is active, final text from small.en at the VAD end; whisper-cli stays
+  as the fallback (no partials then). Fed the test clip at real-time pace: partials at 1.45, 2.30, 3.10, 3.89, 4.74,
+  5.59 s (90 to 180 ms each), final 0.9 s after the speech ended (496 ms of it transcription). Audio is still dropped
+  while Buddy speaks and 0.4 s after; the wake-word rule in the brain is untouched. `tests/test_voice.py` 19 tests;
+  `pytest -q tests` **430 passed**. `requirements.txt`: piper-tts, pywhispercpp added (installed with uv pip; Piper
+  voices in `~/.cache/piper`, whisper `ggml-base.en.bin` and `ggml-tiny.en.bin` downloaded next to small.en).
+- **The hearing field (for the UI agent)**: `app.state()["hearing"] = {"active": bool, "partial": str, "level": float}`.
+  `active` is true from the moment the VAD hears speech until the final text has been handed to the brain (so also
+  during the final transcription); `partial` is the latest partial transcription (empty before the first one, about
+  0.7 s in, and reset to "" the moment the final text is delivered, which then appears in `transcript` as usual);
+  `level` is the microphone RMS (same number as `mic.level`). Without a microphone the field is
+  `{"active": false, "partial": "", "level": 0.0}`. Render `partial` greyed in the input box while `active`.
+- **Not done, in order for whoever continues**: (1) run `tools/voice_check.py --quiet --no-mic` end to end (written,
+  not yet run) and then with the mic; (2) finish the in-demo benchmark for `say` and rerun Kokoro CPU with the new
+  code (script: start `TTS_ENGINE=... UI_PORT=8862 .venv/bin/python -m buddy --no-mic --no-browser --port 8862`,
+  POST four questions to /say, read "voice ready" in the trace); (3) rerun `tools/hangman_dry_run.py` and
+  `tools/tool_dry_run.py` (voice off; not rerun after this change); (4) listen to `runtime/voice_samples/` and
+  confirm the voice; (5) check the PortAudio reopen on a real device change (plug headphones mid-reply): the unit
+  test covers the logic only; a demo started with nohup from a sandboxed shell got -9986 on every open, which is the
+  launcher, not the code (a direct probe from the same shell, foreground and background, opened fine).
+
 ## 8 Nov, 12:10: Buddy learns dots and boxes from the player, from scratch (demo mode)
 
 - **What it does**: `python -m buddy` now starts with dots and boxes hidden (`BUDDY_HIDE_GAMES`, default "dots and
