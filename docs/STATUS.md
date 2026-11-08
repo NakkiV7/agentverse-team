@@ -2,6 +2,64 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov, 10:35: Buddy answers in about 1 s with the demo up (task A4-latency, branch `agent/latency`)
+
+- **What was slow, measured.** The live demo's own trace (coordinator's run, 06:53 to 08:30, two other agents'
+  simulators running flat out, swap 15.2 of 16 GB used) showed planner calls of **10.9, 11.0, 10.9 and 16.0 s** at
+  4091 to 4149 prompt tokens, Kokoro "voice ready" in 3.7 to 7.8 s a sentence, Whisper 5 to 7 s. Ollama's server log
+  (`ollama serve` writes it; its path is in the handoff) says why per request: `cache hit total=4144 matched=3438
+  left=712`, i.e. the prefix (system prompt, worked examples, tool list: 3431 tokens) was cached and the **whole user
+  message, 712 to 718 tokens, was processed again every call, at 150 tokens a second** under that load (4.9 and 4.6 s),
+  then the 28-token answer decoded slowly. The stored planner history was the reason: it replaced the previous user
+  message (situation, facts, words) with the words alone, so the match with the cache ended at the previous
+  exchange. Cost of a cold 3960-token prefix on this Mac: 7.7 to 8.1 s of prompt processing plus a 3.3 s first-token
+  stall (that is a scripted run's 8 to 12 s). Nothing evicts the cache: sequential prompts keep each other, waiting
+  30 or 90 s, a Gemma 3 call, a 400-token gemma4 generation, a 4 GB memory burst, whisper-cli and Kokoro in other
+  processes all left the next call at 0.03 to 0.23 s of prompt processing. A call with its prefix cached waited
+  **11.8 s in Ollama's queue** behind another process's gemma4 request (the paper request compiler, 20 s a call,
+  blocks every planner call for that long; not changed here). `num_ctx` 8192, 4096 or none: identical timings.
+- **Reproduce (1).** `tools/question_eval.py` against the coordinator's demo, idle, nobody polling the page:
+  **45/46, p50 0.63 s, max 0.91 s** (Ollama prompt_eval 0.07 s, eval 0.57 s), not 8.7 s: the eval's cases repeat the
+  same facts, so they hit the cache; the 8.7 s was the eval queueing behind the typing tester's uncached calls and
+  the other agents' simulators. Demo stopped (one other agent's simulator still running): 45/46, p50 1.08 s, max 4.48.
+  The real conversation flow (one Planner, seven questions with changing facts, as the brain sends them): **4 to 5 s
+  a call** on a quiet machine, 1.6 to 2.4 s of prompt processing plus 2.3 s of decode each.
+- **Attribute (2), each load alone in its own process, a planner call with about 200 fresh tokens** (quiet: 1.11 s;
+  decode of a cached prompt 47 tokens/s): overhead+depth+segmentation renders at 3 Hz 1.12 s; those plus the 3/4
+  view at 10 Hz 1.20 s (decode 42 tok/s); physics at 500 Hz 1.14; Kokoro synthesising continuously 1.26 (39 tok/s);
+  the idle demo itself (no voice, no mic) 1.19 s; a one-core Python loop 1.11. So the demo's own load costs 10 to
+  15% on a quiet GPU; the simulator's rendering matters when it runs flat out (scripted runs, other agents'
+  runs): under that load an overhead frame cost 178 ms instead of 93 and the real-time demo ran 5.4 s of sim time
+  in 20 s. Per overhead frame, quiet: bare render 35 ms, **sensor noise 61 ms** (rng.normal over 3.7 M floats,
+  `world.render_overhead`, not changed: outside this task's files), depth+segmentation 37 ms, 3/4 view 40 ms, JPEG
+  4 ms. Kokoro warm in isolation: 1.2 to 2.1 s a sentence; it is not on the planner's path and is unchanged.
+- **Fix (3).** `toolcall.py`: **MAX_TURNS = 0** (the facts carry the last eight turns and Buddy's last words) and
+  `brain.facts()` writes the lines that hold for a whole game first (game, rules, level, record, session, name) and
+  the ones that change every turn last (turn, position, last words, paper, time, moves, conversation), so Ollama's
+  match runs through the situation and the facts head: **left 570 to 675 tokens a call before, 172 to 262 after**
+  (`matched=3723`). The conversation flow: **0.46 to 0.75 s a call** (was 4 to 5). Putting the situation after the
+  facts for a longer stable run was tried: the eval fell to 39/46, so the proven message order stays. `app.py`:
+  the camera and the safety depth check at 10 Hz only while the arm moves or is frozen, something is over the
+  paper, a scene animation runs, `look()` or a fresh snapshot waits, or the sheet is not tracked, **3 Hz otherwise**;
+  the 3/4 view (5 Hz at most) and the overlay and sheet JPEGs only while the page fetched them in the last 2 s
+  (`server.py` records each GET in `app.polled`); the page polls images and state at 500 ms and **not at all while
+  its tab is hidden** (the old page polled 300/400 ms in every tab for ever: five forgotten tabs of it made
+  60 requests a second and alone put every planner call at 3 s, old and new code alike).
+- **Measured again (4), end to end**: a typed hangman session through the real demo (`python -m buddy`, voice
+  loaded, mic muted, page open in Chrome, 18 planner calls: the game, three questions while the arm draws the
+  dashes, three letters, a question while it draws a gallows part, eight questions idle), seconds from the trace:
+  old code **p50 2.35 s, max 9.0 s** (idle 2.5, drawing 2.35); new code **p50 1.10 s, max 1.50 s** (idle 1.0,
+  while the arm draws 1.5, letters 1.2); without voice and page 1.10 / 1.30; voice without page 1.20 / 1.50.
+  Targets (3 s idle, 5 s drawing) met. `tools/question_eval.py` with the demo up and idle: **45/46**, old code with
+  the page open p50 0.71 max 2.48; new code (no voice, no page) p50 1.16 max 3.09 and (voice, page) p50 1.26
+  max 2.03, both measured while five stale tabs still polled the old page; the clean rerun for the new code was
+  lost to the Mac sleeping at 09:30. `tools/tool_dry_run.py`: **12/12**, final state IDLE, model 2.5 s a request
+  (min 1.2, max 4.3), 96 s wall (was 320). `tools/hangman_dry_run.py`: **ok**, APPLE won, 130 s wall (was 360).
+  `pytest tests/test_conversation.py tests/test_toolcall.py tests/test_setup_pipeline.py`: 62 passed.
+- **Still open**: the answer's decode after a fresh tail costs about 1 s (speculative decoding with gemma4's
+  draft model; the eval time grows with the fresh tokens); the request compiler blocks the planner for its 20 s;
+  the sensor noise costs 61 ms a frame while the arm draws; Kokoro's 4 to 8 s a sentence inside the loaded demo.
+
 ## 8 Nov, 06:40: Buddy knows what is going on, and does new things on paper (round 3 merged, branch `agent/tools`)
 
 - **The two things the player asked for.** (1) "What letters have I asked so far" and any other question about the
