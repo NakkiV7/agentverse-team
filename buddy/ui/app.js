@@ -70,7 +70,7 @@ function padline() {                      // the line under the paper: a drawing
   if (myTurn()) { el.className = "hint draw"; el.textContent = S.example ? "Draw a short line anywhere on the paper above, with the mouse." :
     "Draw on the paper above with the mouse: your hand in the simulation draws it on the real sheet."; }
   else { el.className = "hint"; el.textContent = ""; }
-  $("paperframe").classList.toggle("candraw", myTurn());
+  $("paperframe").classList.toggle("candraw", myTurn() && order[0] === "paper");
 }
 
 // ---------------------------------------------------------------- the nine squares (grid games only)
@@ -93,7 +93,34 @@ function refreshImg(id, url) {
   im.onerror = () => { inflight[id] = false; };
   im.src = url + "?t=" + Date.now();
 }
-setInterval(() => { if (document.hidden) return; refreshImg("overhead", "overhead.jpg"); refreshImg("scene", "scene.jpg"); refreshImg("sheetimg", "sheet.jpg"); }, 500);
+// Three views share three places: the large frame (where the pad is) and two small ones. Clicking a small one
+// swaps it with the large one; the choice is remembered in this browser. The pad only works over the paper.
+const VIEWS = {
+  paper:    { url: "sheet.jpg",    cap: "The paper, straightened, with Penny's reading of each square written on it." },
+  overhead: { url: "overhead.jpg", cap: "Overhead camera, with the sheet and marks Penny found drawn on it" },
+  arm:      { url: "scene.jpg",    cap: "The arm (an SO-101 in MuJoCo), seen from the side" },
+};
+const SLOTS = ["sheetimg", "overhead", "scene"];          // the large frame, then the two small ones
+let order = ["paper", "overhead", "arm"];
+try { const o = JSON.parse(localStorage.getItem("penny-views") || "null"); if (Array.isArray(o) && o.length === 3 && o.every(v => VIEWS[v])) order = o; }
+catch (e) { /* default order */ }
+function placeViews() {
+  const big = order[0];
+  $("paperframe").classList.toggle("cam", big !== "paper");
+  [1, 2].forEach(i => {
+    $("thumbcap" + (i - 1)).textContent = VIEWS[order[i]].cap;
+    $(SLOTS[i]).parentElement.classList.toggle("sheetthumb", order[i] === "paper");
+  });
+  SLOTS.forEach(id => $(id).parentElement.classList.remove("live"));    // until the new picture arrives
+  setTimeout(() => { if (typeof resizePad === "function") resizePad(); if (typeof padline === "function" && S) padline(); }, 0);
+}
+[0, 1].forEach(i => {
+  const pick = () => { [order[0], order[i + 1]] = [order[i + 1], order[0]]; try { localStorage.setItem("penny-views", JSON.stringify(order)); } catch (e) { /* */ } placeViews(); };
+  $("thumb" + i).addEventListener("click", pick);
+  $("thumb" + i).addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+});
+setInterval(() => { if (document.hidden) return; SLOTS.forEach((id, i) => refreshImg(id, VIEWS[order[i]].url)); }, 500);
+placeViews();
 
 // ---------------------------------------------------------------- the drawing pad over the straightened sheet
 // The sheet image is 891 x 630 px for 297 x 210 mm (A4 landscape, 3 px per mm); strokes go to the app in sheet
@@ -107,7 +134,7 @@ function toMM(e) {
 }
 function resizePad() { const r = pad.getBoundingClientRect(); pad.width = r.width; pad.height = r.height; }
 new ResizeObserver(resizePad).observe(pad);
-pad.addEventListener("pointerdown", e => { if (!myTurn()) return notNow(); clearTimeout(sendTimer); cur = [toMM(e)]; pad.setPointerCapture(e.pointerId); });
+pad.addEventListener("pointerdown", e => { if (order[0] !== "paper") return; if (!myTurn()) return notNow(); clearTimeout(sendTimer); cur = [toMM(e)]; pad.setPointerCapture(e.pointerId); });
 pad.addEventListener("pointermove", e => {
   if (!cur) return; const p = toMM(e), q = cur[cur.length - 1];
   if (Math.hypot(p[2] - q[2], p[3] - q[3]) < 3) return;
@@ -237,7 +264,8 @@ async function tick() {
     b.querySelector(".m").textContent = taken ? (taken === "X" ? "✕" : "○") : "";
   });
   const sides = s.player && s.robot ? ` You are ${s.player === "X" ? "crosses" : "noughts"}, Penny ${s.robot === "X" ? "crosses" : "noughts"}.` : "";
-  $("papercap").textContent = s.state.startsWith("DOTS") ? "The paper, straightened, with the dots and lines Penny has read." :
+  $("papercap").textContent = order[0] !== "paper" ? VIEWS[order[0]].cap + ". Click the paper below to draw on it." :
+    s.state.startsWith("DOTS") ? "The paper, straightened, with the dots and lines Penny has read." :
     s.state.startsWith("HANGMAN") ? "The paper, straightened: the word's blanks, the letters and the gallows." :
     "The paper, straightened, with Penny's reading of each square written on it." + sides;
   padline();
