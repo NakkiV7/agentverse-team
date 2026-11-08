@@ -21,6 +21,7 @@ States: IDLE -> CHAT -> CHOOSE_GAME -> SETUP (WAIT_SHEET) -> ASK_SIDE -> PLAYER_
         back, says what the solver found, offers a game) -> SETUP ... the same loop, with buddy/game/solver.py
         choosing Buddy's moves. Games live in buddy/game/library.py (built in + taught, kept in runtime/games.json);
         "easy / medium / hard / impossible / adapt to me" can be said in any state.
+        Hangman uses HANGMAN_SETUP -> HANGMAN_TURN -> GAME_OVER, checking known strokes without reading handwriting.
 """
 from __future__ import annotations
 
@@ -835,5 +836,6 @@ class Brain:
                      f"That is six misses. The word was {candidate.word}. Thank you for playing.")
             self.say("Shall we play another? Pop a fresh sheet down and say yes.")
         else:
-            self.say(f"{c} is in the word. {candidate.remaining} misses left. Say another letter." if c in candidate.word
-                     else f"{candidate.remaining} misses left. Say another letter.")
+            found = f"{c} is in the word. " if c in candidate.word else ""
+            noun = "miss" if candidate.remaining == 1 else "misses"
+            self.say(f"{found}{candidate.remaining} {noun} left. Say another letter.")

@@ -3,6 +3,7 @@
 
 A library entry is a GameSpec with a name and a little history. Noughts and crosses is special: it has
 no GameSpec here (spec None) because brain.py plays it with Hakim's original code and win-line drawing.
+Hangman also has spec None; its kind selects the separate spoken-letter game.
 """
 from __future__ import annotations
 

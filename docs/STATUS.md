@@ -24,6 +24,22 @@ Updated after every big change. Newest first. Numbers are measured on Nakkiv's M
   inside the network sandbox). A separate local Gemma check passed 6/6 menu, letter, spoken-letter,
   hint and ambiguity cases in 0.98 to 1.23 s each. The model initially chose A from "A or E";
   an input guard now asks for clarification, with four regression cases.
+- Step 4: `tools/hangman_dry_run.py` sends typed letters through Gemma and the real brain,
+  arm and camera. It checks hints, ambiguous input, both P positions in APPLE, duplicate
+  guesses, and a persisted result. `--lose` exercises the sixth gallows part. Both modes
+  save overhead and straightened-sheet images plus a JSON report under `runtime/`, and
+  use a temporary library so the player's saved history is not changed by the check.
+- Measured win run: 144.7 s wall, five misses, one saved player win, 100% final minimum
+  stroke coverage. The resulting paper image was visually checked.
+- Measured loss run: 98.1 s wall, six misses, one saved loss, 100% final minimum stroke
+  coverage. The saved paper image shows the two P letters and all six gallows parts.
+- Full regression: **47 passed in 37.56 s**, including both existing live Gemma4 teaching
+  tests, using `OLLAMA_URL=http://127.0.0.1:11435 .venv/bin/python -m pytest -q tests`.
+  The first run against the shared Ollama service passed 45 tests but both unchanged teaching
+  tests timed out after 120 s. A temporary isolated Ollama instance loaded the same installed
+  Gemma4 model and passed them; it was stopped after verification. The shared service was left
+  running. Hangman itself uses the working Gemma3 service on port 11434. Microphone audio was
+  not exercised; spoken-letter interpretation was checked through the same intent path.
 
 ## 7 Nov, night: game menu, memory, difficulty levels (branch `games/menu-memory-difficulty`)
 
@@ -58,5 +74,5 @@ Updated after every big change. Newest first. Numbers are measured on Nakkiv's M
 ## Not done
 
 - Voice end to end on a second machine (Misha is on it; his work must target `buddy/voice/stt.py` + `tts.py`).
-- Dots and boxes, hangman, sudoku, adaptive skill rating, teach-by-example: planned, see TASKS.md.
+- Dots and boxes, sudoku, adaptive skill rating, teach-by-example: planned, see TASKS.md.
 - Three pitch deliverables (one-page technical summary, one-take video, five-minute pitch) are unowned.
