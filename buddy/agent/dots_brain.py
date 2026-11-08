@@ -323,6 +323,7 @@ class DotsPlay:
         app, b, n = self.app, self.b, self.n
         while self.state.to_move == BUDDY and D.result(self.state) is None and b.state == "DOTS_ROBOT_TURN":
             ch = self.solver.choose(self.state, b.difficulty, b.rng)
+            b.last_choice = ch
             shown = ", ".join(f"{D.edge_name(n, e)} {s:+d}" for e, s in sorted(ch.scores.items(), key=lambda kv: -kv[1])[:3])
             how = "full search" if self.solver.last_depth == 0 else f"{self.solver.last_depth} moves deep"
             app.trace("plan", f"solver ({how}, {1000 * self.solver.last_seconds:.0f} ms), net boxes after each line: "

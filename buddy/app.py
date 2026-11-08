@@ -79,6 +79,7 @@ class App:
         self.overhead_jpg = self.scene_jpg = self.sheet_jpg = b""
         self.overlay_lines, self.overlay_cov = None, None
         self.scene_actions: "queue.Queue" = queue.Queue()
+        self.last_strokes = None                 # (name, strokes_mm) of the most recent drawing job
         self.running = True
         self.sim_time = 0.0
         self.intrusion = safety.Intrusion(False, 0, 0.0)
@@ -146,6 +147,7 @@ class App:
 
     # ------------------------------------------------------------------ services for the brain
     def draw(self, name: str, strokes_mm, on_stroke=None, home: bool = True) -> Job:
+        self.last_strokes = (name, [np.asarray(s, float) for s in strokes_mm])   # for "do that line again"
         return self.ctl.submit(Job(name, strokes_mm=[np.asarray(s, float) for s in strokes_mm],
                                    sheet=lambda: self.tracker.track, home=home, on_stroke=on_stroke))
 

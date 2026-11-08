@@ -94,6 +94,7 @@ class Brain:
         self.last_heard = ""
         self.level_asked = False                # the difficulty question is asked once per session, before the first game
         self.switch_to = None                   # a game change or stop asked for while the arm was busy; done when it is free
+        self.last_choice = None                 # the solver's last Choice (cell/edge, scores, reason), for "why did you play that?"
         self._setup_after_level = None
         self._hangman_strokes = []
         self._hangman_pending = None
@@ -753,6 +754,7 @@ class Brain:
             ch = self.solver.choose(self.gstate, self.difficulty, self.rng)
         else:
             ch = choose(self.board, self.robot_sym, self.difficulty, self.rng)
+        self.last_choice = ch
         shown = ", ".join(f"{NAMES[i]} {s:+d}" for i, s in sorted(ch.scores.items(), key=lambda kv: -kv[1])[:4])
         self.app.trace("plan", f"{'solver' if self.spec else 'minimax'} scores (win +, loss -): {shown} -> "
                                f"{NAMES[ch.cell]}: {ch.reason}")
