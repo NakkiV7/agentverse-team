@@ -2,6 +2,30 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov, 13:40: latency and memory on Nakkiv's M5, for the technical summary (`tools/measure_m5.py`)
+
+Measured with the live demo running (real-time simulator, Piper voice, microphone on) and two coding agents
+working on the same Mac, so these are loaded figures. Apple M5, 24 GB.
+
+| What | Typical | Worst |
+|---|---|---|
+| Whisper small.en per sentence (resident, Metal) | 0.63 s | 2.6 s |
+| Live partial text while speaking (base.en, every 0.7 s) | 0.07 to 0.18 s | |
+| Sheet finding per camera frame | 1.6 ms | 2.4 ms |
+| Board reading, nine squares (CNN) | 2.7 ms | 4.4 ms |
+| Hand enters the work area to arm frozen | 0.66 s | 0.69 s |
+| Drawing the grid (four lines, checked) | 45 s | 45 s |
+| Drawing one mark | 17 s | 17 s |
+| Penny's voice, first audio (Piper, one sentence) | 0.05 s | 0.3 s |
+| Answer from the planner with the demo up | 0.53 s | 1.1 s |
+
+- **Memory**: Gemma 4 (E4B, MLX) **18 GB**, Gemma 3 4B **2.2 GB**, both in unified GPU memory (not counted in process
+  memory); the demo process 0.84 GB. System: **23 GB of 24 GB in use**, memory pressure normal (25% free after
+  compression). The demo needs a 24 GB Mac with nothing else large running; a 16 GB machine would have to drop
+  Gemma 4 for a smaller tool model.
+- The hand-to-freeze time is dominated by the depth check running at the camera rate (3 Hz while nothing moves,
+  10 Hz while the arm works) plus the clear-for-1-second rule on resume; the reflex itself is under 5 ms.
+
 ## 8 Nov, 13:10: Penny: a quicker female voice, the redesigned page with live transcript and resizable columns
 
 - **Name**: the robot is now Penny everywhere the player sees or hears it (page, speech, tools, tests); wake words
