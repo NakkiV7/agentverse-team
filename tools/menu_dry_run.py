@@ -1,4 +1,4 @@
-"""The menu, difficulty and memory, scripted: Buddy lists its games, the player picks Footsteps by name and asks
+"""The menu, difficulty and memory, scripted: Penny lists its games, the player picks Footsteps by name and asks
 for impossible mode; the game is played on the paper; the result is recorded in a temporary games file.
 
     .venv/bin/python tools/menu_dry_run.py      # exits 0 at GAME_OVER with the record written
@@ -36,12 +36,12 @@ def say(text):
     app.trace("system", f"(player says) {text}")
     said = b.last_said
     b.hear(text)
-    wait(lambda: b.last_said != said, "Buddy's reply", 60)
+    wait(lambda: b.last_said != said, "Penny's reply", 60)
 
 
 def player():
     time.sleep(2.0)
-    say("Buddy, what games do you know?")
+    say("Penny, what games do you know?")
     wait(lambda: b.state == "CHOOSE_GAME", "the list")
     say("Play your best, don't hold back.")
     say("Let's play footsteps.")
@@ -56,11 +56,11 @@ def player():
             cell = rng.choice(legal)
             app.trace("system", f"(the player draws a cross in the {cell_name(b.spec, cell)})")
             app.scene_actions.put(("player_mark", cell))
-            wait(lambda: b.state != "PLAYER_TURN", "Buddy to see my move", 60)
+            wait(lambda: b.state != "PLAYER_TURN", "Penny to see my move", 60)
         elif b.state == "CONFIRM_MARK":
             say("yes"); wait(lambda: b.state != "CONFIRM_MARK", "the confirmation", 30)
         elif b.state == "ROBOT_TURN":
-            wait(lambda: b.state != "ROBOT_TURN", "Buddy's move", 120)
+            wait(lambda: b.state != "ROBOT_TURN", "Penny's move", 120)
         else:
             time.sleep(0.1)
     wait(lambda: not b.busy, "the end", 120)
@@ -82,6 +82,6 @@ threading.Thread(target=runner, daemon=True).start()
 app.run(until=lambda a: not a.running, realtime=False)
 e = b.entry
 print(f"\ngame: {b.game_name} | level {b.difficulty.level} ({100 * b.difficulty.strength:.0f}%) | "
-      f"record: played {e.plays}, player {e.player_wins}, Buddy {e.robot_wins}, drawn {e.draws} -> {b.library.path}")
+      f"record: played {e.plays}, player {e.player_wins}, Penny {e.robot_wins}, drawn {e.draws} -> {b.library.path}")
 print(f"result: {result(b.spec, b.gstate) if b.gstate else None} | {time.time() - t0:.0f} s wall")
 sys.exit(0 if ok["done"] and e.plays == 1 else 1)

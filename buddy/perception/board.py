@@ -1,6 +1,6 @@
 """Reading the board: the sheet is straightened into a top-down image, cut into the 9 cells, and each cell is
 classified (empty / X / O) by a small convolutional network trained on images generated in our own simulator
-(tools/train_marks.py). A cell whose top probability is below MIN_CONFIDENCE is reported as unclear, and Buddy
+(tools/train_marks.py). A cell whose top probability is below MIN_CONFIDENCE is reported as unclear, and Penny
 asks the player instead of guessing.
 """
 from __future__ import annotations

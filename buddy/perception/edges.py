@@ -5,7 +5,7 @@ Classical OpenCV, no training, so every answer comes with a number that explains
 are sampled along the segment between its two dots (skipping the ends, where the dot is), and at each point a short
 line across the edge is checked for ink (pixels well darker than the paper). The fraction of sample points with ink is the edge's coverage: a drawn
 edge measures above 0.9, an empty one near 0. An edge counts as drawn above DRAWN_COVERAGE; the confidence is how far
-the coverage is from that threshold, so a half-drawn or smudged edge is reported as unsure and Buddy can ask.
+the coverage is from that threshold, so a half-drawn or smudged edge is reported as unsure and Penny can ask.
 """
 from __future__ import annotations
 

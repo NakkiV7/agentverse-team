@@ -1,5 +1,5 @@
 """Changing your mind mid-game, scripted: start noughts and crosses, ask for dots and boxes while the grid is being
-drawn (Buddy finishes the stroke, then switches and asks for a fresh sheet), play two dots turns, ask for hangman
+drawn (Penny finishes the stroke, then switches and asks for a fresh sheet), play two dots turns, ask for hangman
 (switch again), then stop. Exits 0 when every switch happened.
 
     .venv/bin/python tools/switch_dry_run.py
@@ -34,12 +34,12 @@ def say(text):
     app.trace("system", f"(player says) {text}")
     said = b.last_said
     b.hear(text)
-    wait(lambda: b.last_said != said, "Buddy's reply", 60)
+    wait(lambda: b.last_said != said, "Penny's reply", 60)
 
 
 def player():
     time.sleep(2.0)
-    say("Buddy, let's play noughts and crosses.")
+    say("Penny, let's play noughts and crosses.")
     wait(lambda: b.state == "ASK_LEVEL", "the level question")
     say("medium")
     wait(lambda: b.state == "SETUP" and b.busy, "the grid drawing to start", 60)
@@ -56,7 +56,7 @@ def player():
     wait(lambda: b.state == "DOTS_PLAYER_TURN", "the dots to be drawn", 300)
     app.trace("system", "(the player draws the top side of the top left box)")
     app.scene_actions.put(("player_edge", ((2, 2), 0)))
-    wait(lambda: b.state == "DOTS_ROBOT_TURN", "Buddy's turn", 90)
+    wait(lambda: b.state == "DOTS_ROBOT_TURN", "Penny's turn", 90)
     time.sleep(1.0)
     say("Actually, can we play hangman instead?")
     wait(lambda: b.state in ("HANGMAN_SETUP", "HANGMAN_TURN"), "the switch to hangman", 240)

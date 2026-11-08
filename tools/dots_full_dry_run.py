@@ -1,7 +1,7 @@
 """Dots and boxes through the conversation, with the things that go wrong at a real table. Scripted, no audio.
 
 The player asks for the game, is asked the size and says "three across and two down"; draws a line by hand; names
-one by voice ("the left side of the ..."); draws one too short (Buddy finishes it); scribbles in a box (Buddy asks for
+one by voice ("the left side of the ..."); draws one too short (Penny finishes it); scribbles in a box (Penny asks for
 a fresh sheet, redraws the dots, every line and every box so far, and play continues); then plays to the end.
 
     .venv/bin/python tools/dots_full_dry_run.py            # exits 0 at GAME_OVER with the record written
@@ -45,7 +45,7 @@ def say(text):
     app.trace("system", f"(player says) {text}")
     said = b.last_said
     b.hear(text)
-    wait(lambda: b.last_said != said, "Buddy's reply", 60)
+    wait(lambda: b.last_said != said, "Penny's reply", 60)
 
 
 def my_turn():
@@ -58,7 +58,7 @@ def hand(action, arg):
 
 
 def _wait_level(timeout=20):
-    """Buddy asks how hard to play before the first game; give it a moment to ask."""
+    """Penny asks how hard to play before the first game; give it a moment to ask."""
     t0 = time.time()
     while time.time() - t0 < timeout:
         if b.state == "ASK_LEVEL":
@@ -72,11 +72,11 @@ def _wait_level(timeout=20):
 def player():
     time.sleep(2.0)
     if args.plain:
-        say("Buddy, let's play dots and boxes, two by two.")
+        say("Penny, let's play dots and boxes, two by two.")
         if _wait_level():
             say("authentic please")
     else:
-        say("Buddy, let's play dots and boxes.")
+        say("Penny, let's play dots and boxes.")
         if _wait_level():
             say("authentic please")
         wait(lambda: b.state == "DOTS_SIZE", "the size question")
@@ -101,7 +101,7 @@ def player():
                 k = rng.choice([i for i, o in enumerate(st.owners) if not o])
                 app.trace("system", f"(the player scribbles in the {D.box_name(N, k)})")
                 hand("player_scribble", (N, k))
-                wait(lambda: b.state == "DOTS_SETUP", "Buddy to ask for a fresh sheet", 60)
+                wait(lambda: b.state == "DOTS_SETUP", "Penny to ask for a fresh sheet", 60)
                 wait(lambda: "fresh sheet" in b.last_said.lower() or "blank sheet" in b.last_said.lower(), "the request", 60)
                 time.sleep(1.0)
                 app.trace("system", "(the player puts a fresh sheet down)")
@@ -112,7 +112,7 @@ def player():
             else:
                 app.trace("system", f"(the player draws {D.edge_name(N, e)})")
                 hand("player_edge", (N, e))
-            wait(lambda: b.state != "DOTS_PLAYER_TURN" or (b.dots.state and b.dots.state.edges != before), "Buddy to see my line", 120)
+            wait(lambda: b.state != "DOTS_PLAYER_TURN" or (b.dots.state and b.dots.state.edges != before), "Penny to see my line", 120)
             if not args.plain and move == 3 and b.dots.state.edges != before:
                 ok["finished_short"] = True
             time.sleep(1.5)
@@ -137,6 +137,6 @@ threading.Thread(target=runner, daemon=True).start()
 app.run(until=lambda a: not a.running, realtime=False)
 st = b.dots.state if b.dots else None
 print(f"\ngame: {b.game_name} {D.size_words(b.dots.n) if b.dots else ''} | boxes: player {st.score('P') if st else '-'}, "
-      f"Buddy {st.score('B') if st else '-'} | {time.time() - t0:.0f} s wall | record: {b.entry.plays} played | "
+      f"Penny {st.score('B') if st else '-'} | {time.time() - t0:.0f} s wall | record: {b.entry.plays} played | "
       f"spoken line {ok['spoken']}, short line finished {ok['finished_short']}, restored after a scribble {ok['restored']}")
 sys.exit(0 if ok["done"] and (args.plain or (ok["spoken"] and ok["finished_short"] and ok["restored"])) else 1)

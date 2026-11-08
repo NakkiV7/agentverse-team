@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 def _wait_level(b, timeout=20):
-    """Buddy asks how hard to play before the first game; give it a moment to ask."""
+    """Penny asks how hard to play before the first game; give it a moment to ask."""
     t0 = time.time()
     while time.time() - t0 < timeout:
         if b.state == "ASK_LEVEL":
@@ -67,7 +67,7 @@ def main():
             end = time.monotonic() + timeout
             while not condition():
                 if time.monotonic() > end:
-                    raise TimeoutError(f"Waiting for {what}; state={b.state}; Buddy said {b.last_said!r}")
+                    raise TimeoutError(f"Waiting for {what}; state={b.state}; Penny said {b.last_said!r}")
                 time.sleep(.1)
 
         def say(text):
@@ -83,7 +83,7 @@ def main():
         def player():
             try:
                 wait(lambda: app.tracker.track is not None, "camera to find the sheet")
-                say("Buddy, let's play hangman.")
+                say("Penny, let's play hangman.")
                 if _wait_level(b):
                     say("authentic please")
                 wait(lambda: b.state == "HANGMAN_TURN" and not b.busy, "the checked dashes")

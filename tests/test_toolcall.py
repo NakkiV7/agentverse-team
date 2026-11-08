@@ -103,8 +103,8 @@ def test_switch_game_starts_the_setup_of_a_known_game(brain, monkeypatch):
 
 
 def test_switch_game_without_a_game_in_the_words_offers_the_menu(brain):
-    """"Buddy, let's play a game": the model may guess a game, the brain offers the menu as it always did."""
-    run(brain, "switch_game", "Buddy, let's play a game", name="noughts and crosses")
+    """"Penny, let's play a game": the model may guess a game, the brain offers the menu as it always did."""
+    run(brain, "switch_game", "Penny, let's play a game", name="noughts and crosses")
     assert brain.state == "CHOOSE_GAME" and "Shall we play" in brain.last_said
     brain.state = "GAME_OVER"
     brain.games = 1
@@ -405,6 +405,6 @@ def _gemma4_up() -> bool:
 @pytest.mark.skipif(not _gemma4_up(), reason="needs Ollama with gemma4")
 def test_live_plan_picks_switch_game():
     calls = toolcall.Planner().plan("let's play hangman instead",
-                                    "Dots and boxes: it is the player's turn. Games Buddy knows: noughts and crosses, "
+                                    "Dots and boxes: it is the player's turn. Games Penny knows: noughts and crosses, "
                                     "hangman and dots and boxes.", "DOTS_PLAYER_TURN")
     assert calls and calls[0].name == "switch_game" and "hangman" in str(calls[0].args.get("name", "")).lower()

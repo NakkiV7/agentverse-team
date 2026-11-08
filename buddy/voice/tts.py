@@ -1,11 +1,11 @@
 """Text to speech with Kokoro-82M (Apache 2.0), fully on the laptop.
 
 Pipeline: text -> split into sentences -> Kokoro synthesises sentence 1 -> it starts playing while sentence 2 is
-being synthesised. So Buddy starts talking after one sentence's worth of synthesis, not after the whole reply.
+being synthesised. So Penny starts talking after one sentence's worth of synthesis, not after the whole reply.
 
 Two threads: the synthesiser turns queued text into audio chunks, the player plays chunks in order. `speaking`
 is True from the first chunk until the last one has played; the microphone listener ignores audio during that
-time (plus a short tail) so Buddy does not hear itself.
+time (plus a short tail) so Penny does not hear itself.
 """
 from __future__ import annotations
 

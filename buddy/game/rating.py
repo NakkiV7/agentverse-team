@@ -1,4 +1,4 @@
-"""Local Elo ratings for each player and game, and Buddy at each strength.
+"""Local Elo ratings for each player and game, and Penny at each strength.
 
 Results are from the player's side. A draw scores half a point. Strengths are
 grouped in steps of 0.05, so repeated games can calibrate the same opponent.
@@ -54,7 +54,7 @@ class Record:
             return cls(rating=initial)
 
     def update(self, result: str, expectation: float, scale: float = 1.0) -> None:
-        # The first five results establish a rating quickly. Buddy learns more
+        # The first five results establish a rating quickly. Penny learns more
         # slowly, keeping the scale steady while the player's skill is measured.
         k = (64.0 if self.games < 5 else 24.0) * scale
         self.rating += k * (SCORES[result] - expectation)
@@ -142,7 +142,7 @@ def select_strength(rating: Rating, rng=random) -> Selection:
     recent = rating.player.recent
     draw_rate = recent.count("draw") / len(recent) if recent else 0.0
     # Elo scores a draw as half a point, so in a draw-heavy game (noughts and crosses) the target must rise with the
-    # draw rate or the player never actually wins. The floor keeps Buddy from playing almost at random after a run
+    # draw rate or the player never actually wins. The floor keeps Penny from playing almost at random after a run
     # of draws (it reached 5% strength before the floor).
     target_score = min(0.95, 0.45 + 0.5 * draw_rate)
     strengths = [v for v in STRENGTHS if ADAPTIVE_MIN <= v <= ADAPTIVE_MAX]

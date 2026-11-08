@@ -1,5 +1,5 @@
 """Plays any GameSpec game perfectly from the first move: full negamax with a memo, and the analysis
-Buddy speaks after learning a game ("if you go first you can always win, but only from a corner or the
+Penny speaks after learning a game ("if you go first you can always win, but only from a corner or the
 middle"). For boards too big to search completely (4x4 with marks anywhere) it looks a few moves ahead
 instead and says so.
 
@@ -99,7 +99,7 @@ class Solver:
             return empties                  # solve the endgame exactly
         return {8: 6, 9: 5, 10: 5, 11: 4, 12: 4}.get(empties, 3)
 
-    # -- what Buddy uses --------------------------------------------------------------------------
+    # -- what Penny uses --------------------------------------------------------------------------
     def move_scores(self, s: State) -> dict[int, int]:
         """Score of every legal move for the player to move (higher is better)."""
         out = {}
@@ -145,7 +145,7 @@ class Analysis:
     complete: bool
 
     def speak(self, spec: GameSpec) -> str:
-        """The line Buddy says after thinking the game through."""
+        """The line Penny says after thinking the game through."""
         n = spec.n
         if not self.complete:
             return "That board is too big for me to work out completely, so I'll play by looking a few moves ahead."

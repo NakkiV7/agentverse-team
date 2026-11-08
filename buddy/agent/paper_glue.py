@@ -6,7 +6,7 @@ install(brain) is called once by the brain. It is safe when either package is mi
 worker branch not merged yet): the tool then explains kindly that it cannot do extra things on the paper yet.
 
 Compiling takes the language model several seconds and writing can take minutes, so neither runs inside
-brain._worker: the player can keep talking, guessing and switching games while Buddy writes. The paper
+brain._worker: the player can keep talking, guessing and switching games while Penny writes. The paper
 package queues its drawing behind game strokes itself.
 """
 from __future__ import annotations

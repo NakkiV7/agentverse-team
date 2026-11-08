@@ -23,7 +23,7 @@ SCHEMA = {
   },
   "required": ["rows", "cols", "placement", "end", "k", "first_player", "question"],
 }
-SYSTEM = """You help Buddy, a robot that plays pen-and-paper games on a 3x3 or 4x4 grid where two players take turns writing X or O.
+SYSTEM = """You help Penny, a robot that plays pen-and-paper games on a 3x3 or 4x4 grid where two players take turns writing X or O.
 The player is explaining the rules of a game. Fill in the game description ONLY from what they actually said.
 
 Fields:
@@ -42,7 +42,7 @@ Rules for filling it in:
 5. Never invent a rule. An unspecified field with an empty question is an error."""
 
 CASES = [
-  ("Footsteps", "New game, Buddy. We take turns putting our mark next to the last one, up, down or sideways. If you can't go anywhere, you lose.",
+  ("Footsteps", "New game, Penny. We take turns putting our mark next to the last one, up, down or sideways. If you can't go anywhere, you lose.",
    dict(rows=3, cols=3, placement="adjacent_to_last_mark", end="no_legal_move_loses", k=0), None),
   ("Tic-tac-toe", "You can put your mark in any empty square, and whoever gets three in a row first wins. I'll go first.",
    dict(rows=3, cols=3, placement="anywhere", end="k_in_a_row_wins", k=3, first_player="player"), None),
@@ -93,7 +93,7 @@ for model, constrained in (("gemma3:4b", True), ("gemma4", False)):
     if follow and got.get("question"):
       turn2_total += 1
       ans, exp2 = follow
-      msgs += [{"role": "assistant", "content": raw}, {"role": "user", "content": f'Buddy asked: "{got["question"]}"\nThe player answered: "{ans}"\nUpdate the game description with everything said so far.'}]
+      msgs += [{"role": "assistant", "content": raw}, {"role": "user", "content": f'Penny asked: "{got["question"]}"\nThe player answered: "{ans}"\nUpdate the game description with everything said so far.'}]
       got2, _, dt2 = chat(model, msgs, constrained)
       ok2 = check(got2, exp2); turn2 += ok2
       print(f"      turn 2 {'OK ' if ok2 else 'BAD'} {dt2:4.1f}s placement={got2.get('placement')} end={got2.get('end')} q={got2.get('question','')!r:.60}")

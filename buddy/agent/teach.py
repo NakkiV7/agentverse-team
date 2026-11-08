@@ -38,7 +38,7 @@ SCHEMA = {
     "required": ["rows", "cols", "placement", "end", "k", "first_player", "question", "name"],
 }
 
-SYSTEM = """You help Buddy, a robot that plays pen-and-paper games on a 3x3 or 4x4 grid where two players take turns writing X or O.
+SYSTEM = """You help Penny, a robot that plays pen-and-paper games on a 3x3 or 4x4 grid where two players take turns writing X or O.
 The player is explaining the rules of a game. Fill in the game description ONLY from what they actually said.
 
 Fields:
@@ -88,7 +88,7 @@ class Draft:
 @dataclass
 class TeachTurn:
     draft: Draft
-    say: str                         # what Buddy says next (a question, or the rules read back)
+    say: str                         # what Penny says next (a question, or the rules read back)
     done: bool                       # True when the spec is complete or the game cannot be learned
     spec: GameSpec | None = None
     seconds: float = 0.0
@@ -130,7 +130,7 @@ class Teacher:
     def hear(self, text: str, name: str = "") -> TeachTurn:
         t0 = time.perf_counter()
         if self.questions:
-            text = f'Buddy asked: "{self.draft.question}"\nThe player answered: "{text}"\nUpdate the game description with everything said so far.'
+            text = f'Penny asked: "{self.draft.question}"\nThe player answered: "{text}"\nUpdate the game description with everything said so far.'
         else:
             text = f'The player said: "{text}"'
         self.msgs.append({"role": "user", "content": text})

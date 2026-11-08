@@ -4,14 +4,14 @@
                                                       # http://localhost:8850/progress.html (tools/serve_progress.py)
 
 1. Generate. For each of N boards: a blank sheet at a random position and rotation, the grid drawn with a little
-   jitter, and every cell filled at random with nothing, an X or an O in a random style (clean like Buddy's, or
+   jitter, and every cell filled at random with nothing, an X or an O in a random style (clean like Penny's, or
    messy, small, big, slanted, off-centre, unclosed, blue or black ink). Lighting and camera noise are randomised.
    The board goes through the SAME pipeline as at run time: the simulated overhead camera, find_sheet, rectify,
    cell crops. Labels are known because we drew the marks.
 2. Train. A small CNN (buddy/perception/marknet.py) on 85 % of the boards, validated on the other 15 % (whole
    boards held out, so no near-duplicates leak between the sets).
 3. Report. Accuracy, confusion matrix, and how often a validation cell would fall below the confidence threshold
-   (Buddy would ask the player). Saved next to the weights in assets/models/.
+   (Penny would ask the player). Saved next to the weights in assets/models/.
 """
 import argparse
 import json

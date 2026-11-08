@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Buddy</title>
+<title>Penny</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="top">
   <div class="brand">
-    <h1>Buddy</h1>
+    <h1>Penny</h1>
     <span class="game" id="gamename" title="">noughts and crosses</span>
   </div>
   <div class="status">
@@ -30,14 +30,14 @@
     <div class="card chatcard">
       <h2>Conversation</h2>
       <div id="chat" aria-live="polite"></div>
-      <div class="next" id="next"><span class="lbl">Now</span><span id="nexthint">Say or type <b>Buddy</b> to wake it up.</span></div>
+      <div class="next" id="next"><span class="lbl">Now</span><span id="nexthint">Say or type <b>Penny</b> to wake it up.</span></div>
       <div class="hearing" id="hearing">
         <span class="lvl" title="Microphone level"><i id="lvl"></i></span>
         <span class="partial" id="partial"></span>
       </div>
       <form id="say" autocomplete="off">
         <div class="inputwrap">
-          <input type="text" id="text" placeholder="Say it, or type it here" autocomplete="off" aria-label="Talk to Buddy">
+          <input type="text" id="text" placeholder="Say it, or type it here" autocomplete="off" aria-label="Talk to Penny">
           <span class="ghost" id="ghost" aria-hidden="true"></span>
         </div>
         <button class="primary" type="submit">Say</button>
@@ -46,21 +46,21 @@
     </div>
   </section>
 
-  <!-- 2. what Buddy sees -->
+  <!-- 2. what Penny sees -->
   <section class="col look">
     <div class="card">
-      <h2>What Buddy sees</h2>
+      <h2>What Penny sees</h2>
       <div class="paper frame" id="paperframe">
         <img id="sheetimg" alt="the sheet of paper, straightened">
         <canvas id="pad"></canvas>
       </div>
-      <p class="cap" id="papercap">The paper, straightened, with Buddy's reading of each square written on it.</p>
+      <p class="cap" id="papercap">The paper, straightened, with Penny's reading of each square written on it.</p>
       <p class="hint" id="padline"></p>
       <div class="cells" id="cells" hidden></div>
       <div class="thumbs">
         <figure>
           <div class="frame r43"><img id="overhead" alt="overhead camera"></div>
-          <figcaption>Overhead camera, with the sheet and marks Buddy found drawn on it</figcaption>
+          <figcaption>Overhead camera, with the sheet and marks Penny found drawn on it</figcaption>
         </figure>
         <figure>
           <div class="frame r43"><img id="scene" alt="the arm"></div>
@@ -70,11 +70,11 @@
     </div>
   </section>
 
-  <!-- 3. how Buddy decided, and ways to test it -->
+  <!-- 3. how Penny decided, and ways to test it -->
   <section class="col think">
     <details class="card" id="think">
       <summary>
-        <h2>How Buddy decided</h2>
+        <h2>How Penny decided</h2>
         <span class="last" id="tracelast"></span>
         <span class="count" id="tracecount"></span>
       </summary>
@@ -90,7 +90,7 @@
     </details>
     <div class="card test">
       <h2>Test it</h2>
-      <p class="cap">Move the paper or reach over it while Buddy plays, and watch it notice, wait, and find the board again.</p>
+      <p class="cap">Move the paper or reach over it while Penny plays, and watch it notice, wait, and find the board again.</p>
       <div class="scene">
         <button type="button" data-a="reach">Reach over the paper</button>
         <button type="button" data-a="slide">Slide the sheet</button>

@@ -91,7 +91,7 @@ def main():
         def player():
             try:
                 wait(lambda: app.tracker.track is not None, "camera to find the sheet")
-                say("Buddy, let's play hangman.")
+                say("Penny, let's play hangman.")
                 wait(lambda: b.state in ("ASK_LEVEL", "HANGMAN_TURN"), "the level question")
                 if b.state == "ASK_LEVEL":
                     say("authentic please")

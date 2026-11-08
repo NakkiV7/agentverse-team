@@ -1,11 +1,11 @@
-"""Buddy learns dots and boxes from the player, from scratch, then plays it: the demo flow in the real simulator.
+"""Penny learns dots and boxes from the player, from scratch, then plays it: the demo flow in the real simulator.
 
     .venv/bin/python tools/learn_dots_dry_run.py
 
 Dots and boxes is hidden at the start (BUDDY_HIDE_GAMES). The player asks what there is to play (no dots and
-boxes), asks to teach a new game, pastes an explanation in the style of a chat assistant, answers Buddy's two
+boxes), asks to teach a new game, pastes an explanation in the style of a chat assistant, answers Penny's two
 questions, draws one example line on the paper for the camera, says yes, picks the level and the size, puts a fresh
-sheet down, and plays one line each way. Exits 0 when the menu did not name the game before, Buddy asked exactly two
+sheet down, and plays one line each way. Exits 0 when the menu did not name the game before, Penny asked exactly two
 questions, saw the example, the game joined the menu, and the first lines were played.
 """
 import json
@@ -27,7 +27,7 @@ EXPLANATION = ("Dots and Boxes is a classic pencil-and-paper game for two player
                "their initial inside it, and they must take another turn. The game ends when all possible lines have "
                "been drawn, and the player who has claimed the most boxes wins.")
 
-ANSWERS = {   # whatever Buddy asks, the player has an answer in the spirit of the explanation
+ANSWERS = {   # whatever Penny asks, the player has an answer in the spirit of the explanation
     "turn": "Yes, you go again straight away, and you keep going as long as you keep closing boxes.",
     "end": "When every line is drawn. Whoever has more boxes wins, and it can be a draw.",
     "grid": "Any size you like. Let's start small, two boxes by two.",
@@ -81,7 +81,7 @@ def main():
         def player():
             try:
                 wait(lambda: app.tracker.track is not None, "camera to find the sheet")
-                menu = " ".join(say("Buddy, what games can we play?"))
+                menu = " ".join(say("Penny, what games can we play?"))
                 result["menu"] = menu
                 assert "dots" not in menu.lower(), f"dots and boxes was on the menu already: {menu!r}"
                 invite = " ".join(say("I want to teach you a new game and play it with you."))
@@ -106,7 +106,7 @@ def main():
                 app.scene_actions.put(("strokes", [np.array([(-80.0, -60.0), (-79.0, -60.0)]),
                                                    np.array([(-40.0, -60.0), (-39.0, -60.0)]),
                                                    np.array([(-78.0, -60.0), (-42.0, -60.0)])]))
-                wait(lambda: b.state == "OFFER_TAUGHT", "Buddy to see the example and offer the game", 120)
+                wait(lambda: b.state == "OFFER_TAUGHT", "Penny to see the example and offer the game", 120)
                 result["example_seen"] = "see it" in b.last_said.lower() or any(
                     "see it" in ev.text.lower() for ev in list(b.events)[-4:] if ev.kind == "said")
                 assert b.library.find("dots and boxes") is not None, "the game did not join the menu"
@@ -126,7 +126,7 @@ def main():
                 wait(lambda: b.state == "DOTS_PLAYER_TURN", "the dots to be drawn", 300)
                 say("Could you draw my line on the top side of the top left box?")
                 wait(lambda: b.state == "DOTS_ROBOT_TURN", "the player's line to be read back", 120)
-                wait(lambda: b.state == "DOTS_PLAYER_TURN" and not b.busy, "Buddy's line", 120)
+                wait(lambda: b.state == "DOTS_PLAYER_TURN" and not b.busy, "Penny's line", 120)
                 result.update(ok=True, menu_after=b.library.spoken_list(),
                               lines_played=sum(1 for ev in b.events if ev.kind == "line"))
             except Exception as error:

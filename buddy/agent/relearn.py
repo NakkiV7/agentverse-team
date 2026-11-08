@@ -1,9 +1,9 @@
-"""Learning a game from the player's own explanation, when it is one Buddy can already play.
+"""Learning a game from the player's own explanation, when it is one Penny can already play.
 
-For the demo Buddy starts with dots and boxes hidden (config.HIDE_GAMES): it is not on the menu, not in the facts,
+For the demo Penny starts with dots and boxes hidden (config.HIDE_GAMES): it is not on the menu, not in the facts,
 and "let's play dots and boxes" leads to "teach me". When the player then explains the game, recognise() spots which
 hidden game it is from the words, and a Relearn interview asks two short clarifying questions through Gemma 4
-(grounded in what was said, never about what was already explained), reads the rules back in Buddy's words, asks
+(grounded in what was said, never about what was already explained), reads the rules back in Penny's words, asks
 the player to draw one example move on the paper so the camera can see it, and reveals the game. From then on the
 ordinary dots-and-boxes engine plays it.
 
@@ -44,7 +44,7 @@ FALLBACK_SUMMARY = {
                        "line is drawn, the one with more boxes wins."),
 }
 
-SYSTEM = """You are Buddy, a friendly robot arm learning a pen-and-paper game from an older adult's explanation. \
+SYSTEM = """You are Penny, a friendly robot arm learning a pen-and-paper game from an older adult's explanation. \
 You will play it on real paper, so you need the rules exactly. Reply with JSON only, no other text."""
 
 QUESTION_PROMPT = """From the explanation and the answers so far, ask ONE short, warm clarifying question (under 22 \
@@ -116,7 +116,7 @@ class Relearn:
 
     # -- the model ---------------------------------------------------------------------------------------------
     def _transcript(self) -> str:
-        return "\n".join(("The player explained: " if i == 0 else "Buddy asked: " if who == "buddy" else "The player answered: ")
+        return "\n".join(("The player explained: " if i == 0 else "Penny asked: " if who == "buddy" else "The player answered: ")
                          + f'"{text}"' for i, (who, text) in enumerate(self.notes))
 
     def _model(self, prompt: str, key: str):

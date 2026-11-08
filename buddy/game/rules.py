@@ -1,10 +1,10 @@
 """Teachable grid games: a small family of rules that covers noughts and crosses, Footsteps and their
-variants, chosen so that everything else in Buddy stays the same (a 3x3 or 4x4 grid, X and O marks,
+variants, chosen so that everything else in Penny stays the same (a 3x3 or 4x4 grid, X and O marks,
 the same drawing and the same mark reader).
 
 A game is a GameSpec. The player teaches it in conversation (buddy/agent/teach.py fills the spec from
 what they say, asking when something is missing); buddy/game/solver.py then plays it perfectly from the
-very first move. Cells are numbered row by row from the player's top-left, as everywhere else in Buddy.
+very first move. Cells are numbered row by row from the player's top-left, as everywhere else in Penny.
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ class GameSpec:
 
     def __post_init__(self):
         if not (2 <= self.rows <= 4 and 2 <= self.cols <= 4):
-            raise ValueError("Buddy draws 3x3 or 4x4 boards")
+            raise ValueError("Penny draws 3x3 or 4x4 boards")
         if self.placement not in PLACEMENTS or self.end not in ENDS:
             raise ValueError("unknown rule")
         if self.end != "no_legal_move_loses" and not (2 <= self.k <= max(self.rows, self.cols)):
@@ -45,7 +45,7 @@ class GameSpec:
         return replace(self, **kw)
 
     def describe(self) -> str:
-        """The rules in the plain words Buddy says back to the player."""
+        """The rules in the plain words Penny says back to the player."""
         size = f"{self.rows} by {self.cols}" if (self.rows, self.cols) != (3, 3) else "three by three"
         where = {
             "anywhere": "You can put your mark in any empty square.",

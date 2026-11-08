@@ -1,12 +1,12 @@
-"""The whole thing: the player teaches Buddy a game it has never seen, Buddy draws the board and plays it on the
+"""The whole thing: the player teaches Penny a game it has never seen, Penny draws the board and plays it on the
 paper. Scripted, no audio, simulation as fast as it goes. Prints every pipeline step.
 
     .venv/bin/python tools/teach_full_dry_run.py            # Footsteps, taught in two sentences; exits 0 at GAME_OVER
     .venv/bin/python tools/teach_full_dry_run.py --misere   # "three in a row and you lose"
-    .venv/bin/python tools/teach_full_dry_run.py --new      # a game Buddy has never seen: it asks for a name and remembers it
+    .venv/bin/python tools/teach_full_dry_run.py --new      # a game Penny has never seen: it asks for a name and remembers it
 
-The scripted player wakes Buddy, asks to teach a game, explains it (answering Buddy's question), says yes, picks
-crosses, then plays legal moves drawn by the simulated hand; one move is asked for by voice. Buddy learns the
+The scripted player wakes Penny, asks to teach a game, explains it (answering Penny's question), says yes, picks
+crosses, then plays legal moves drawn by the simulated hand; one move is asked for by voice. Penny learns the
 rules with Gemma 4, solves the game, draws the grid, and plays with the generic solver. Needs Ollama with
 gemma3:4b (intents) and gemma4 (teaching).
 """
@@ -27,7 +27,7 @@ from buddy.game.rules import cell_name, result                         # noqa: E
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--misere", action="store_true")
-ap.add_argument("--new", action="store_true", help="a game not in the library, so Buddy asks for its name")
+ap.add_argument("--new", action="store_true", help="a game not in the library, so Penny asks for its name")
 args = ap.parse_args()
 
 if args.misere:
@@ -57,12 +57,12 @@ def say(text):
     app.trace("system", f"(player says) {text}")
     said = b.last_said
     b.hear(text)
-    wait(lambda: b.last_said != said, "Buddy's reply", 60)
+    wait(lambda: b.last_said != said, "Penny's reply", 60)
 
 
 
 def _wait_level(timeout=20):
-    """Buddy asks how hard to play before the first game; give it a moment to ask."""
+    """Penny asks how hard to play before the first game; give it a moment to ask."""
     t0 = time.time()
     while time.time() - t0 < timeout:
         if b.state == "ASK_LEVEL":
@@ -75,16 +75,16 @@ def _wait_level(timeout=20):
 
 def player():
     time.sleep(2.0)
-    say("Buddy, let me teach you a game I know.")
+    say("Penny, let me teach you a game I know.")
     wait(lambda: b.state == "TEACH", "the invitation")
     for line in LESSON:
         say(line)
         if b.state in ("OFFER_TAUGHT", "NAME_GAME"):
             break
-    wait(lambda: b.state in ("OFFER_TAUGHT", "NAME_GAME"), "Buddy to learn the game")
+    wait(lambda: b.state in ("OFFER_TAUGHT", "NAME_GAME"), "Penny to learn the game")
     if b.state == "NAME_GAME":
         say(NAME)
-        wait(lambda: b.state == "OFFER_TAUGHT", "Buddy to remember the game")
+        wait(lambda: b.state == "OFFER_TAUGHT", "Penny to remember the game")
     say("Yes please.")
     if b.state == "ASK_LEVEL" or _wait_level():
         say("authentic please")
@@ -105,12 +105,12 @@ def player():
             else:
                 app.trace("system", f"(the player draws a cross in the {cell_name(b.spec, cell)})")
                 app.scene_actions.put(("player_mark", cell))
-            wait(lambda: b.state != "PLAYER_TURN", "Buddy to see my move", 60)
+            wait(lambda: b.state != "PLAYER_TURN", "Penny to see my move", 60)
         elif b.state == "CONFIRM_MARK":
             say("yes")
             wait(lambda: b.state != "CONFIRM_MARK", "the confirmation", 30)
         elif b.state == "ROBOT_TURN":
-            wait(lambda: b.state != "ROBOT_TURN", "Buddy's move", 120)
+            wait(lambda: b.state != "ROBOT_TURN", "Penny's move", 120)
         else:
             time.sleep(0.1)
     wait(lambda: not b.busy, "the end of the game", 120)

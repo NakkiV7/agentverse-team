@@ -1,5 +1,5 @@
-"""Dots and boxes on the paper, scripted: Buddy draws the dot grid, the simulated hand draws the player's lines,
-Buddy reads every line back from the camera, answers with its own, claims the boxes it closes, until every line is
+"""Dots and boxes on the paper, scripted: Penny draws the dot grid, the simulated hand draws the player's lines,
+Penny reads every line back from the camera, answers with its own, claims the boxes it closes, until every line is
 drawn. No audio. The game pieces (buddy/game/dotsboxes.py, marks.py, perception/edges.py) are driven directly from
 here; the brain states are set by name so the page and the scene actions behave as they will once brain.py owns
 the loop (see docs/STATUS.md).
@@ -153,7 +153,7 @@ def player_turn(state):
 
 
 def robot_turn(state):
-    b.set_state("DOTS_ROBOT_TURN", "Buddy's turn")
+    b.set_state("DOTS_ROBOT_TURN", "Penny's turn")
     ch = solver.choose(state, diff, rng)
     stats["solver_s"] = max(stats["solver_s"], solver.last_seconds)
     shown = ", ".join(f"{D.edge_name(N, e)} {s:+d}" for e, s in sorted(ch.scores.items(), key=lambda kv: -kv[1])[:3])
@@ -181,7 +181,7 @@ def robot_turn(state):
     state = D.play(state, ch.cell)
     if boxes:
         names = " and ".join(D.box_name(N, k) for k in boxes)
-        app.trace("decide", f"that closes the {names} box: Buddy goes again")
+        app.trace("decide", f"that closes the {names} box: Penny goes again")
         say(f"That closes the {names} box, so it's mine. I'll put my B in it and go again.")
         for k in boxes:
             app.draw("my B", M.box_claim(N, k)).done.wait()
@@ -190,7 +190,7 @@ def robot_turn(state):
 
 def finish(state):
     p, q = state.score(PLAYER), state.score(BUDDY)
-    b.set_state("DOTS_GAME_OVER", f"all lines drawn: player {p}, Buddy {q}")
+    b.set_state("DOTS_GAME_OVER", f"all lines drawn: player {p}, Penny {q}")
     r = D.result(state)
     if r[0] == "draw":
         say(f"Every line is drawn and we have {p} boxes each. A draw!")
@@ -228,7 +228,7 @@ app.run(until=lambda a: not a.running, realtime=False)
 total = D.n_edges(N)
 s = stats.get("state")
 print(f"\ndots and boxes {N}x{N}, level {diff.level}: "
-      + (f"player {s.score(PLAYER)} boxes, Buddy {s.score(BUDDY)} | " if s else "did not finish | ")
+      + (f"player {s.score(PLAYER)} boxes, Penny {s.score(BUDDY)} | " if s else "did not finish | ")
       + f"{stats['read_back']}/{total} lines read back from the camera, {stats['retries']} redraws, "
       f"{stats['unsure']} unsure looks, lowest edge confidence {stats['min_conf']:.2f} | "
       f"dots {stats['dots_s']:.0f} s, slowest solver move {1000 * stats['solver_s']:.0f} ms | {time.time() - t0:.0f} s wall")

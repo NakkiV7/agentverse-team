@@ -1,4 +1,4 @@
-// Buddy's demo page. Plain JS, no build step, nothing fetched from outside: the demo may run offline.
+// Penny's demo page. Plain JS, no build step, nothing fetched from outside: the demo may run offline.
 // It polls state.json and the three images twice a second and not at all while the tab is hidden (the app renders
 // an image only while the page fetches it, and every render competes with the language model for the GPU).
 "use strict";
@@ -21,32 +21,32 @@ const NAMES = ["top left", "top middle", "top right", "middle left", "centre", "
 const WORDS = {                           // the state machine's name -> what a person would say is happening
   IDLE: "Resting", CHAT: "Chatting", CHOOSE_GAME: "Choosing a game", NAME_GAME: "Naming your game",
   TEACH: "Learning your game", TEACH_MODEL: "Learning your game", OFFER_TAUGHT: "Ready to play your game",
-  SETUP: "Buddy is drawing the board", DOTS_SETUP: "Buddy is drawing the dots", HANGMAN_SETUP: "Buddy is setting up hangman",
-  WAIT_SHEET: "Buddy needs the paper", ASK_LEVEL: "Choosing a level", ASK_SIDE: "Choosing sides", DOTS_SIZE: "Choosing the board size",
+  SETUP: "Penny is drawing the board", DOTS_SETUP: "Penny is drawing the dots", HANGMAN_SETUP: "Penny is setting up hangman",
+  WAIT_SHEET: "Penny needs the paper", ASK_LEVEL: "Choosing a level", ASK_SIDE: "Choosing sides", DOTS_SIZE: "Choosing the board size",
   PLAYER_TURN: "Your turn", DOTS_PLAYER_TURN: "Your turn", HANGMAN_TURN: "Your guess",
-  ROBOT_TURN: "Buddy is drawing", DOTS_ROBOT_TURN: "Buddy is drawing", CONFIRM_MARK: "Buddy has a question", GAME_OVER: "Game over" };
+  ROBOT_TURN: "Penny is drawing", DOTS_ROBOT_TURN: "Penny is drawing", CONFIRM_MARK: "Penny has a question", GAME_OVER: "Game over" };
 const NEXT = {                            // the one line above the input: what to do now
-  IDLE: "Say or type <b>Buddy</b> to wake it up.",
+  IDLE: "Say or type <b>Penny</b> to wake it up.",
   CHAT: "Ask for a game: <b>let's play a game</b>. Or teach it one: <b>let me teach you a game</b>.",
-  CHOOSE_GAME: "Name a game Buddy knows (hover the game name at the top to see them), or say <b>let me teach you a game</b>.",
-  NAME_GAME: "Tell Buddy what to call the game you just taught it.",
-  TEACH: "Explain your game in your own words, a sentence or two at a time. Buddy asks about anything it is unsure of.",
-  TEACH_MODEL: "Explain your game in your own words, a sentence or two at a time. Buddy asks about anything it is unsure of.",
+  CHOOSE_GAME: "Name a game Penny knows (hover the game name at the top to see them), or say <b>let me teach you a game</b>.",
+  NAME_GAME: "Tell Penny what to call the game you just taught it.",
+  TEACH: "Explain your game in your own words, a sentence or two at a time. Penny asks about anything it is unsure of.",
+  TEACH_MODEL: "Explain your game in your own words, a sentence or two at a time. Penny asks about anything it is unsure of.",
   OFFER_TAUGHT: "Say <b>yes</b> to play the game you taught, or <b>no</b>.",
-  SETUP: "Buddy is drawing the board. Watch the arm, and its reasoning under How Buddy decided.",
-  WAIT_SHEET: "Buddy needs the paper back: press <b>Put it back</b> or <b>New blank sheet</b> under Test it.",
-  ASK_LEVEL: "Choose how hard Buddy plays: <b>easy</b>, <b>medium</b>, <b>hard</b>, <b>impossible</b>, or <b>authentic</b> (it learns your level over a few games).",
+  SETUP: "Penny is drawing the board. Watch the arm, and its reasoning under How Penny decided.",
+  WAIT_SHEET: "Penny needs the paper back: press <b>Put it back</b> or <b>New blank sheet</b> under Test it.",
+  ASK_LEVEL: "Choose how hard Penny plays: <b>easy</b>, <b>medium</b>, <b>hard</b>, <b>impossible</b>, or <b>authentic</b> (it learns your level over a few games).",
   ASK_SIDE: "Say <b>crosses</b> or <b>noughts</b>. Crosses go first.",
   PLAYER_TURN: "Your move: draw your mark on the paper, press a square, or say it: <b>put mine in the top left</b>.",
-  CONFIRM_MARK: "Buddy asked about a mark it saw. Answer <b>yes</b> or <b>no</b>.",
-  ROBOT_TURN: "Buddy's move: it plans, draws, then reads its own mark back. Try <b>Reach over the paper</b> while it draws.",
+  CONFIRM_MARK: "Penny asked about a mark it saw. Answer <b>yes</b> or <b>no</b>.",
+  ROBOT_TURN: "Penny's move: it plans, draws, then reads its own mark back. Try <b>Reach over the paper</b> while it draws.",
   DOTS_SIZE: "Say the board size: <b>three by three</b>, <b>four across and three down</b>, or <b>the usual</b>.",
-  DOTS_SETUP: "Buddy is drawing the dots. Watch the arm.",
+  DOTS_SETUP: "Penny is drawing the dots. Watch the arm.",
   DOTS_PLAYER_TURN: "Your line: draw it on the paper between two neighbouring dots, or say it: <b>the top side of the top left box</b>. Close a box and you go again.",
-  DOTS_ROBOT_TURN: "Buddy's line: it plans, draws, then reads its own line back.",
-  HANGMAN_SETUP: "Buddy is writing the word's blanks on the paper. Watch the arm.",
+  DOTS_ROBOT_TURN: "Penny's line: it plans, draws, then reads its own line back.",
+  HANGMAN_SETUP: "Penny is writing the word's blanks on the paper. Watch the arm.",
   HANGMAN_TURN: "Guess a letter: say or type it, for instance <b>E</b>. You can also ask for a hint, or ask what you have tried.",
-  GAME_OVER: "Say <b>yes</b> for another game (press <b>New blank sheet</b> first), or ask Buddy anything about the one you played.",
+  GAME_OVER: "Say <b>yes</b> for another game (press <b>New blank sheet</b> first), or ask Penny anything about the one you played.",
 };
 const GRID_STATES = new Set(["SETUP", "ASK_SIDE", "PLAYER_TURN", "ROBOT_TURN", "CONFIRM_MARK"]);   // the nine squares show
 const color = s => getComputedStyle(document.documentElement).getPropertyValue("--" + s).trim() || "#888";
@@ -59,10 +59,10 @@ function warn(text) {                     // a short warning under the paper, go
   clearTimeout(hintTimer); hintTimer = setTimeout(() => { hintTimer = null; padline(); }, 4000);
 }
 function notNow() {
-  warn(!S ? "" : S.state === "ROBOT_TURN" || S.state === "DOTS_ROBOT_TURN" ? "It's Buddy's turn: wait for it to finish." :
-    S.state === "CONFIRM_MARK" ? "Answer Buddy's question first (yes or no)." :
-    S.state === "HANGMAN_TURN" ? "In hangman you say or type a letter; Buddy writes it." :
-    "There's no game on yet: say Buddy, then ask for a game. Buddy draws the board before you mark it.");
+  warn(!S ? "" : S.state === "ROBOT_TURN" || S.state === "DOTS_ROBOT_TURN" ? "It's Penny's turn: wait for it to finish." :
+    S.state === "CONFIRM_MARK" ? "Answer Penny's question first (yes or no)." :
+    S.state === "HANGMAN_TURN" ? "In hangman you say or type a letter; Penny writes it." :
+    "There's no game on yet: say Penny, then ask for a game. Penny draws the board before you mark it.");
 }
 function padline() {                      // the line under the paper: a drawing hint only while drawing is possible
   if (hintTimer) return;
@@ -128,20 +128,20 @@ function setDot(id, cls, text) { const d = $(id); d.className = "dot " + cls; d.
 function header(s) {
   const g = s.game || {};
   $("gamename").textContent = g.name || "";
-  $("gamename").title = g.known ? "Games Buddy knows: " + g.known.join(", ") : "";
+  $("gamename").title = g.known ? "Games Penny knows: " + g.known.join(", ") : "";
   const st = $("statetext");
   let words = WORDS[s.state] || s.state, cls = "state";
-  if ((s.state === "ROBOT_TURN" || s.state === "DOTS_ROBOT_TURN") && s.arm === "home") words = "Buddy is thinking";
-  if (s.example) words = "Show Buddy an example move";
-  if (s.state === "IDLE") words = "Resting: say Buddy";
+  if ((s.state === "ROBOT_TURN" || s.state === "DOTS_ROBOT_TURN") && s.arm === "home") words = "Penny is thinking";
+  if (s.example) words = "Show Penny an example move";
+  if (s.state === "IDLE") words = "Resting: say Penny";
   if (s.state === "PLAYER_TURN" || s.state === "DOTS_PLAYER_TURN" || s.state === "HANGMAN_TURN" || s.example) cls += " yours";
   if (s.safety.frozen) { words = "Arm frozen: hand over the paper"; cls = "state alarm"; }
   st.textContent = words; st.className = cls; st.title = "state machine: " + s.state;
   const lv = $("level");
   lv.textContent = "Level " + (g.level || "adaptive");
   lv.title = `Your rating ${g.rating ?? "-"} after ${g.rating_games ?? 0} game${g.rating_games === 1 ? "" : "s"}` +
-    (g.difficulty_reason ? ` · ${g.difficulty_reason}` : "") + ` · Buddy plays at ${Math.round(100 * (s.strength || 0))}% of its best`;
-  setDot("dot-voice", s.speaking ? "on" : "", s.speaking ? "Voice: Buddy is speaking" : "Voice: idle");
+    (g.difficulty_reason ? ` · ${g.difficulty_reason}` : "") + ` · Penny plays at ${Math.round(100 * (s.strength || 0))}% of its best`;
+  setDot("dot-voice", s.speaking ? "on" : "", s.speaking ? "Voice: Penny is speaking" : "Voice: idle");
   if (!s.mic.available) setDot("dot-mic", "off", "Microphone: none, type below");
   else setDot("dot-mic", s.mic.enabled ? "ok" : "warn", s.mic.enabled ? "Microphone: on, listening" : "Microphone: muted");
   setDot("dot-safety", s.safety.frozen ? "bad" : s.safety.pixels ? "warn" : "ok",
@@ -149,7 +149,7 @@ function header(s) {
     s.safety.pixels ? "Safety: something near the paper" : "Safety: clear, nothing over the paper");
 }
 
-// ---------------------------------------------------------------- what Buddy is hearing (another process fills hearing = {active, partial, level})
+// ---------------------------------------------------------------- what Penny is hearing (another process fills hearing = {active, partial, level})
 function hearing(s, newPlayerLine) {
   const h = s.hearing, strip = $("hearing"), input = $("text");
   const available = s.mic.available || !!h;
@@ -160,7 +160,7 @@ function hearing(s, newPlayerLine) {
   const level = h ? Math.min(100, Math.round(100 * (h.level || 0))) : Math.min(100, Math.round(1500 * (s.mic.level || 0)));
   $("lvl").style.width = (s.mic.available && !s.mic.enabled ? 0 : level) + "%";
   const active = h ? !!h.active : s.mic.enabled;
-  if (newPlayerLine || !active) partial = "";          // the final text arrived, or Buddy stopped listening
+  if (newPlayerLine || !active) partial = "";          // the final text arrived, or Penny stopped listening
   else if (h && h.partial) partial = String(h.partial);
   const typing = input.value.length > 0;
   $("ghost").textContent = !typing && partial ? partial : "";
@@ -204,17 +204,17 @@ async function tick() {
     newPlayerLine = nChat >= 0 && s.transcript.length > nChat && last && last.who === "Player";
     nChat = s.transcript.length;
     const el = $("chat");
-    let lastBuddy = -1; s.transcript.forEach((m, i) => { if (m.who === "Buddy") lastBuddy = i; });
+    let lastBuddy = -1; s.transcript.forEach((m, i) => { if (m.who === "Penny") lastBuddy = i; });
     el.innerHTML = s.transcript.length ? s.transcript.map((m, i) =>
-      `<div class="msg ${esc(m.who)}${i === lastBuddy ? " latest" : ""}"><small>${m.who === "Player" ? "You" : "Buddy"} · ${m.t.toFixed(1)}s` +
+      `<div class="msg ${esc(m.who)}${i === lastBuddy ? " latest" : ""}"><small>${m.who === "Player" ? "You" : "Penny"} · ${m.t.toFixed(1)}s` +
       `${i === lastBuddy ? ' <span class="speaking" id="speakmark"></span>' : ""}</small>${esc(m.text)}</div>`).join("") :
-      `<p class="empty">Nothing said yet. Buddy wakes up when you say its name.</p>`;
+      `<p class="empty">Nothing said yet. Penny wakes up when you say its name.</p>`;
     el.scrollTop = el.scrollHeight;
   }
   const sm = $("speakmark"); if (sm) sm.textContent = s.speaking ? "· speaking" : "";
   const next = $("next");
-  $("nexthint").innerHTML = s.safety.frozen ? "Buddy's arm is frozen while something is over the paper. Move it away and Buddy carries on." :
-    s.example ? "Show Buddy one example move: draw a short line anywhere on the paper, or say <b>skip</b>." : (NEXT[s.state] || "");
+  $("nexthint").innerHTML = s.safety.frozen ? "Penny's arm is frozen while something is over the paper. Move it away and Penny carries on." :
+    s.example ? "Show Penny one example move: draw a short line anywhere on the paper, or say <b>skip</b>." : (NEXT[s.state] || "");
   next.classList.toggle("warn", !!s.safety.frozen);
   hearing(s, newPlayerLine);
 
@@ -228,10 +228,10 @@ async function tick() {
     b.classList.toggle("legal", turn && legal.length > 0 && legal.includes(c) && !taken);
     b.querySelector(".m").textContent = taken ? (taken === "X" ? "✕" : "○") : "";
   });
-  const sides = s.player && s.robot ? ` You are ${s.player === "X" ? "crosses" : "noughts"}, Buddy ${s.robot === "X" ? "crosses" : "noughts"}.` : "";
-  $("papercap").textContent = s.state.startsWith("DOTS") ? "The paper, straightened, with the dots and lines Buddy has read." :
+  const sides = s.player && s.robot ? ` You are ${s.player === "X" ? "crosses" : "noughts"}, Penny ${s.robot === "X" ? "crosses" : "noughts"}.` : "";
+  $("papercap").textContent = s.state.startsWith("DOTS") ? "The paper, straightened, with the dots and lines Penny has read." :
     s.state.startsWith("HANGMAN") ? "The paper, straightened: the word's blanks, the letters and the gallows." :
-    "The paper, straightened, with Buddy's reading of each square written on it." + sides;
+    "The paper, straightened, with Penny's reading of each square written on it." + sides;
   padline();
 
   // the trace and the sensors that used to crowd the header

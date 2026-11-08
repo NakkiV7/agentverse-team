@@ -1,7 +1,7 @@
-"""Teach Buddy a game it has never seen, then watch it play from the first move. Typed, no arm, no audio.
+"""Teach Penny a game it has never seen, then watch it play from the first move. Typed, no arm, no audio.
 
     .venv/bin/python tools/teach_dry_run.py                 # Footsteps, taught in two sentences
-    .venv/bin/python tools/teach_dry_run.py --vague         # a vague explanation: Buddy has to ask first
+    .venv/bin/python tools/teach_dry_run.py --vague         # a vague explanation: Penny has to ask first
     .venv/bin/python tools/teach_dry_run.py --misere        # "three in a row and you lose"
     .venv/bin/python tools/teach_dry_run.py -i              # interactive: explain your own game, then play it by typing cells
 
@@ -21,7 +21,7 @@ from buddy.game.solver import analyse                                           
 from buddy.game.tictactoe import Difficulty                                              # noqa: E402
 
 SCRIPTS = {
-    "footsteps": ["New game, Buddy. We take turns putting our mark next to the last one, up, down or sideways.",
+    "footsteps": ["New game, Penny. We take turns putting our mark next to the last one, up, down or sideways.",
                   "If you can't go anywhere, you lose."],
     "vague": ["You just put marks next to each other and try not to get stuck.",
               "Next to the last mark that was played, and only up, down, left or right.",
@@ -39,7 +39,7 @@ script = SCRIPTS["vague" if args.vague else "misere" if args.misere else "footst
 
 
 def typed_lines():
-    print("Explain the game to Buddy in your own words (one or two sentences at a time; empty line to give up).")
+    print("Explain the game to Penny in your own words (one or two sentences at a time; empty line to give up).")
     while True:
         try:
             line = input("You: ").strip()
@@ -73,19 +73,19 @@ for line in (typed_lines() if args.interactive else script):
     if not args.interactive:
         print(f"Player: {line}")
     turn = teacher.hear(line, name="the player's game")
-    print(f"Buddy ({turn.seconds:.1f}s): {turn.say}")
+    print(f"Penny ({turn.seconds:.1f}s): {turn.say}")
     if turn.done:
         spec = turn.spec
         break
 if spec is None:
-    print("Buddy could not learn the game"); sys.exit(1)
+    print("Penny could not learn the game"); sys.exit(1)
 
 print("\n== THINK ==")
 solver, a = analyse(spec)
-print(f"Buddy: Let me think... ({a.nodes} positions in {a.seconds * 1000:.0f} ms) {a.speak(spec)} Want to try?")
+print(f"Penny: Let me think... ({a.nodes} positions in {a.seconds * 1000:.0f} ms) {a.speak(spec)} Want to try?")
 
-print("\n== PLAY ==  " + ("(you are X, type your moves; Buddy = solver at 75% strength)" if args.interactive
-                        else "(player = random legal moves, Buddy = solver at 75% strength)"))
+print("\n== PLAY ==  " + ("(you are X, type your moves; Penny = solver at 75% strength)" if args.interactive
+                        else "(player = random legal moves, Penny = solver at 75% strength)"))
 rng = random.Random(7)
 human, robot = ("X", "O")
 s = State.start(spec, human if spec.first_player == "player" else robot)
@@ -96,13 +96,13 @@ while not result(spec, s):
         print(f"Player writes X in the {cell_name(spec, c)}")
     else:
         ch = solver.choose(s, diff, rng)
-        print(f"Buddy: I'll take the {cell_name(spec, ch.cell)}.   [{ch.reason}; scores {ch.scores}]")
+        print(f"Penny: I'll take the {cell_name(spec, ch.cell)}.   [{ch.reason}; scores {ch.scores}]")
         c = ch.cell
     s = play(spec, s, c)
     for r in range(spec.rows):
         print("    " + " | ".join(s.board[r * spec.cols + c] or " " for c in range(spec.cols)))
 r = result(spec, s)
-who = "Buddy" if r[1] == robot else "the player"
+who = "Penny" if r[1] == robot else "the player"
 if r[0] == "draw":
     why = "draw"
 elif spec.end == "k_in_a_row_loses":

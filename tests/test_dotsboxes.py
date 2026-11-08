@@ -85,7 +85,7 @@ def test_known_results_on_small_boards():
 
 
 def play_out(n, buddy, rng, strength=1.0, opponent="random", exact=None):
-    """Buddy (the solver) against a random or greedy opponent. With `exact` (a Solver with the full memo), also
+    """Penny (the solver) against a random or greedy opponent. With `exact` (a Solver with the full memo), also
     reports whether the opponent ever made a mistake, measured against the exact values."""
     sol = D.Solver(n)
     s = D.State.start(n, ("P", "B"), first="P" if buddy == "second" else "B")

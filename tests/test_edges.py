@@ -27,7 +27,7 @@ def paint(world, strokes, rgb, radius):
 
 
 def random_board(world, rng, n):
-    """Dots, a random half of the edges (Buddy's straight or the player's wobbly, any pen), some claimed boxes;
+    """Dots, a random half of the edges (Penny's straight or the player's wobbly, any pen), some claimed boxes;
     the sheet anywhere in reach, random lighting and camera noise. Returns the truth mask."""
     world.clear_ink()
     world.move_sheet(rng.uniform(0.19, 0.235), rng.uniform(-0.035, 0.035), math.pi / 2 + rng.uniform(-0.35, 0.35))

@@ -13,7 +13,7 @@ completely. 3x3 boxes (24 edges) is searched completely once few enough edges ar
 negamax with alpha-beta pruning, a chain-aware heuristic at the cut-off, a node budget and a deadline keeps every
 move under about a second.
 
-Difficulty reuses tictactoe.Difficulty: Buddy plays the best edge with probability `strength`, otherwise a
+Difficulty reuses tictactoe.Difficulty: Penny plays the best edge with probability `strength`, otherwise a
 friendlier edge that does not hand the player a box.
 """
 from __future__ import annotations
@@ -386,7 +386,7 @@ class Solver:
                 break
         return best
 
-    # -- what Buddy uses ---------------------------------------------------------------------------
+    # -- what Penny uses ---------------------------------------------------------------------------
     def move_scores(self, s: State) -> dict[int, int]:
         """Net boxes for the mover after each legal edge (higher is better)."""
         t0 = time.perf_counter()

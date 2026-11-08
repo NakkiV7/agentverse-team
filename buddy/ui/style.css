@@ -1,4 +1,4 @@
-/* Buddy's demo page. Plain CSS, no build step. Light and dark follow the system; the header button overrides. */
+/* Penny's demo page. Plain CSS, no build step. Light and dark follow the system; the header button overrides. */
 :root {
   --bg: #f3f1ec; --card: #ffffff; --fg: #1b1b19; --muted: #5f5f59; --line: #e1dfd7; --accent: #2457c5;
   --accent-ink: #ffffff; --buddy: #e9eefb; --player: #efeee9; --ok: #2a8f4b; --warn: #c7860a; --bad: #d11a2a;
@@ -93,9 +93,9 @@ main { display: grid; gap: var(--gap); padding: var(--gap); max-width: 2100px; m
 #chat { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 12px 4px 2px; scrollbar-gutter: stable; }
 .msg { max-width: 86%; padding: 10px 14px; border-radius: 14px; font-size: 17px; line-height: 1.4; word-wrap: break-word; }
 .msg small { display: block; color: var(--muted); font-size: 13px; margin-bottom: 2px; }
-.msg.Buddy { background: var(--buddy); align-self: flex-start; border-bottom-left-radius: 4px; }
+.msg.Penny { background: var(--buddy); align-self: flex-start; border-bottom-left-radius: 4px; }
 .msg.Player { background: var(--player); align-self: flex-end; border-bottom-right-radius: 4px; }
-.msg.Buddy.latest { font-size: 19px; box-shadow: inset 4px 0 0 var(--accent); padding-left: 16px; }
+.msg.Penny.latest { font-size: 19px; box-shadow: inset 4px 0 0 var(--accent); padding-left: 16px; }
 .msg .speaking { color: var(--accent); font-weight: 600; }
 .empty { color: var(--muted); font-size: 16px; margin: auto 0; text-align: center; padding: 20px; }
 .next { display: flex; gap: 10px; align-items: baseline; margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--bg); font-size: 16px; line-height: 1.4; min-height: 44px; }
@@ -116,7 +116,7 @@ main { display: grid; gap: var(--gap); padding: var(--gap); max-width: 2100px; m
 #micbtn { font-size: 15px; white-space: nowrap; }
 #micbtn.gone { display: none; }
 
-/* ---------- what Buddy sees: the paper is the main picture, the cameras are small */
+/* ---------- what Penny sees: the paper is the main picture, the cameras are small */
 .frame { position: relative; overflow: hidden; border-radius: 8px; background: color-mix(in srgb, var(--fg) 6%, var(--card)); }
 .frame::after { content: "waiting for the camera…"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 14px; }
 .frame.live::after { content: none; }
@@ -140,7 +140,7 @@ main { display: grid; gap: var(--gap); padding: var(--gap); max-width: 2100px; m
 .thumbs figure { margin: 0; min-width: 0; }
 .thumbs figcaption { color: var(--muted); font-size: 13.5px; margin-top: 5px; line-height: 1.3; }
 
-/* ---------- how Buddy decided: collapsible, filterable; legend lives in tooltips */
+/* ---------- how Penny decided: collapsible, filterable; legend lives in tooltips */
 details.card { padding: 0; }
 details summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 14px 16px; }
 details summary::-webkit-details-marker { display: none; }

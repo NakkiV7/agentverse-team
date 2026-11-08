@@ -1,4 +1,4 @@
-"""The games Buddy knows: a few built in, plus every game a player has taught it, remembered on disk
+"""The games Penny knows: a few built in, plus every game a player has taught it, remembered on disk
 (runtime/games.json, gitignored) so they are offered again next session.
 
 A library entry is a GameSpec with a name and a little history. Noughts and crosses is special: it has
@@ -68,7 +68,7 @@ class Library:
     def __init__(self, path: Path = GAMES_FILE, hidden=None):
         self.path = Path(path)
         self.entries: list[Entry] = [Entry(**{**asdict(e), "spec": e.spec}) for e in BUILTIN]
-        # Games Buddy pretends not to know until taught (config.HIDE_GAMES): left out of the menu, the facts and
+        # Games Penny pretends not to know until taught (config.HIDE_GAMES): left out of the menu, the facts and
         # name matching, so "let's play dots and boxes" leads to "teach me", not to a game. reveal() ends that.
         self.hidden: set[str] = set(_norm(n) for n in (C.HIDE_GAMES if hidden is None else hidden))
         self.load()
@@ -80,7 +80,7 @@ class Library:
         return [e for e in self.entries if not self.is_hidden(e)]
 
     def reveal(self, entry: Entry) -> Entry:
-        """The player has taught Buddy this game: it joins the menu and counts as taught today."""
+        """The player has taught Penny this game: it joins the menu and counts as taught today."""
         self.hidden.discard(_norm(entry.name))
         entry.taught_at = time.strftime("%Y-%m-%d %H:%M")
         return entry

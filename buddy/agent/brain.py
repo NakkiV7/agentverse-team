@@ -1,4 +1,4 @@
-"""Buddy's brain: conversation, game setup and the game itself.
+"""Penny's brain: conversation, game setup and the game itself.
 
 Every step is written to the trace shown on the demo page:
   HEAR        the microphone (Whisper) or the keyboard
@@ -11,15 +11,15 @@ Every step is written to the trace shown on the demo page:
   ADAPT       re-planning when the scene changes; SAFETY: the reflex layer
   SAY         Kokoro
 
-The game board is never kept from memory alone: every move, the player's and Buddy's, is read from the paper by the
+The game board is never kept from memory alone: every move, the player's and Penny's, is read from the paper by the
 camera and only then committed.
 
 States: IDLE -> CHAT -> CHOOSE_GAME -> SETUP (WAIT_SHEET) -> ASK_SIDE -> PLAYER_TURN <-> ROBOT_TURN -> GAME_OVER
         PLAYER_TURN -> CONFIRM_MARK when a new mark is unclear or the wrong symbol
         CHAT / CHOOSE_GAME -> TEACH (the player explains a game of their own; buddy/agent/teach.py runs the
-        interview with Gemma 4) -> NAME_GAME (if they did not name it) -> OFFER_TAUGHT (Buddy reads the rules
+        interview with Gemma 4) -> NAME_GAME (if they did not name it) -> OFFER_TAUGHT (Penny reads the rules
         back, says what the solver found, offers a game) -> SETUP ... the same loop, with buddy/game/solver.py
-        choosing Buddy's moves. Games live in buddy/game/library.py (built in + taught, kept in runtime/games.json);
+        choosing Penny's moves. Games live in buddy/game/library.py (built in + taught, kept in runtime/games.json);
         "easy / medium / hard / impossible / adapt to me" can be said in any state.
         Hangman uses HANGMAN_SETUP -> HANGMAN_TURN -> GAME_OVER, checking known strokes without reading handwriting.
 """
@@ -94,7 +94,7 @@ class Brain:
         self.board = [""] * 9
         self.ignored: set[int] = set()
         self.pending = None
-        self.busy = False                       # a worker (setup / Buddy's move / drawing for the player) runs
+        self.busy = False                       # a worker (setup / Penny's move / drawing for the player) runs
         self.difficulty = Difficulty()
         self.events: collections.deque[Event] = collections.deque(maxlen=400)   # what happened, oldest first
         self.listeners = []                                                     # callables taking an Event
@@ -125,7 +125,7 @@ class Brain:
         self.game_started_at = None             # when the current game's play began (set_state), for the facts
         self.paper = None                       # paper routines (buddy/paper, task B) once the coordinator attaches them
         self.relearn = None                     # an interview about a hidden game the player is explaining (relearn.py)
-        self.awaiting_example = False           # Buddy asked for one example move on the paper and is watching for it
+        self.awaiting_example = False           # Penny asked for one example move on the paper and is watching for it
         paper_glue.install(self)                # buddy/paper routines + the custom_request tool (docs/round3.md)
         threading.Thread(target=self._loop, daemon=True, name="brain").start()
         threading.Thread(target=self._watch, daemon=True, name="board-watch").start()
@@ -141,7 +141,7 @@ class Brain:
 
     def say(self, text: str, wait: bool = False):
         self.last_said = text
-        self.app.transcript_add("Buddy", text)
+        self.app.transcript_add("Penny", text)
         self.emit("said", "buddy", text)
         done = self.app.say(text)
         if wait and done is not None:
@@ -213,31 +213,31 @@ class Brain:
         if st in ("PLAYER_TURN", "CONFIRM_MARK", "ROBOT_TURN"):
             free = ", ".join(NAMES[i] for i in self.legal_cells()) or "none"
             game = f"The game is {self.game_name}: {self.spec.describe()} " if self.spec else ""
-            base = (f"{game}A game is on. The player is {SYM[self.player_sym]}es, Buddy is {SYM[self.robot_sym]}s. "
+            base = (f"{game}A game is on. The player is {SYM[self.player_sym]}es, Penny is {SYM[self.robot_sym]}s. "
                     f"Squares the player may use: {free}. ")
             if st == "PLAYER_TURN":
-                return base + "It is the player's turn: they draw their mark, or say a square for Buddy to draw it."
+                return base + "It is the player's turn: they draw their mark, or say a square for Penny to draw it."
             if st == "CONFIRM_MARK":
-                return base + f"Buddy just asked: {self.last_said}"
-            return base + "Buddy is taking its turn."
-        known = f" Games Buddy knows: {self.library.spoken_list()}."
+                return base + f"Penny just asked: {self.last_said}"
+            return base + "Penny is taking its turn."
+        known = f" Games Penny knows: {self.library.spoken_list()}."
         return {
-            "IDLE": "Buddy was resting; the player just said its name.",
-            "NAME_GAME": "Buddy asked what the game the player just taught is called. Their next words are probably its name.",
-            "CHAT": "Chatting. Buddy would like to offer a game of noughts and crosses.",
-            "CHOOSE_GAME": "Buddy asked which game they would like to play, or whether they want to teach it one.",
-            "ASK_LEVEL": "Buddy asked how hard it should play: easy, medium, hard, impossible, or authentic (adaptive: it learns the player's level over a few games). Their answer is a choose_difficulty with the level; 'authentic', 'realistic', 'match me' mean adaptive.",
-            "TEACH": "The player is teaching Buddy a new game.",
-            "OFFER_TAUGHT": f"Buddy learned the player's game and asked whether they want to play it. It said: {self.last_said}",
-            "WAIT_SHEET": f"Buddy is waiting for a usable sheet of paper. It said: {self.last_said}",
-            "SETUP": f"Buddy is drawing the board for {self.game_name} on the paper.",
-            "ASK_SIDE": "The board is drawn. Buddy asked: crosses or noughts? Crosses go first.",
-            "GAME_OVER": "The game has ended. Buddy asked whether they would like another game.",
-            "DOTS_SIZE": "Buddy asked how big a dots-and-boxes board the player wants (boxes across and down, up to 6 across and 5 down).",
-            "DOTS_SETUP": "Buddy is drawing the dots for dots and boxes.",
-            "DOTS_PLAYER_TURN": "Dots and boxes: it is the player's turn to join two neighbouring dots with a line, on the paper or on the page, or by naming it ('the top side of the top left box', intent move). Buddy reads the paper with the camera.",
-            "DOTS_ROBOT_TURN": "Dots and boxes: Buddy is drawing its line.",
-            "HANGMAN_SETUP": "Buddy is preparing hangman on paper. Say yes to retry, or stop to finish.",
+            "IDLE": "Penny was resting; the player just said its name.",
+            "NAME_GAME": "Penny asked what the game the player just taught is called. Their next words are probably its name.",
+            "CHAT": "Chatting. Penny would like to offer a game of noughts and crosses.",
+            "CHOOSE_GAME": "Penny asked which game they would like to play, or whether they want to teach it one.",
+            "ASK_LEVEL": "Penny asked how hard it should play: easy, medium, hard, impossible, or authentic (adaptive: it learns the player's level over a few games). Their answer is a choose_difficulty with the level; 'authentic', 'realistic', 'match me' mean adaptive.",
+            "TEACH": "The player is teaching Penny a new game.",
+            "OFFER_TAUGHT": f"Penny learned the player's game and asked whether they want to play it. It said: {self.last_said}",
+            "WAIT_SHEET": f"Penny is waiting for a usable sheet of paper. It said: {self.last_said}",
+            "SETUP": f"Penny is drawing the board for {self.game_name} on the paper.",
+            "ASK_SIDE": "The board is drawn. Penny asked: crosses or noughts? Crosses go first.",
+            "GAME_OVER": "The game has ended. Penny asked whether they would like another game.",
+            "DOTS_SIZE": "Penny asked how big a dots-and-boxes board the player wants (boxes across and down, up to 6 across and 5 down).",
+            "DOTS_SETUP": "Penny is drawing the dots for dots and boxes.",
+            "DOTS_PLAYER_TURN": "Dots and boxes: it is the player's turn to join two neighbouring dots with a line, on the paper or on the page, or by naming it ('the top side of the top left box', intent move). Penny reads the paper with the camera.",
+            "DOTS_ROBOT_TURN": "Dots and boxes: Penny is drawing its line.",
+            "HANGMAN_SETUP": "Penny is preparing hangman on paper. Say yes to retry, or stop to finish.",
             "HANGMAN_TURN": "The player is guessing a hangman word. Say one letter, or ask for a hint. "
                             "Do not choose a letter for the player.",
         }.get(st, "") + known
@@ -249,12 +249,12 @@ class Brain:
     def facts(self, current: str | None = None) -> str:
         """Everything true now, in plain sentences the model can quote: the game and its rules, level, rating and
         record, whose turn, the board / word / dots position, the move history of this game, the games played this
-        session, the last turns of conversation, Buddy's last words, the time since the game started and what the
+        session, the last turns of conversation, Penny's last words, the time since the game started and what the
         paper routines wrote. `current` is the player's words being handled now; they are left out of the
         conversation history so the model answers them instead of echoing them. Kept under FACTS_LIMIT characters
         by shortening the oldest history first."""
         # Stable first, volatile last: the head is the same for a whole game (the game and its rules, the level and
-        # record, the session, the name), the tail changes at every turn (whose turn, the position, Buddy's last
+        # record, the session, the name), the tail changes at every turn (whose turn, the position, Penny's last
         # words, the paper, the time, the moves, the conversation). Ollama processes the planner's request again only
         # from the first token that differs from the last one, so this order keeps the head cached (toolcall.py).
         lines = [self._facts_game(), self._facts_level(), self._facts_session()]
@@ -262,7 +262,7 @@ class Brain:
             lines.append(f"The player's name is {self.player_name}.")
         tail = self._facts_position()
         if self.last_said:
-            tail.append(f'Buddy last said: "{self._short(self.last_said, 160)}"')
+            tail.append(f'Penny last said: "{self._short(self.last_said, 160)}"')
         paper = self._facts_paper()
         if paper:
             tail.append(paper)
@@ -316,7 +316,7 @@ class Brain:
     def _facts_level(self) -> str:
         d = self.difficulty
         level = "authentic (adaptive, matched to the player's rating)" if d.level == "adaptive" else d.level
-        out = f"Level: {level}; Buddy plays its best move {100 * d.strength:.0f}% of the time."
+        out = f"Level: {level}; Penny plays its best move {100 * d.strength:.0f}% of the time."
         try:
             rec = d.rating.player
             out += f" The player's {self.game_name} rating is {rec.rating:.0f} after {rec.games} rated game{'s' if rec.games != 1 else ''}."
@@ -324,7 +324,7 @@ class Brain:
             pass
         e = self.entry
         if e is not None and e.plays:
-            out += (f" Record at {e.name}: {e.plays} played, the player won {e.player_wins}, Buddy won {e.robot_wins}, "
+            out += (f" Record at {e.name}: {e.plays} played, the player won {e.player_wins}, Penny won {e.robot_wins}, "
                     f"{e.draws} drawn.")
         return out
 
@@ -333,9 +333,9 @@ class Brain:
         if st in ("PLAYER_TURN", "DOTS_PLAYER_TURN", "HANGMAN_TURN"):
             return "the player's"
         if st in ("ROBOT_TURN", "DOTS_ROBOT_TURN"):
-            return "Buddy's"
+            return "Penny's"
         if st == "CONFIRM_MARK":
-            return "the player's; Buddy is asking about their last mark"
+            return "the player's; Penny is asking about their last mark"
         if st == "GAME_OVER":
             return "nobody's, the game is over"
         return "nobody's yet"
@@ -374,22 +374,22 @@ class Brain:
             left = sum(1 for o in s.owners if not o)
             out.append(f"Dots board: {rows} by {cols} boxes ({D.n_boxes(d.n)} boxes, {D.n_edges(d.n)} lines). "
                        f"Lines drawn: {drawn} of {D.n_edges(d.n)}, {D.n_edges(d.n) - drawn} to go.")
-            out.append(f"Score: the player {s.score('P')}, Buddy {s.score('B')}, {left} box{'es' if left != 1 else ''} still open. "
-                       f"The player's boxes: {', '.join(mine) or 'none yet'}. Buddy's boxes: {', '.join(his) or 'none yet'}.")
+            out.append(f"Score: the player {s.score('P')}, Penny {s.score('B')}, {left} box{'es' if left != 1 else ''} still open. "
+                       f"The player's boxes: {', '.join(mine) or 'none yet'}. Penny's boxes: {', '.join(his) or 'none yet'}.")
             if self.last_choice is not None and s.drawn(self.last_choice.cell):
-                out.append(f"Buddy's last line: {D.edge_name(d.n, self.last_choice.cell)} ({self.last_choice.reason}).")
+                out.append(f"Penny's last line: {D.edge_name(d.n, self.last_choice.cell)} ({self.last_choice.reason}).")
         elif kind == "grid":
             ps, rs = self.player_sym, self.robot_sym
             cells = [f"{NAMES[i]} {SYM[c]}" for i, c in enumerate(self.board) if c]
             free = [NAMES[i] for i in range(9) if not self.board[i]]
-            out.append(f"The player is {PLURAL[ps]} ({ps}), Buddy is {PLURAL[rs]} ({rs}). "
+            out.append(f"The player is {PLURAL[ps]} ({ps}), Penny is {PLURAL[rs]} ({rs}). "
                        f"Board: {'; '.join(cells) if cells else 'empty'}. Free squares: {', '.join(free) or 'none'}.")
-            out.append(f"Marks: the player {self.board.count(ps)}, Buddy {self.board.count(rs)}.")
+            out.append(f"Marks: the player {self.board.count(ps)}, Penny {self.board.count(rs)}.")
             if self.last_choice is not None and self.board[self.last_choice.cell] == rs:
-                out.append(f"Buddy's last move: the {NAMES[self.last_choice.cell]} ({self.last_choice.reason}).")
+                out.append(f"Penny's last move: the {NAMES[self.last_choice.cell]} ({self.last_choice.reason}).")
             if self.state == "GAME_OVER":
                 w = winner(self.board)
-                out.append("Result: " + (f"{'the player' if w[0] == ps else 'Buddy'} won with three in a row" if w else "a draw") + ".")
+                out.append("Result: " + (f"{'the player' if w[0] == ps else 'Penny'} won with three in a row" if w else "a draw") + ".")
         return out
 
     def _this_game_events(self) -> list:
@@ -400,7 +400,7 @@ class Brain:
             if ev.kind == "game_start":
                 start = i
             elif ev.kind == "game_over" and self.state != "GAME_OVER":
-                start = i + 1          # a finished game keeps its moves while Buddy is still talking about it
+                start = i + 1          # a finished game keeps its moves while Penny is still talking about it
         return evs[start:]
 
     def _facts_moves(self) -> list[str]:
@@ -428,7 +428,7 @@ class Brain:
         turns = [ev for ev in self.events if ev.kind in ("heard", "said")]
         if current is not None and turns and turns[-1].kind == "heard" and turns[-1].text == current:
             turns = turns[:-1]
-        return [f"{'Player' if ev.kind == 'heard' else 'Buddy'}: \"{self._short(ev.text, 70)}\"" for ev in turns]
+        return [f"{'Player' if ev.kind == 'heard' else 'Penny'}: \"{self._short(ev.text, 70)}\"" for ev in turns]
 
     @staticmethod
     def _chat_line(chat: list[str], n: int) -> str:
@@ -441,7 +441,7 @@ class Brain:
         done = [ev for ev in self.events if ev.kind == "game_over"]
         if not done and self._game_kind() == "none":
             return "Games this session: none yet."
-        words = {"win": "the player won", "loss": "Buddy won", "draw": "a draw"}
+        words = {"win": "the player won", "loss": "Penny won", "draw": "a draw"}
         played = "; ".join(f"game {i + 1}: {ev.data.get('game', 'a game')}, {words.get(ev.data.get('result'), 'ended')}"
                            for i, ev in enumerate(done))
         n = len(done)
@@ -506,7 +506,7 @@ class Brain:
                        + (f" (Whisper {stt_s:.1f} s)" if source == "mic" else ""))
         if self.state == "IDLE":
             if not has_wake_word(text):
-                self.app.trace("decide", "ignored: I only listen after my name, 'Buddy'")
+                self.app.trace("decide", "ignored: I only listen after my name, 'Penny'")
                 return
             self.set_state("CHAT", "woken up by name")
         self.app.transcript_add("Player", text)
@@ -671,7 +671,7 @@ class Brain:
                 self.say(self.offer_text())
             elif intent in ("no", "stop"):
                 self.set_state("IDLE", "the player does not want to play now")
-                self.say("No problem at all. Just say Buddy whenever you fancy a game.")
+                self.say("No problem at all. Just say Penny whenever you fancy a game.")
             else:
                 self._chat_reply(text, sit)
             return
@@ -803,7 +803,7 @@ class Brain:
     def end_session(self):
         self.set_state("IDLE", "the player wants to stop")
         self.conv.reset()
-        self.say("Thank you, that was lovely. Just say Buddy whenever you want to play again.")
+        self.say("Thank you, that was lovely. Just say Penny whenever you want to play again.")
 
     # ------------------------------------------------------------------ teaching: learn a game from the player
     def start_teaching(self, why: str):
@@ -824,7 +824,7 @@ class Brain:
                 relearn_module.recognise(self.library, self._teach_text)
             if hidden is not None:
                 self.relearn = relearn_module.Relearn(hidden, text)
-                self.app.trace("understand", f"this explanation describes {hidden.name}, which Buddy is learning: "
+                self.app.trace("understand", f"this explanation describes {hidden.name}, which Penny is learning: "
                                              f"asking {relearn_module.MAX_QUESTIONS} questions about the rules")
                 self.emit("learning", "player", f"the player started explaining {hidden.name}", game=hidden.name)
                 self.say(self.relearn.ask())
@@ -853,7 +853,7 @@ class Brain:
             return
         known = self.library.same_rules(spec)
         if known is not None:
-            self.app.trace("decide", f"these are the rules of {known.name}, which Buddy already knows")
+            self.app.trace("decide", f"these are the rules of {known.name}, which Penny already knows")
             self.say(f"Oh, I know this one! Those are the rules of {known.name}.", wait=True)
             self._offer_taught(known)
             return
@@ -916,11 +916,11 @@ class Brain:
         self._offer_relearned(self.relearn.entry)
 
     def _offer_relearned(self, entry):
-        """The explained game joins the menu (library.reveal) and Buddy offers to play it with its usual engine."""
+        """The explained game joins the menu (library.reveal) and Penny offers to play it with its usual engine."""
         self.library.reveal(entry)
         self.relearn = None
         self._select(entry)
-        self.emit("learned", "buddy", f"Buddy learned {entry.name} from the player's explanation", game=entry.name)
+        self.emit("learned", "buddy", f"Penny learned {entry.name} from the player's explanation", game=entry.name)
         self.app.trace("decide", f"{entry.name} learned from the player: on the menu from now on")
         self.set_state("OFFER_TAUGHT", f"ready to play {entry.name}")
         self.say(f"Thank you, I've learned {entry.name}. Shall we play it?")
@@ -930,7 +930,7 @@ class Brain:
                       "level over a few games and play to match it.")
 
     def start_setup(self, why: str):
-        """Every game starts here. The first time in a session Buddy asks how hard to play, unless a level was
+        """Every game starts here. The first time in a session Penny asks how hard to play, unless a level was
         already chosen; then the game's own setup runs."""
         if not self.level_asked:
             self._setup_after_level = why
@@ -1035,15 +1035,15 @@ class Brain:
 
     # ------------------------------------------------------------------ the game
     def start_game(self, player_sym: str, inline: bool = False):
-        """inline: already inside a worker (the setup), so Buddy's first move runs here rather than in a new one."""
+        """inline: already inside a worker (the setup), so Penny's first move runs here rather than in a new one."""
         self.player_sym, self.robot_sym = player_sym, other(player_sym)
         self.games += 1
         self.app.trace("decide", "difficulty: " + self.difficulty.start_game(self.game_name, self.rng))
         self.emit("game_start", "buddy", f"game {self.games} of {self.game_name} started: the player is "
                   f"{SYM[player_sym]}es and goes {'first' if player_sym == 'X' else 'second'}, level {self.difficulty.level}",
                   game=self.game_name, number=self.games, player_symbol=player_sym, level=self.difficulty.level)
-        self.app.trace("decide", f"game {self.games} ({self.game_name}): player {SYM[player_sym]}es, Buddy "
-                                 f"{SYM[self.robot_sym]}s, level {self.difficulty.level}, Buddy plays the best move "
+        self.app.trace("decide", f"game {self.games} ({self.game_name}): player {SYM[player_sym]}es, Penny "
+                                 f"{SYM[self.robot_sym]}s, level {self.difficulty.level}, Penny plays the best move "
                                  f"{100 * self.difficulty.strength:.0f}% of the time")
         player_first = (self.spec.first_player == "player") if self.spec else (player_sym == "X")
         if self.spec:
@@ -1053,7 +1053,7 @@ class Brain:
             self.say(f"{PLURAL[player_sym].capitalize()} for you, and you go first. Draw your {SYM[player_sym]} in any "
                      "square, or tell me the square and I'll draw it for you.")
         else:
-            self.set_state("ROBOT_TURN", f"the player chose {SYM[player_sym]}es; Buddy goes first")
+            self.set_state("ROBOT_TURN", f"the player chose {SYM[player_sym]}es; Penny goes first")
             self.say(f"{PLURAL[player_sym].capitalize()} for you, so I'll start.")
             if inline:
                 self._robot_move()
@@ -1187,13 +1187,13 @@ class Brain:
         self.board[ch.cell] = self.robot_sym
         if self.spec is not None:
             self.gstate = State(tuple(self.board), ch.cell, self.player_sym)
-        self.emit("move", "buddy", f"Buddy put {SYM[self.robot_sym]} in the {NAMES[ch.cell]} ({ch.reason})",
+        self.emit("move", "buddy", f"Penny put {SYM[self.robot_sym]} in the {NAMES[ch.cell]} ({ch.reason})",
                   cells=[ch.cell], symbol=self.robot_sym, reason=ch.reason, board=list(self.board))
         self._seen = None
         if self._maybe_switch():
             return
         if not self._game_over():
-            self.set_state("PLAYER_TURN", "Buddy has played")
+            self.set_state("PLAYER_TURN", "Penny has played")
             self.say("Your turn.")
 
     def _game_over(self) -> bool:
@@ -1235,8 +1235,8 @@ class Brain:
         e = self.entry or self.library.find("noughts and crosses")
         self.library.record(e, result)
         self.app.trace("decide", f"{e.name}: {e.plays} played, you {e.player_wins}, me {e.robot_wins}, drawn {e.draws}")
-        self.emit("game_over", "buddy", f"{e.name} over: " + {"win": "the player won", "loss": "Buddy won", "draw": "a draw"}[result]
-                  + f" (record: {e.plays} played, player {e.player_wins}, Buddy {e.robot_wins}, drawn {e.draws})",
+        self.emit("game_over", "buddy", f"{e.name} over: " + {"win": "the player won", "loss": "Penny won", "draw": "a draw"}[result]
+                  + f" (record: {e.plays} played, player {e.player_wins}, Penny {e.robot_wins}, drawn {e.draws})",
                   game=e.name, result=result, plays=e.plays, player_wins=e.player_wins, robot_wins=e.robot_wins, draws=e.draws)
 
     def _finish_taught(self, r):
@@ -1271,7 +1271,7 @@ class Brain:
         if u.intent == "stop":
             self.end_session()
             return
-        if self.paper is not None and self.paper.defer_guess(u):   # a letter said while Buddy writes a note: queued
+        if self.paper is not None and self.paper.defer_guess(u):   # a letter said while Penny writes a note: queued
             return
         if self.busy:
             self.say("Let me finish checking the paper first.")
@@ -1439,7 +1439,7 @@ class Brain:
     def _warm_planner(self):
         """Process the planner's instructions once at start-up so the first real request is quick."""
         try:
-            self.planner.plan("hello", "Buddy is starting up.", "CHAT")
+            self.planner.plan("hello", "Penny is starting up.", "CHAT")
             self.planner.reset()
             self.app.trace("system", f"tool planner ready ({self.planner.model} via Ollama, warmed up in {self.planner.seconds:.1f} s)")
         except Exception as e:  # noqa: BLE001
@@ -1452,7 +1452,7 @@ class Brain:
         if self.state == "DOTS_SIZE" and self.dots is not None and self.dots.parse_size_text(text) is not None:
             self.app.trace("understand", f"tools: new_board(size={text!r}) (a size answer wins; no model call)")
             return [ToolCall("new_board", {"size": text})]
-        # the rules, the dots score and Buddy's last words used to be appended here; the facts block carries them
+        # the rules, the dots score and Penny's last words used to be appended here; the facts block carries them
         # now, and the 4096-token context is tight (toolcall.py)
         self.planner.facts = self.facts(current=text)         # handed over as planner state: plan() keeps its old signature
         calls = self.planner.plan(text, sit, self.state)
@@ -1608,11 +1608,11 @@ class Brain:
     def _tool_stop(self, args, text):
         if self.state in self.RESTING and not self.busy:
             self.set_state("IDLE", "the player does not want to play now")
-            self.say("No problem at all. Just say Buddy whenever you fancy a game.")
+            self.say("No problem at all. Just say Penny whenever you fancy a game.")
         else:
             self.request_switch("stop", "the player wants to stop")
 
-    # -- answers to Buddy's questions
+    # -- answers to Penny's questions
     def _tool_answer(self, args, text):
         yes = args.get("yes", True)
         if isinstance(yes, str):

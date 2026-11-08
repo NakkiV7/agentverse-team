@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from buddy.agent.tools import BY_NAME, schemas  # noqa: E402
 
-SYSTEM = """You are Buddy, a friendly robot arm playing paper games with an older adult.
+SYSTEM = """You are Penny, a friendly robot arm playing paper games with an older adult.
 Choose the tools that match what the player asks in the situation below. Use native tool calls,
 including say for a spoken reply. If there are several requests, call their tools in spoken order.
 Do not add an acknowledgement tool to an action. If the request is unclear, use say to ask one short question.

@@ -107,7 +107,7 @@ def test_target_win_rate_in_200_actual_games(skill, seed):
     """Play legal tic-tac-toe moves, alternate who starts, and count wins separately from draws.
 
     The scripted player's strength stays fixed for all 200 games. It uses the
-    same solver as Buddy, with its own constant chance of a friendly move.
+    same solver as Penny, with its own constant chance of a friendly move.
     """
     rng = random.Random(seed)
     adaptive = Difficulty(rng=rng)

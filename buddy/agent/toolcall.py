@@ -1,4 +1,4 @@
-"""The player asks for anything in their own words; Gemma 4 picks which of Buddy's tools do it.
+"""The player asks for anything in their own words; Gemma 4 picks which of Penny's tools do it.
 
 Ollama's native tool calling (POST /api/chat with "tools") is used with the model in config.TEACH_MODEL (Gemma 4).
 The model only picks tool names and arguments from buddy/agent/tools.py; the brain (brain.run_tools) checks every
@@ -51,7 +51,7 @@ NUM_PREDICT = 160             # a tool call or three short sentences; the 4096-t
 NUM_CTX = 8192                # Ollama's default context is 4096 and the facts block took the prompt to 3660 tokens before the
                               # custom_request tool joined the list; a per-request window twice that leaves room (measured: same speed)
 MAX_TURNS = 0                 # exchanges kept in the running conversation: none, the facts carry the last eight turns of
-                              # conversation and Buddy's last words, and every stored exchange moved the point where the
+                              # conversation and Penny's last words, and every stored exchange moved the point where the
                               # cached prefix ends back by a whole facts block (see the module docstring)
 # Ollama caches the prompt prefix, and the tool list is part of it. Offering only the state's tools (tools.schemas)
 # changes the prefix at every state change, so the whole prompt is processed again: measured 5.7 s a call on
@@ -59,9 +59,9 @@ MAX_TURNS = 0                 # exchanges kept in the running conversation: none
 # sees every tool and brain.run_tools refuses the ones that do not fit the state.
 OFFER_ALL_TOOLS = True
 
-SYSTEM = """You choose what Buddy does next. Buddy is a friendly robot arm that plays pen-and-paper games with \
+SYSTEM = """You choose what Penny does next. Penny is a friendly robot arm that plays pen-and-paper games with \
 older adults: it draws on a sheet of paper and talks. The player just said something; the situation says what is \
-going on, which game is being played and its rules, the score, which squares are free and what Buddy said last.
+going on, which game is being played and its rules, the score, which squares are free and what Penny said last.
 
 Call the tool or tools that do what the player asked, in the order they asked for them. Most requests need one tool.
 - A plain yes, no, "go on", "please do", "not that one" is always the answer tool. Never turn a yes into a side, \
@@ -70,8 +70,8 @@ a square or a letter.
 a game, or asking what there is to play, is list_games.
 - Never invent a move: draw_my_mark, draw_my_line and say_letter only carry a square, line or letter the player \
 themselves named, passed as they said it. If they did not name one, do not call them.
-- A board size is new_board. A level, or playing easier or harder, is set_difficulty. Asking Buddy to hold on is \
-wait. Asking Buddy to say it again is repeat. Saying their turn is done is i_am_done. Stopping or goodbye is stop.
+- A board size is new_board. A level, or playing easier or harder, is set_difficulty. Asking Penny to hold on is \
+wait. Asking Penny to say it again is repeat. Saying their turn is done is i_am_done. Stopping or goodbye is stop.
 - Use say for small talk, thanks and any QUESTION about the game, the session or the paper: one or two short, \
 warm sentences of plain British English, no emoji.
 
@@ -81,10 +81,10 @@ is written on the paper). Answer with say from the Facts only, quoting letters, 
 three sentences. Never invent a fact; if the Facts do not say, say "I don't know" kindly. The level, strength, \
 rating, record, earlier games, who has which marks, names and what was said are Facts: answer them with say. Questions about what is \
 written on the paper are answered with say, never a drawing tool. "What did I say" or "what did I ask" is a \
-question about the conversation in the Facts: answer it with say, never by repeating Buddy's own words. Use the player's name now and then if the Facts give it. "What's the score", "why did \
+question about the conversation in the Facts: answer it with say, never by repeating Penny's own words. Use the player's name now and then if the Facts give it. "What's the score", "why did \
 you play that", "give me a hint" and "what are the rules" keep their own tools."""
 
-KNOWN = "Games Buddy knows: noughts and crosses, hangman and dots and boxes."
+KNOWN = "Games Penny knows: noughts and crosses, hangman and dots and boxes."
 
 
 def user_message(text: str, situation: str, facts: str = "") -> str:
@@ -104,13 +104,13 @@ def _seed(situation: str, text: str, *calls: tuple[str, dict], facts: str = "") 
 
 
 SEEDS = (
-    _seed("Chatting. Buddy would like to offer a game.", "Buddy, let's play a game", ("list_games", {}))
-    + _seed("Buddy asked which game they would like to play.", "yes please", ("answer", {"yes": True}))
-    + _seed("Buddy asked which game they would like to play.", "let's do dots and boxes, a small one, and go easy on me",
+    _seed("Chatting. Penny would like to offer a game.", "Penny, let's play a game", ("list_games", {}))
+    + _seed("Penny asked which game they would like to play.", "yes please", ("answer", {"yes": True}))
+    + _seed("Penny asked which game they would like to play.", "let's do dots and boxes, a small one, and go easy on me",
             ("switch_game", {"name": "dots and boxes"}), ("new_board", {"size": "small"}), ("set_difficulty", {"level": "easy"}))
-    + _seed("A game of noughts and crosses is on. Buddy just asked: I can't quite read the mark in the centre. Is that your cross?",
+    + _seed("A game of noughts and crosses is on. Penny just asked: I can't quite read the mark in the centre. Is that your cross?",
             "yes", ("answer", {"yes": True}))
-    + _seed("Dots and boxes: it is the player's turn. Buddy last said: Your turn.", "how are you keeping today",
+    + _seed("Dots and boxes: it is the player's turn. Penny last said: Your turn.", "how are you keeping today",
             ("say", {"text": "Very well, thank you. It's lovely to have a game with you."}))
     + _seed("The player is guessing a hangman word.", "which letters have I tried so far?",
             ("say", {"text": "You've tried four letters so far: P, T, E and S. P and E were right; T and S were wrong."}),
@@ -118,8 +118,8 @@ SEEDS = (
                   "Right letters: E, P. Wrong letters: S, T.\nMisses: 2 of 6 used, 4 misses left.")
     + _seed("A game of noughts and crosses is on; it is the player's turn.", "how hard are you playing?",
             ("say", {"text": "I'm on easy just now, so I play my best move about a third of the time. You've won one of our two games and I've won the other."}),
-            facts="Game: noughts and crosses, on, game 3 of this session.\nLevel: easy; Buddy plays its best move 30% of the time. "
-                  "Record at noughts and crosses: 2 played, the player won 1, Buddy won 1, 0 drawn.")
+            facts="Game: noughts and crosses, on, game 3 of this session.\nLevel: easy; Penny plays its best move 30% of the time. "
+                  "Record at noughts and crosses: 2 played, the player won 1, Penny won 1, 0 drawn.")
 )
 
 

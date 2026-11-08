@@ -4,7 +4,7 @@ facts block (brain.facts()) in front of it, and the answers are checked for the 
 
     .venv/bin/python tools/chat_dry_run.py          # exits 0 when every answer checked out; prints a table
 
-The session: "Buddy, let's play hangman", "authentic please", "I'm Margaret, by the way", the letters P, T, E, S
+The session: "Penny, let's play hangman", "authentic please", "I'm Margaret, by the way", the letters P, T, E, S
 (APPLE is forced, so P and E are right, T and S wrong), "I think it might be a fruit", then the questions:
 "what letters have I asked so far", "which were wrong", "how many misses do I have left", "what's the word so
 far", "how many games have we played", "what did I say a minute ago", "what's my name", "what's the score"
@@ -55,12 +55,12 @@ def wait(cond, what, timeout=300):
     t0 = time.time()
     while not cond():
         if time.time() - t0 > timeout:
-            raise TimeoutError(f"waiting for {what}; state {b.state}; Buddy said {b.last_said!r}")
+            raise TimeoutError(f"waiting for {what}; state {b.state}; Penny said {b.last_said!r}")
         time.sleep(0.1)
 
 
 def say(text, timeout=120):
-    """Type it and wait for Buddy's reply (and for the arm to finish)."""
+    """Type it and wait for Penny's reply (and for the arm to finish)."""
     app.trace("system", f"(player says) {text}")
     previous, n = b.last_said, len(batches)
     t0 = time.time()
@@ -104,7 +104,7 @@ def guess(c):
 def player():
     try:
         wait(lambda: app.tracker.track is not None, "camera to find the sheet")
-        say("Buddy, let's play hangman.")
+        say("Penny, let's play hangman.")
         t_level = time.time()        # the level question comes from a worker, a moment after the reply
         while time.time() - t_level < 20 and b.state in ("CHAT", "CHOOSE_GAME", "IDLE"):
             time.sleep(0.1)

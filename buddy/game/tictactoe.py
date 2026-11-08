@@ -6,7 +6,7 @@ one perception read from the paper, never an internal copy.
 Solver: full minimax over the game tree (memoised), scoring every legal move: +10 - depth for a win, 0 for a draw,
 -10 + depth for a loss, so it prefers quick wins and slow losses.
 
-Adaptive difficulty: a persistent player rating chooses a varied strength each game. Buddy plays the best move
+Adaptive difficulty: a persistent player rating chooses a varied strength each game. Penny plays the best move
 with that probability; otherwise it plays a friendly move that does not let the player win on the very next turn.
 """
 from __future__ import annotations
@@ -81,7 +81,7 @@ LEVEL_WORDS = {"easy": "easy, I'll make plenty of mistakes", "medium": "medium",
 
 @dataclass
 class Difficulty:
-    """How well Buddy plays. `level` is a fixed setting (easy / medium / hard / impossible) or "adaptive",
+    """How well Penny plays. `level` is a fixed setting (easy / medium / hard / impossible) or "adaptive",
     where a per-player, per-game rating sets the challenge. Explicit strengths still work for solver callers;
     start_game selects adaptive strength when a real game begins."""
     strength: float = 0.75

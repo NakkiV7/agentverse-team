@@ -3,7 +3,7 @@
 Every utterance becomes one structured call: the reply is forced into a JSON schema (Ollama structured outputs) with
 the intent, the game, the side, the cell for a spoken move ("put mine in the top left") and, only for small talk,
 a short reply. The state machine acts on these fields; the model never chooses moves, positions or arm motions.
-The situation (what Buddy just asked, whose turn it is, which squares are free) is given with every call.
+The situation (what Penny just asked, whose turn it is, which squares are free) is given with every call.
 """
 from __future__ import annotations
 
@@ -40,27 +40,27 @@ LETTERS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ") + ["none"]
 SCHEMA["properties"]["letter"] = {"type": "string", "enum": LETTERS}
 SCHEMA["required"].append("letter")
 
-SYSTEM = """You are the language understanding of Buddy, a friendly robot arm that plays noughts and crosses \
+SYSTEM = """You are the language understanding of Penny, a friendly robot arm that plays noughts and crosses \
 (tic-tac-toe) on paper with older adults. Read what the player said, in the situation given, and return JSON.
 
 intent:
 - play_game: wants to play a game. choose_game: names a game (set game, and copy the game's name into game_name). \
-new_game: wants another game. list_games: asks which games Buddy knows.
-- choose_difficulty: asks Buddy to play easier or harder, or names a level (set level: easy, medium, hard, impossible, \
+new_game: wants another game. list_games: asks which games Penny knows.
+- choose_difficulty: asks Penny to play easier or harder, or names a level (set level: easy, medium, hard, impossible, \
 or adaptive). "go easy on me" is easy, "play your best" / "don't hold back" is impossible, "authentic" / "realistic" / \
-"match me" / "learn my level" / "adapt to me" is adaptive. A bare level word as an answer to Buddy's question counts.
+"match me" / "learn my level" / "adapt to me" is adaptive. A bare level word as an answer to Penny's question counts.
 - teach_game: ONLY when the player offers to teach or explain a game of THEIR OWN ("let me teach you one", "I know a \
 different game", "here's how mine works") or starts stating rules ("we take turns putting..."). "Let's play a game" \
 or "shall we play" is play_game, never teach_game.
-- yes / no: agrees or declines what Buddy just asked.
-- explain_rules: asks how to play. repeat: wants Buddy to say it again. stop: wants to stop or says goodbye.
+- yes / no: agrees or declines what Penny just asked.
+- explain_rules: asks how to play. repeat: wants Penny to say it again. stop: wants to stop or says goodbye.
 - choose_side: picks crosses or noughts (set side).
-- move: says where THEIR mark should go (set cell); Buddy will draw it for them.
+- move: says where THEIR mark should go (set cell); Penny will draw it for them.
 - done: says they have finished their turn ("your turn", "done", "go on").
 - smalltalk: anything social. unclear: cannot tell.
 game: tic_tac_toe for noughts and crosses / tic-tac-toe / X's and O's; other for any other game; else none.
 game_name: the game's name as the player said it (e.g. "footsteps", "the trail game"), else "". The situation lists \
-the games Buddy knows; a known game is still intent choose_game with game "other" and its name in game_name.
+the games Penny knows; a known game is still intent choose_game with game "other" and its name in game_name.
 level: only with choose_difficulty, else none.
 side: crosses or noughts only with choose_side, else none.
 cell: the square as the player sees the paper: top/middle/bottom row, left/middle/right column; the very middle \
@@ -69,7 +69,7 @@ is centre. "top" alone is top_middle, "left" alone is middle_left. none unless i
 Examples:
 "how does it work again" -> {"intent":"explain_rules","game":"none","side":"none","cell":"none","game_name":"","level":"none"}
 "go on then" -> {"intent":"yes","game":"none","side":"none","cell":"none","game_name":"","level":"none"}
-"Buddy, let's play a game" -> {"intent":"play_game","game":"none","side":"none","cell":"none","game_name":"","level":"none"}
+"Penny, let's play a game" -> {"intent":"play_game","game":"none","side":"none","cell":"none","game_name":"","level":"none"}
 "I'll be noughts" -> {"intent":"choose_side","game":"none","side":"noughts","cell":"none","game_name":"","level":"none"}
 "put mine in the top left please" -> {"intent":"move","game":"none","side":"none","cell":"top_left","game_name":"","level":"none"}
 "the middle one" -> {"intent":"move","game":"none","side":"none","cell":"centre","game_name":"","level":"none"}
@@ -99,7 +99,7 @@ SYSTEM += """\nHangman additions:
 Always include letter, using none except for say_letter. All earlier examples have letter none.
 """
 
-REPLY_SYSTEM = """You are Buddy, a friendly robot arm that plays noughts and crosses on paper with older adults. \
+REPLY_SYSTEM = """You are Penny, a friendly robot arm that plays noughts and crosses on paper with older adults. \
 Answer the player in one warm sentence of plain British English, at most 20 words, no slang, no emoji. You only \
 know noughts and crosses. Never describe actions or moves that the situation does not mention."""
 
@@ -167,6 +167,6 @@ def reply(utterance: str, situation: str) -> tuple[str, float]:
 def warm_up(conv: Conversation) -> float:
     """Load the model and process the instructions once, so the first real question is fast."""
     t0 = time.time()
-    conv.understand("hello", "Buddy is starting up.")
-    reply("hello", "Buddy is starting up.")
+    conv.understand("hello", "Penny is starting up.")
+    reply("hello", "Penny is starting up.")
     return time.time() - t0

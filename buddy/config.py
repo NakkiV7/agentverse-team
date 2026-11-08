@@ -23,7 +23,7 @@ SHEET_THICK = 0.0004                       # m
 SHEET_POSE0 = (0.21, 0.0, 1.5708)         # sheet centre x, y (m), yaw (rad): landscape in front of the arm
 TEX_PX_PER_MM = 4                          # ink texture resolution
 INK_RADIUS_MM = 0.7                        # felt-tip line half-width
-INK_RGB = (25, 30, 95)                     # Buddy's dark blue ink
+INK_RGB = (25, 30, 95)                     # Penny's dark blue ink
 PLAYER_INK_RGB = (30, 30, 34)              # the player's black pen
 HAND_PARK = (0.75, 0.25, 0.25)             # where the simulated player's hand rests (out of the camera's view)
 
@@ -69,12 +69,12 @@ WHISPER_MODEL = Path.home() / ".cache" / "whisper.cpp" / "ggml-small.en.bin"
 TTS_VOICE = "bm_george"       # Kokoro British English male voice; "bf_emma" for a female voice
 TTS_LANG = "b"                # Kokoro language code: b = British English
 TTS_SPEED = 0.92              # a little slower than default: clearer for older players
-WAKE_WORDS = ("buddy", "buddie", "budy", "bodie", "body")   # Whisper's spellings of "Buddy"
+WAKE_WORDS = ("penny", "penni", "peny", "pennie", "penney", "penn", "buddy", "buddie", "budy")   # Whisper's spellings of "Penny" (Buddy still works)
 UI_PORT = int(os.environ.get("UI_PORT", "8860"))
 
 # ---------------------------------------------------------------- teaching a new game (buddy/agent/teach.py)
 TEACH_MODEL = os.environ.get("TEACH_MODEL", "gemma4")   # Gemma 4 E4B: reliable rule extraction; gemma3:4b guesses
 
-# Games Buddy pretends not to know until the player teaches them (a demo of learning a game from scratch).
+# Games Penny pretends not to know until the player teaches them (a demo of learning a game from scratch).
 # Comma-separated names; `python -m buddy` defaults this to "dots and boxes", scripts and tests leave it empty.
 HIDE_GAMES = tuple(n.strip().lower() for n in os.environ.get("BUDDY_HIDE_GAMES", "").split(",") if n.strip())

@@ -3,7 +3,7 @@
 microphone (16 kHz) -> Silero VAD in 32 ms frames -> one utterance (speech + 0.6 s of silence) -> whisper.cpp
 (small.en) -> text -> the agent.
 
-While Buddy is speaking (and for 0.4 s after), microphone audio is dropped so it never hears itself.
+While Penny is speaking (and for 0.4 s after), microphone audio is dropped so it never hears itself.
 """
 from __future__ import annotations
 

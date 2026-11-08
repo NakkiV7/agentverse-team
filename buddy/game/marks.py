@@ -1,6 +1,6 @@
 """Strokes for the marks, in sheet millimetres (x to the player's right, y away from the player).
 
-robot_*    Buddy's marks: clean and centred in the cell.
+robot_*    Penny's marks: clean and centred in the cell.
 hand_*     the player's marks: smooth wobble, a random size, offset and slant, an O that may not quite close.
 random_*   the full range of styles used to generate the classifier's training images.
 """
@@ -167,14 +167,18 @@ def hand_edge(n, e: int, rng, spacing: float | None = None, n_pts: int = 16):
     return [pts]
 
 
-def box_claim(n, box: int, style: str = "B", spacing: float | None = None):
-    """Buddy's mark in a box it won: its initial B (two strokes), or a small circle."""
+def box_claim(n, box: int, style: str = "P", spacing: float | None = None):
+    """Penny's mark in a box it won: its initial P (two strokes), a B (the old initial), or a small circle."""
     c = box_centre_mm(n, box, spacing)
     h = BOX_MARK_MM
     if style == "circle":
         return nought(c, 0.6 * h, n=36)
     x0 = c[0] - 0.4 * h
     stem = np.array([[x0, c[1] + h], [x0, c[1] - h]])
+    if style == "P":
+        t = np.linspace(math.pi / 2, -math.pi / 2, 16)
+        bowl = np.column_stack([x0 + 0.15 * h + 0.55 * h * np.cos(t), c[1] + h / 2 + 0.5 * h * np.sin(t)])
+        return [stem, np.vstack([[x0, c[1] + h], bowl, [x0, c[1]]])]
     bumps = [np.array([x0, c[1] + h])]
     for yc, r in ((c[1] + h / 2, 0.5 * h), (c[1] - h / 2, 0.55 * h)):
         t = np.linspace(math.pi / 2, -math.pi / 2, 14)

@@ -134,7 +134,7 @@ def main():
 
         def setup(game, final_state):
             wait(lambda: app.tracker.track is not None, "camera sheet detection")
-            say(f"Buddy, let's play {game}.")
+            say(f"Penny, let's play {game}.")
             wait(lambda: b.state in ("ASK_LEVEL", "DOTS_SIZE", final_state), "level question")
             if b.state == "ASK_LEVEL":
                 say("authentic please")
@@ -210,7 +210,7 @@ def main():
                     app.scene_actions.put(("player_edge", (2, edge)))
                     wait(lambda: b.dots.state.edges != state.edges, "player line read from camera")
                     wait(lambda: settled.is_set() and not b.busy and not p.pending,
-                         "box rules and Buddy's turn")
+                         "box rules and Penny's turn")
                 else:
                     time.sleep(.05)
             wait(lambda: not b.busy and not p.pending, "final score written")

@@ -7,7 +7,7 @@ asks for a fresh sheet.
                                                     # and the session ended in IDLE; prints seconds per request
 
 The requests: "hello buddy, what can we play", "let's do dots and boxes, a small one, and don't go too hard on me",
-"the usual" (only if Buddy still asks the size), "could you draw my line on the top side of the top left box",
+"the usual" (only if Penny still asks the size), "could you draw my line on the top side of the top left box",
 "hang on a second", "what's the score", "why did you play that?", "do that last line again, it was faint",
 "give me a hint", "actually let's play hangman instead", "the letter E", "that's enough, thank you".
 """
@@ -53,12 +53,12 @@ def wait(cond, what, timeout=300):
 
 
 def ask(text, expect):
-    """Say it, wait for Buddy's reply, record which tools ran and how long it took."""
+    """Say it, wait for Penny's reply, record which tools ran and how long it took."""
     app.trace("system", f"(player says) {text}")
     said, n = b.last_said, len(batches)
     t0 = time.time()
     b.hear(text)
-    wait(lambda: len(finished) > n or (b.last_said != said and len(batches) == n), "Buddy's reply", 90)
+    wait(lambda: len(finished) > n or (b.last_said != said and len(batches) == n), "Penny's reply", 90)
     dt = time.time() - t0
     ran = batches[n] if len(batches) > n else []
     ok = any(e in ran for e in ([expect] if isinstance(expect, str) else expect))
@@ -95,7 +95,7 @@ def player():
     wait(my_turn, "the dots to be drawn", 400)
     ask("could you draw my line on the top side of the top left box", "draw_my_line")
     wait(lambda: edges_drawn() >= 1, "my line to be read back", 120)
-    wait(lambda: my_turn() and edges_drawn() >= 2, "Buddy's reply line", 180)
+    wait(lambda: my_turn() and edges_drawn() >= 2, "Penny's reply line", 180)
     time.sleep(1.0)
     ask("hang on a second", "wait")
     ask("what's the score", "tell_score")

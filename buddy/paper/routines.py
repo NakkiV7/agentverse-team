@@ -228,7 +228,7 @@ class Paper:
         if self._closed:
             return
         # Our own progress announcement must not recursively trigger a
-        # standing "when Buddy says something, write ..." instruction.
+        # standing "when Penny says something, write ..." instruction.
         if ev.kind == "said" and threading.current_thread() is self._thread:
             return
         if ev.kind in ("switch", "game_start"):

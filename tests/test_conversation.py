@@ -68,7 +68,7 @@ def finished_game(b, game, result, number):
     b.emit("game_start", "buddy", f"game {number} of {game} started", game=game, number=number)
     e = b.library.find(game)
     b.library.record(e, result)
-    words = {"win": "the player won", "loss": "Buddy won", "draw": "a draw"}[result]
+    words = {"win": "the player won", "loss": "Penny won", "draw": "a draw"}[result]
     b.emit("game_over", "buddy", f"{game} over: {words}", game=game, result=result, plays=e.plays,
            player_wins=e.player_wins, robot_wins=e.robot_wins, draws=e.draws)
 
@@ -131,7 +131,7 @@ def grid_scene(b, state="PLAYER_TURN"):
     b.board = ["X", "", "O", "", "O", "", "", "", "X"]
     for who, sym, cell, reason in (("player", "cross", "top left", None), ("buddy", "nought", "centre", "the strongest square"),
                                    ("player", "cross", "bottom right", None), ("buddy", "nought", "top right", "blocking your line")):
-        b.emit("move", who, (f"Buddy put {sym} in the {cell} ({reason})" if who == "buddy" else f"the player put {sym} in the {cell}"),
+        b.emit("move", who, (f"Penny put {sym} in the {cell} ({reason})" if who == "buddy" else f"the player put {sym} in the {cell}"),
                cells=[cell], symbol=sym, board=list(b.board), **({"reason": reason} if reason else {}))
     b.last_choice = Choice(2, [2], {2: 0, 1: -1}, True, "blocking your line")
     talk(b, "you're not making this easy", "I'm playing gently, I promise. Your turn.")
@@ -153,7 +153,7 @@ def grid_over_scene(b):
 
 
 def dots_scene(b):
-    """A 2 by 2 game: five lines drawn, the player owns the top left box, the player to move, Buddy drew last."""
+    """A 2 by 2 game: five lines drawn, the player owns the top left box, the player to move, Penny drew last."""
     b._select(b.library.find("dots and boxes"))
     b.difficulty.set_level("medium")
     b.dots = brain_module.DotsPlay(b, 2)
@@ -162,15 +162,15 @@ def dots_scene(b):
     b.emit("game_start", "buddy", "game 1 of dots and boxes started", game="dots and boxes", number=1)
     b.set_state("DOTS_PLAYER_TURN", "test")
     b.game_started_at = time.time() - 150
-    # edges of the top left box: top 0, bottom 2, left 6, right 7; Buddy's safe line is the right side of the top right box (8)
+    # edges of the top left box: top 0, bottom 2, left 6, right 7; Penny's safe line is the right side of the top right box (8)
     for who, e in (("player", 0), ("buddy", 2), ("player", 6), ("buddy", 8), ("player", 7)):
         boxes = D.completed_by(2, s.edges, e)
         s = D.play(s, e)
-        text = f"{'the player' if who == 'player' else 'Buddy'} drew {D.edge_name(2, e)}"
+        text = f"{'the player' if who == 'player' else 'Penny'} drew {D.edge_name(2, e)}"
         b.emit("line", who, text, edge=e, name=D.edge_name(2, e), boxes=list(boxes), score={"player": s.score("P"), "buddy": s.score("B")})
         if boxes:
-            b.emit("box", who, f"{'the player' if who == 'player' else 'Buddy'} closed the {D.box_name(2, boxes[0])}", boxes=list(boxes))
-    # make the position as described: the player closed the top left box with its right side (7) and Buddy answered with 8
+            b.emit("box", who, f"{'the player' if who == 'player' else 'Penny'} closed the {D.box_name(2, boxes[0])}", boxes=list(boxes))
+    # make the position as described: the player closed the top left box with its right side (7) and Penny answered with 8
     b.dots.state = D.State(2, s.edges, ("P", "", "", ""), "P", ("P", "B"))
     b.last_choice = Choice(8, [8], {8: 0}, True, "a safe line that gives nothing away")
     b.say("Your turn.")
@@ -178,7 +178,7 @@ def dots_scene(b):
 
 
 def dots_big_scene(b):
-    """A 3 across by 2 down game just started: two lines, no boxes, Buddy to move."""
+    """A 3 across by 2 down game just started: two lines, no boxes, Penny to move."""
     b._select(b.library.find("dots and boxes"))
     b.dots = brain_module.DotsPlay(b, (2, 3))
     s = D.State.start((2, 3), ("P", "B"), first="P")
@@ -189,7 +189,7 @@ def dots_big_scene(b):
     b.set_state("DOTS_ROBOT_TURN", "test")
     b.game_started_at = time.time() - 30
     b.emit("line", "player", f"the player drew {D.edge_name((2, 3), 0)}", edge=0, name=D.edge_name((2, 3), 0), boxes=[])
-    b.emit("line", "buddy", f"Buddy drew {D.edge_name((2, 3), 4)}", edge=4, name=D.edge_name((2, 3), 4), boxes=[])
+    b.emit("line", "buddy", f"Penny drew {D.edge_name((2, 3), 4)}", edge=4, name=D.edge_name((2, 3), 4), boxes=[])
     b.say("Let me think about my line.")
     return b
 
@@ -226,7 +226,7 @@ def test_hangman_facts_tell_the_letters_right_wrong_and_misses(brain):
     assert "Level: authentic (adaptive" in f and "62% of the time" in f and "rating is" in f
     assert "Moves this game, in order: 1. the player guessed P: right" in f
     assert "Conversation so far" in f and 'Player: "N"' in f
-    assert 'Buddy last said: "There is no N. 3 misses left. Say another letter."' in f
+    assert 'Penny last said: "There is no N. 3 misses left. Say another letter."' in f
     assert len(f) <= Brain.FACTS_LIMIT
 
 
@@ -242,15 +242,15 @@ def test_fresh_hangman_says_none_tried_and_the_length(brain):
 def test_grid_facts_name_every_square(brain):
     grid_scene(brain)
     f = brain.facts()
-    assert "The player is crosses (X), Buddy is noughts (O)." in f
+    assert "The player is crosses (X), Penny is noughts (O)." in f
     assert "Board: top left cross; top right nought; centre nought; bottom right cross." in f
     assert "Free squares: top middle, middle left, middle right, bottom left, bottom middle." in f
-    assert "Marks: the player 2, Buddy 2." in f
-    assert "Buddy's last move: the top right (blocking your line)." in f
-    assert "Level: easy; Buddy plays its best move 30% of the time." in f
-    assert "Record at noughts and crosses: 2 played, the player won 1, Buddy won 1, 0 drawn." in f
-    assert "Games this session: 2 finished (game 1: noughts and crosses, Buddy won; game 2: noughts and crosses, the player won); this noughts and crosses is game 3, still going." in f
-    assert "4. Buddy put nought in the top right (blocking your line)" in f
+    assert "Marks: the player 2, Penny 2." in f
+    assert "Penny's last move: the top right (blocking your line)." in f
+    assert "Level: easy; Penny plays its best move 30% of the time." in f
+    assert "Record at noughts and crosses: 2 played, the player won 1, Penny won 1, 0 drawn." in f
+    assert "Games this session: 2 finished (game 1: noughts and crosses, Penny won; game 2: noughts and crosses, the player won); this noughts and crosses is game 3, still going." in f
+    assert "4. Penny put nought in the top right (blocking your line)" in f
 
 
 def test_grid_over_facts_give_the_result(brain):
@@ -266,8 +266,8 @@ def test_dots_facts_count_lines_and_boxes(brain):
     dots_scene(brain)
     f = brain.facts()
     assert "Dots board: 2 by 2 boxes (4 boxes, 12 lines). Lines drawn: 5 of 12, 7 to go." in f
-    assert "Score: the player 1, Buddy 0, 3 boxes still open. The player's boxes: top left box. Buddy's boxes: none yet." in f
-    assert "Buddy's last line: the right side of the top right box (a safe line that gives nothing away)." in f
+    assert "Score: the player 1, Penny 0, 3 boxes still open. The player's boxes: top left box. Penny's boxes: none yet." in f
+    assert "Penny's last line: the right side of the top right box (a safe line that gives nothing away)." in f
     assert "the player closed the top left box" in f
 
 
@@ -275,7 +275,7 @@ def test_dots_big_board_and_buddys_turn(brain):
     dots_big_scene(brain)
     f = brain.facts()
     assert "Dots board: 2 by 3 boxes (6 boxes, 17 lines). Lines drawn: 2 of 17" in f
-    assert "Whose turn: Buddy's." in f
+    assert "Whose turn: Penny's." in f
 
 
 def test_no_game_facts_still_describe_the_session(brain):
@@ -290,17 +290,17 @@ def test_current_turn_is_left_out_of_the_conversation(brain):
     without = brain.facts(current="what letters have I asked so far")
     assert "what letters have I asked so far" in with_it
     assert "what letters have I asked so far" not in without
-    assert 'Player: "N" | Buddy: "There is no N.' in without
+    assert 'Player: "N" | Penny: "There is no N.' in without
 
 
 def test_facts_stay_under_the_limit_with_a_long_history(brain):
     hangman_scene(brain)
     for i in range(40):
-        talk(brain, f"player line number {i} with a few extra words to make it long", f"Buddy reply number {i}, also padded out a bit")
+        talk(brain, f"player line number {i} with a few extra words to make it long", f"Penny reply number {i}, also padded out a bit")
         brain.emit("guess", "player", f"the player guessed Q: wrong (word so far _ P P _ E, 3 of 6 misses) padding {i}")
     f = brain.facts()
     assert len(f) <= Brain.FACTS_LIMIT
-    assert "Buddy reply number 39" in f and "Moves this game" in f
+    assert "Penny reply number 39" in f and "Moves this game" in f
     assert "player line number 0 " not in f
 
 
@@ -340,7 +340,7 @@ def test_facts_put_the_stable_lines_first_and_the_volatile_ones_last(brain):
     hangman_scene(brain)
     f = brain.facts()
     order = [f.index(k) for k in ("Game: hangman", "Level:", "Games this session", "The player's name", "Whose turn",
-                                  "Word so far", "Buddy last said", "This game started", "Moves this game", "Conversation so far")]
+                                  "Word so far", "Penny last said", "This game started", "Moves this game", "Conversation so far")]
     assert order == sorted(order), f
 
 

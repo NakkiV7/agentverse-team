@@ -2,11 +2,11 @@
 
 States: DOTS_SIZE (which board; "three by four", up to 5 down by 6 across) -> DOTS_SETUP (find the sheet, draw the
 dot grid, check it) -> DOTS_PLAYER_TURN (watch the paper for the player's new line; closing a box gives them
-another go) <-> DOTS_ROBOT_TURN (solver picks a line, Buddy draws it, reads it back, claims boxes) -> GAME_OVER.
+another go) <-> DOTS_ROBOT_TURN (solver picks a line, Penny draws it, reads it back, claims boxes) -> GAME_OVER.
 
 The player draws on the real paper or on the demo page's straightened sheet, or says a line ("the top of the top
-left box") and Buddy draws it for them. A line that is too short to count is finished by Buddy. Ink that is not a
-line between two neighbouring dots (a scribble, a diagonal, a line through a dot) means a fresh sheet: Buddy asks for
+left box") and Penny draws it for them. A line that is too short to count is finished by Penny. Ink that is not a
+line between two neighbouring dots (a scribble, a diagonal, a line through a dot) means a fresh sheet: Penny asks for
 one and redraws the dots, every line drawn so far and every claimed box, then play goes on from the last proper move.
 Talking is fine at any point: questions, difficulty, the rules, small talk.
 """
@@ -27,7 +27,7 @@ from ..perception.sheet import ink_fraction
 
 PLAYER, BUDDY = "P", "B"
 STATES = ("DOTS_SIZE", "DOTS_SETUP", "DOTS_PLAYER_TURN", "DOTS_ROBOT_TURN")
-SHORT_COVERAGE = 0.3           # a line with at least this much of its length inked is "started": Buddy finishes it
+SHORT_COVERAGE = 0.3           # a line with at least this much of its length inked is "started": Penny finishes it
 MESS_LOOKS = 4                 # unsure or unexplained ink seen this many looks in a row (about 2 s) = not a proper line
 MESS_EXTRA_INK = 0.012         # ink in the board area beyond what dots, lines and marks explain, as a fraction of the area
 
@@ -178,11 +178,11 @@ class DotsPlay:
                          on_stroke=lambda k, m, edges=edges: app.trace("act", f"line {k + 1}/{len(edges)}: {D.edge_name(n, edges[k])}")).done.wait()
             for k, owner in enumerate(restore.owners):
                 if owner == BUDDY:
-                    app.draw("my B", M.box_claim(n, k)).done.wait()
+                    app.draw("my P", M.box_claim(n, k)).done.wait()
                 elif owner == PLAYER:
                     app.draw("your box", M.box_claim(n, k, style="circle")).done.wait()
             app.trace("decide", f"restored the position: {len(edges)} lines, player {restore.score(PLAYER)} boxes, "
-                                f"Buddy {restore.score(BUDDY)}; {'the player' if restore.to_move == PLAYER else 'Buddy'} to move")
+                                f"Penny {restore.score(BUDDY)}; {'the player' if restore.to_move == PLAYER else 'Penny'} to move")
         else:
             app.trace("decide", "difficulty: " + b.difficulty.start_game(b.game_name, b.rng))
             self.state = D.State.start(n, (PLAYER, BUDDY), first=PLAYER)
@@ -196,7 +196,7 @@ class DotsPlay:
         if b._maybe_switch():
             return
         if self.state.to_move == BUDDY:
-            b.set_state("DOTS_ROBOT_TURN", "restored; Buddy to move")
+            b.set_state("DOTS_ROBOT_TURN", "restored; Penny to move")
             self.say("There we are, back where we were. My turn.")
             b._worker(self.robot_turn)
         else:
@@ -275,7 +275,7 @@ class DotsPlay:
             self.say("Your turn again.")
 
     def _finish_short(self, e: int, coverage: float):
-        """A line that was started but is too short to count: Buddy completes it and counts it as the player's."""
+        """A line that was started but is too short to count: Penny completes it and counts it as the player's."""
         self.app.trace("decide", f"{D.edge_name(self.n, e)} is only {100 * coverage:.0f}% drawn: finishing it for the player")
         self.say(f"That line looks a little short. Let me finish it for you.")
         self.b._worker(self._draw_for_player, e)
@@ -357,7 +357,7 @@ class DotsPlay:
         self._finish_short(e, cov)
         return True
 
-    # -- Buddy's turn ----------------------------------------------------------------------------------
+    # -- Penny's turn ----------------------------------------------------------------------------------
     def robot_turn(self):
         app, b, n = self.app, self.b, self.n
         while self.state.to_move == BUDDY and D.result(self.state) is None and b.state == "DOTS_ROBOT_TURN":
@@ -387,16 +387,16 @@ class DotsPlay:
                 self.say("My line isn't showing up on the paper. Let me try once more later.")
             boxes = D.completed_by(n, self.state.edges, ch.cell)
             self.state = D.play(self.state, ch.cell)
-            b.emit("line", "buddy", f"Buddy drew {D.edge_name(n, ch.cell)} ({ch.reason})", edge=ch.cell,
+            b.emit("line", "buddy", f"Penny drew {D.edge_name(n, ch.cell)} ({ch.reason})", edge=ch.cell,
                    name=D.edge_name(n, ch.cell), boxes=list(boxes), reason=ch.reason,
                    score={"player": self.state.score(PLAYER), "buddy": self.state.score(BUDDY)})
             if boxes:
                 names = " and ".join(D.box_name(n, k) for k in boxes)
-                b.emit("box", "buddy", f"Buddy closed the {names}", boxes=list(boxes))
-                app.trace("decide", f"that closes the {names}: Buddy goes again")
-                self.say(f"That closes the {names}, so it's mine. I'll put my B in it and go again.")
+                b.emit("box", "buddy", f"Penny closed the {names}", boxes=list(boxes))
+                app.trace("decide", f"that closes the {names}: Penny goes again")
+                self.say(f"That closes the {names}, so it's mine. I'll put my P in it and go again.")
                 for k in boxes:
-                    app.draw("my B", M.box_claim(n, k)).done.wait()
+                    app.draw("my P", M.box_claim(n, k)).done.wait()
         _, rect, _ = self.look()
         if rect is not None:
             self._baseline_ink = self.board_ink(rect)
@@ -407,7 +407,7 @@ class DotsPlay:
         elif b.state == "DOTS_ROBOT_TURN":
             self._last_mask = None
             self._odd_looks = 0
-            b.set_state("DOTS_PLAYER_TURN", "Buddy has drawn its line")
+            b.set_state("DOTS_PLAYER_TURN", "Penny has drawn its line")
             self.say("Your turn.")
 
     # -- the end ----------------------------------------------------------------------------------
@@ -415,7 +415,7 @@ class DotsPlay:
         self.running = False
         p, q = self.state.score(PLAYER), self.state.score(BUDDY)
         r = D.result(self.state)
-        self.b.set_state("GAME_OVER", f"dots and boxes: all lines drawn, player {p}, Buddy {q}")
+        self.b.set_state("GAME_OVER", f"dots and boxes: all lines drawn, player {p}, Penny {q}")
         if r[0] == "draw":
             self.say(f"Every line is drawn and we have {p} boxes each. A draw!")
             result = "draw"
@@ -471,5 +471,5 @@ class DotsPlay:
     def _score_line(self) -> str:
         if not self.state:
             return ""
-        return (f"Score so far: the player {self.state.score(PLAYER)} boxes, Buddy {self.state.score(BUDDY)}; "
+        return (f"Score so far: the player {self.state.score(PLAYER)} boxes, Penny {self.state.score(BUDDY)}; "
                 f"{bin(self.state.edges).count('1')} of {D.n_edges(self.n)} lines drawn.")
