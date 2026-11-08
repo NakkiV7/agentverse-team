@@ -2,6 +2,26 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov, 12:10: Buddy learns dots and boxes from the player, from scratch (demo mode)
+
+- **What it does**: `python -m buddy` now starts with dots and boxes hidden (`BUDDY_HIDE_GAMES`, default "dots and
+  boxes" for the live demo, empty for scripts and tests): it is not on the menu, not in the facts, and "let's play
+  dots and boxes" gets "I'd love to learn it". When the player explains the game in their own words (a paragraph in
+  the style of a chat assistant works), `buddy/agent/relearn.py` recognises which hidden game it is from the words,
+  Gemma 4 asks two short clarifying questions grounded in the explanation ("Does the player who completes a box get
+  another turn immediately?"), reads the rules back ("So, if I've understood: ..."), asks the player to join two dots
+  with a line on the paper and watches the camera for the new ink, then the game joins the menu and the ordinary
+  dots-and-boxes engine plays it (level, size, dots, lines read back). Questions and the summary are validated; a
+  bad model answer falls back to a fixed question, so the flow never stalls.
+- **Measured** (`tools/learn_dots_dry_run.py`, simulator): menu without dots and boxes, teach invite, two model
+  questions in 1.4 and 1.2 s, rules read back in 1.5 s (0 fallbacks), example line seen on the camera (0.17% new
+  ink), game revealed, authentic level, two by two, dots drawn, a spoken line drawn and read back, Buddy's reply:
+  **53 s wall, exit 0**. `tests/test_relearn.py` 5 tests (hidden menu, reveal, recognition only while hidden, fixed
+  fallbacks, repeated-question rejection).
+- **To run the demo flow**: "Buddy, what games can we play?" (no dots and boxes), "I want to teach you a new game",
+  paste or say the explanation, answer the two questions, draw a line on the paper (or say skip), "yes", level,
+  size, play. `BUDDY_HIDE_GAMES=""` restores the normal menu.
+
 ## 8 Nov, 11:20: faster writing and faster answers, merged (branch `agent/tools` = `games/integration`)
 
 - **What changed**: the paper routines write one arm job per row instead of per letter, with the camera check per

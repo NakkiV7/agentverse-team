@@ -74,3 +74,7 @@ UI_PORT = int(os.environ.get("UI_PORT", "8860"))
 
 # ---------------------------------------------------------------- teaching a new game (buddy/agent/teach.py)
 TEACH_MODEL = os.environ.get("TEACH_MODEL", "gemma4")   # Gemma 4 E4B: reliable rule extraction; gemma3:4b guesses
+
+# Games Buddy pretends not to know until the player teaches them (a demo of learning a game from scratch).
+# Comma-separated names; `python -m buddy` defaults this to "dots and boxes", scripts and tests leave it empty.
+HIDE_GAMES = tuple(n.strip().lower() for n in os.environ.get("BUDDY_HIDE_GAMES", "").split(",") if n.strip())

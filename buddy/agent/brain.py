@@ -53,6 +53,7 @@ from ..game import dotsboxes as D
 from . import tools
 from .toolcall import Planner, ToolCall
 from . import paper_glue
+from . import relearn as relearn_module
 from dataclasses import dataclass, field
 
 
@@ -123,6 +124,8 @@ class Brain:
         self.player_name = None                 # "I'm Margaret": remembered for the session and used in replies
         self.game_started_at = None             # when the current game's play began (set_state), for the facts
         self.paper = None                       # paper routines (buddy/paper, task B) once the coordinator attaches them
+        self.relearn = None                     # an interview about a hidden game the player is explaining (relearn.py)
+        self.awaiting_example = False           # Buddy asked for one example move on the paper and is watching for it
         paper_glue.install(self)                # buddy/paper routines + the custom_request tool (docs/round3.md)
         threading.Thread(target=self._loop, daemon=True, name="brain").start()
         threading.Thread(target=self._watch, daemon=True, name="board-watch").start()
@@ -799,9 +802,23 @@ class Brain:
     def start_teaching(self, why: str):
         self.set_state("TEACH", why)
         self.teacher = Teacher()
+        self.relearn = None
+        self.awaiting_example = False
         self.say(TEACH_INVITE)
 
     def _teach(self, text: str):
+        if self.relearn is None and self.teacher.questions == 0:
+            hidden = relearn_module.recognise(self.library, text)
+            if hidden is not None:
+                self.relearn = relearn_module.Relearn(hidden, text)
+                self.app.trace("understand", f"this explanation describes {hidden.name}, which Buddy is learning: "
+                                             f"asking {relearn_module.MAX_QUESTIONS} questions about the rules")
+                self.emit("learning", "player", f"the player started explaining {hidden.name}", game=hidden.name)
+                self.say(self.relearn.ask())
+                return
+        if self.relearn is not None:
+            self._relearn_step(text)
+            return
         turn = self.teacher.hear(text)
         d = turn.draft
         self.app.trace("understand", f"Gemma 4 ({self.teacher.model}): grid {d.rows}x{d.cols}, placement {d.placement}, "
@@ -836,6 +853,64 @@ class Brain:
         self.pending_spec = spec
         self.set_state("NAME_GAME", "the game needs a name to be remembered by")
         self.say("What shall we call it?")
+
+    def _relearn_step(self, text: str):
+        """The player answered one of the questions about the game they are explaining."""
+        r = self.relearn
+        if self.awaiting_example:
+            if re.search(r"\b(skip|can't|cannot|no pen|never mind|just play|go on)\b", text.lower()):
+                self._skip_example = True
+            else:
+                self.say("Draw it whenever you're ready, or say skip and we'll go straight to the game.")
+            return
+        r.answer(text)
+        if not r.done_asking:
+            self.say(r.ask())
+            return
+        summary = r.summary()
+        self.app.trace("understand", f"Gemma 4 ({r.model}): rules read back after {r.questions} questions "
+                                     f"({r.seconds:.1f} s, {r.used_fallback} fixed fallbacks)")
+        self.say(summary, wait=True)
+        self.say("Before we start, could you join two dots with a line anywhere on the paper, so I can see what a "
+                 "move looks like?")
+        self.awaiting_example = True
+        self._skip_example = False
+        self._worker(self._watch_example)
+
+    def _watch_example(self):
+        """Watch the paper for the example move: new ink anywhere on the sheet, seen with the hand away."""
+        app = self.app
+        base, seen, t_end = None, False, time.time() + 90
+        while time.time() < t_end and not self._skip_example and self.state == "TEACH":
+            look = app.look(timeout=5)
+            if look is None or look.track is None or not look.track.visible:
+                time.sleep(0.3)
+                continue
+            ink = ink_fraction(look.rgb, app.cam, look.track.pose, 100.0)
+            if base is None:
+                base = ink
+                app.trace("see", f"ink on the sheet before the example: {100 * ink:.2f}%")
+            elif ink - base > 0.0006:
+                app.trace("see", f"new ink on the sheet: {100 * ink:.2f}% (was {100 * base:.2f}%): the example move")
+                seen = True
+                break
+            time.sleep(0.5)
+        self.awaiting_example = False
+        if self.state != "TEACH" or self.relearn is None:
+            return
+        self.say("I see it: a line between two dots. That's a move, lovely." if seen else
+                 "No matter, I can picture it.")
+        self._offer_relearned(self.relearn.entry)
+
+    def _offer_relearned(self, entry):
+        """The explained game joins the menu (library.reveal) and Buddy offers to play it with its usual engine."""
+        self.library.reveal(entry)
+        self.relearn = None
+        self._select(entry)
+        self.emit("learned", "buddy", f"Buddy learned {entry.name} from the player's explanation", game=entry.name)
+        self.app.trace("decide", f"{entry.name} learned from the player: on the menu from now on")
+        self.set_state("OFFER_TAUGHT", f"ready to play {entry.name}")
+        self.say(f"Thank you, I've learned {entry.name}. Shall we play it?")
 
     # ------------------------------------------------------------------ setup: find the sheet, draw the board
     LEVEL_QUESTION = ("How hard shall I play? Easy, medium, hard or impossible. Or say authentic, and I'll learn your "

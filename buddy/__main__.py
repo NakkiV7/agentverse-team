@@ -4,7 +4,12 @@ Opens the demo page at http://localhost:8860. Say (or type) "Buddy, let's play a
 Needs the Ollama server running (`ollama serve` or the Ollama app) with gemma3:4b pulled.
 """
 import argparse
+import os
 import webbrowser
+
+# The live demo starts with dots and boxes unknown: the player teaches it, Buddy asks two questions, sees an example
+# line on the paper, then plays it. Scripts and tests do not set this, so the game is known to them.
+os.environ.setdefault("BUDDY_HIDE_GAMES", "dots and boxes")
 
 from . import config as C
 

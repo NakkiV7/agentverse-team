@@ -61,11 +61,29 @@ def _norm(s: str) -> str:
     return re.sub(r"[^a-z0-9 ]+", " ", s.lower()).strip()
 
 
+from .. import config as C
+
+
 class Library:
-    def __init__(self, path: Path = GAMES_FILE):
+    def __init__(self, path: Path = GAMES_FILE, hidden=None):
         self.path = Path(path)
         self.entries: list[Entry] = [Entry(**{**asdict(e), "spec": e.spec}) for e in BUILTIN]
+        # Games Buddy pretends not to know until taught (config.HIDE_GAMES): left out of the menu, the facts and
+        # name matching, so "let's play dots and boxes" leads to "teach me", not to a game. reveal() ends that.
+        self.hidden: set[str] = set(_norm(n) for n in (C.HIDE_GAMES if hidden is None else hidden))
         self.load()
+
+    def is_hidden(self, entry: Entry) -> bool:
+        return _norm(entry.name) in self.hidden
+
+    def visible(self) -> list[Entry]:
+        return [e for e in self.entries if not self.is_hidden(e)]
+
+    def reveal(self, entry: Entry) -> Entry:
+        """The player has taught Buddy this game: it joins the menu and counts as taught today."""
+        self.hidden.discard(_norm(entry.name))
+        entry.taught_at = time.strftime("%Y-%m-%d %H:%M")
+        return entry
 
     # -- persistence -------------------------------------------------------------------------------
     def load(self) -> None:
@@ -104,24 +122,25 @@ class Library:
         return e
 
     def names(self) -> list[str]:
-        return [e.name for e in self.entries]
+        return [e.name for e in self.visible()]
 
     def learned(self) -> list[Entry]:
         return [e for e in self.entries if not e.builtin]
 
-    def find(self, text: str) -> Entry | None:
+    def find(self, text: str, include_hidden: bool = False) -> Entry | None:
         """Match what the player said to a game: exact name or alias, then a contained name, then a close match."""
         t = _norm(text)
         if not t:
             return None
-        for e in self.entries:
+        entries = self.entries if include_hidden else self.visible()
+        for e in entries:
             if t == _norm(e.name) or t in (_norm(a) for a in e.aliases):
                 return e
-        for e in sorted(self.entries, key=lambda e: -len(e.name)):
+        for e in sorted(entries, key=lambda e: -len(e.name)):
             if _norm(e.name) in t or any(_norm(a) in t for a in e.aliases):
                 return e
-        keys = {_norm(e.name): e for e in self.entries}
-        for e in self.entries:
+        keys = {_norm(e.name): e for e in entries}
+        for e in entries:
             for a in e.aliases:
                 keys.setdefault(_norm(a), e)
         close = difflib.get_close_matches(t, list(keys), n=1, cutoff=0.75)
