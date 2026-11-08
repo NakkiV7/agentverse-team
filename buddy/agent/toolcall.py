@@ -122,6 +122,27 @@ def _kwargs(text: str) -> dict:
     return out
 
 
+def _named_in_text(content: str) -> ToolCall | None:
+    """Content that is a tool name, optionally followed by one argument in words: the argument goes to the tool's
+    first parameter. Seen from Gemma 4 now and then instead of a native call."""
+    m = re.match(r"^\s*[`'\"]?([a-z_]+)[`'\"]?\s*[:=\-]?\s*(.*?)\s*[.`'\"]*\s*$", content, re.S)
+    if not m or m.group(1) not in tools.BY_NAME:
+        return None
+    tool, arg = tools.BY_NAME[m.group(1)], m.group(2).strip().strip("\"'`()")
+    if not tool.params:
+        return ToolCall(tool.name) if not arg else None  # "wait" alone, not "wait, I need to think about that"
+    if not arg:
+        return ToolCall(tool.name)
+    if "\n" in arg or len(arg) > 80 or len(arg.split()) > 6:
+        return None                                     # a sentence, not an argument
+    key = (tool.required or tuple(tool.params))[0]
+    kind = tool.params[key].get("type")
+    value: object = arg
+    if kind == "boolean":
+        value = arg.lower() in ("true", "yes", "1")
+    return ToolCall(tool.name, {key: value})
+
+
 def parse_message(message: dict, state: str) -> list[ToolCall] | None:
     """Tool calls from an Ollama chat message. Unknown tool names are dropped; plain content becomes say(text);
     nothing usable -> None."""
@@ -133,14 +154,15 @@ def parse_message(message: dict, state: str) -> list[ToolCall] | None:
             calls.append(ToolCall(name, _args(fn.get("arguments"))))
     content = str(message.get("content") or "").strip()
     if not calls and content:
-        if content.strip("` .") in tools.BY_NAME:               # a bare tool name
-            return [ToolCall(content.strip("` ."))]
         for m in CALL_TEXT.finditer(content):           # "switch_game(name=\"hangman\")" written as text
             name = m.group(1)
             if name in tools.BY_NAME:
                 calls.append(ToolCall(name, _kwargs(m.group(2))))
         if calls:
             return calls
+        named = _named_in_text(content)                         # "stop", "switch_game hangman", "say_letter: E"
+        if named is not None:
+            return [named]
         # some answers come back as JSON text instead of a tool call
         m = re.search(r"\{.*\}", content, re.S)
         if m:

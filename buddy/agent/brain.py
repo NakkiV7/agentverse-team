@@ -43,7 +43,7 @@ from ..game.solver import analyse
 from ..game.tictactoe import LEVELS, NAMES, Difficulty, choose, full, other, winner
 from ..motion.drawing import grid_lines_mm, sheet_to_world
 from ..perception.sheet import check_lines, ink_fraction
-from .llm import Conversation, reply
+from .llm import Conversation, Understanding, reply
 from .teach import Teacher
 from ..game.hangman import Hangman, WORDS, letter as hangman_letter
 from .dots_brain import STATES as DOTS_STATES, DotsPlay
@@ -1228,7 +1228,9 @@ class Brain:
 
     def _tool_draw_my_mark(self, args, text):
         cell = str(args.get("cell") or "").strip().lower()
-        idx = tools.CELLS.index(cell) if cell in tools.CELLS else self._cell_index(cell or text)
+        idx = tools.CELLS.index(cell) if cell in tools.CELLS else self._cell_index(cell)
+        if idx is None:
+            idx = self._cell_index(text)
         if idx is None:
             self.say("Which square? Say the row and the column, like the top left, or the centre.")
             return
