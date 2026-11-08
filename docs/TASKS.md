@@ -138,7 +138,7 @@ Owns everything the audience sees and hears.
       push-to-talk key. Wake word "Buddy" can be a plain substring check on the transcript.
 - [ ] **Pitch:** 3-minute demo script, the one-page technical summary, screen recording of the stream page.
 
-Files: `buddy/voice/*`, `buddy/ui/*`, `docs/pitch.md`.
+Files: `buddy/voice/*`, `buddy/ui/*`.
 
 ---
 
