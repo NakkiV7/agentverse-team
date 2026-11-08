@@ -17,6 +17,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import sys
 import time
 from urllib.error import URLError
@@ -37,6 +38,28 @@ The executor checks state, legality, reach and safety before doing anything. Nev
 Use short, plain British English, without emoji.
 """
 CRITICAL = ("stop", "switch_game", "say_letter")
+
+
+def argument_equal(tool: str, key: str, got, expected) -> bool:
+    if type(got) is not type(expected):
+        return False
+    if (tool, key) not in (("new_board", "size"), ("draw_my_line", "where")):
+        return got == expected
+    # These fields carry spoken descriptions, not enums. Case, punctuation and
+    # courtesy words do not change a board size or line. Preserve the order and
+    # repetition of every direction, number and location word; never accept a
+    # subset, which could silently discard a second requested edge.
+    filler = set("the a please can could would you we have draw put stick mine my for me "
+                 "along of side at on and line".split())
+    if tool == "new_board":
+        filler.update(("box", "boxes"))
+    numbers = dict(zip("one two three four five six seven eight nine ten".split(), map(str, range(1, 11))))
+
+    def words(value):
+        return [numbers.get(word, word) for word in re.findall(r"[a-z0-9]+", value.casefold())
+                if word not in filler]
+
+    return isinstance(got, str) and bool(words(expected)) and words(got) == words(expected)
 
 
 def load_cases(path: Path) -> list[dict]:
@@ -92,7 +115,7 @@ def chat(url: str, case: dict, timeout: float) -> tuple[dict, float]:
 
 
 def check(case: dict, payload: dict) -> tuple[list[dict], list[str]]:
-    """Strict tool order and types; optional expected arguments are exact subsets.
+    """Strict tool order and types; expected argument values must match.
 
     Do not salvage JSON from prose, rename tools, coerce booleans, or repair calls.
     Native calls must already satisfy the offered schemas.
@@ -134,7 +157,7 @@ def check(case: dict, payload: dict) -> tuple[list[dict], list[str]]:
             if "enum" in spec and value not in spec["enum"]:
                 errors.append(f"{name}.{key}: outside enum")
         for key, value in case.get("args", {}).get(name, {}).items():
-            if type(args.get(key)) is not type(value) or args.get(key) != value:
+            if not argument_equal(name, key, args.get(key), value):
                 errors.append(f"{name}.{key}: expected {value!r}, got {args.get(key)!r}")
     names = [call["name"] for call in calls]
     if names != case["expect"]:
