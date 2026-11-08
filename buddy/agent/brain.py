@@ -80,8 +80,19 @@ RULES = ("Here's how it works. We take turns putting our mark in one of the nine
 STABLE_S = 1.2                 # a new mark must look the same for this long, with no hand over the paper
 
 
+GREETINGS = {"hey", "hi", "hello", "oi", "ok", "okay", "right", "so", "now", "excuse", "me", "um", "erm", "oh", "well", "dear", "please"}
+
+
 def has_wake_word(text: str) -> bool:
-    return any(w in C.WAKE_WORDS for w in re.findall(r"[a-z']+", text.lower()))
+    """Penny wakes only when her name starts what is said, after at most a greeting ("Hey Penny", "Okay, Penny,
+    ..."): a resident or carer may also be called Penny, and "tell Penny I said hello" must not wake her."""
+    for sentence in re.split(r"[.!?]+\s*", text.lower()):
+        words = re.findall(r"[a-z']+", sentence)
+        while words and words[0] in GREETINGS:
+            words = words[1:]
+        if words and words[0] in C.WAKE_WORDS:
+            return True
+    return False
 
 
 class Brain:
