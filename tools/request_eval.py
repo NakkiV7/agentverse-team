@@ -139,7 +139,8 @@ def main(argv=None) -> int:
         print(f"Cannot evaluate: {exc}", file=sys.stderr)
         return 2
     load_start = os.getloadavg()
-    print(f"{len(cases)} cases; {requests.C.TEACH_MODEL}; deadline {requests.TIMEOUT:g}s; load {load_start}", flush=True)
+    print(f"{len(cases)} cases; {requests.C.TEACH_MODEL}; context {requests.NUM_CTX}; "
+          f"deadline {requests.TIMEOUT:g}s; load {load_start}", flush=True)
     print("Sequential, no warm-up excluded; shared Ollama latency is informational.", flush=True)
     results = []
     for case in cases:
@@ -165,7 +166,7 @@ def main(argv=None) -> int:
                   "url": requests.C.OLLAMA_URL, "only": args.only, "accuracy": accuracy, "passed": passed,
                   "total": len(results), "p50_seconds": p50, "p95_seconds": p95, "max_seconds": max(seconds),
                   "wall_seconds": sum(seconds), "load_start": load_start, "load_end": load_end,
-                  "latency_gated": False, "deadline_seconds": requests.TIMEOUT,
+                  "latency_gated": False, "deadline_seconds": requests.TIMEOUT, "num_ctx": requests.NUM_CTX,
                   "cases_sha256": hashlib.sha256(args.cases.read_bytes()).hexdigest(),
                   "prompt_sha256": hashlib.sha256(requests.SYSTEM.encode()).hexdigest(), "results": results}
         args.output.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")

@@ -172,8 +172,8 @@ def test_every_event_kind_and_data_key(answer, kind, keys):
     assert isinstance(R.validate(answer), R.Routine)
 
 
-def test_all_eight_prompt_examples_are_valid():
-    assert len(R.EXAMPLES) == 8
+def test_all_prompt_examples_are_valid():
+    assert len(R.EXAMPLES) == 10
     assert R.EXAMPLES[0][0] == R.ALPHABET_REQUEST
     for _, _, answer in R.EXAMPLES:
         result = R.validate(answer)
@@ -221,6 +221,7 @@ def test_http_contract(monkeypatch):
     body = seen["body"]
     assert body["model"] == "test-gemma" and body["think"] is False and body["stream"] is False
     assert body["options"]["temperature"] == 0
+    assert body["options"]["num_ctx"] == 8192
     assert "format" not in body
     assert body["messages"][0]["content"] == R.SYSTEM
     assert json.loads(body["messages"][1]["content"]) == {"request": request, "facts": "Known facts", "state": "CHAT"}
