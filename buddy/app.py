@@ -151,6 +151,16 @@ class App:
         return self.ctl.submit(Job(name, strokes_mm=[np.asarray(s, float) for s in strokes_mm],
                                    sheet=lambda: self.tracker.track, home=home, on_stroke=on_stroke))
 
+    def redraw_last(self, name: str | None = None) -> Job | None:
+        """Repeat the saved drawing through the usual controller and live sheet tracking."""
+        if self.last_strokes is None:
+            return None
+        previous_name, strokes = self.last_strokes
+        # Keep the original drawing as the source, even after several faint-line retries.
+        return self.ctl.submit(Job(f"again: {name if name is not None else previous_name}",
+                                   strokes_mm=[np.array(s, dtype=float, copy=True) for s in strokes],
+                                   sheet=lambda: self.tracker.track, home=True))
+
     def view_clear(self) -> bool:
         return (self.ctl.at_home and not self.ctl.busy and not self.intrusion.present
                 and not self.world.busy_animating())
