@@ -1117,7 +1117,9 @@ class Brain:
             self.set_state("CHOOSE_GAME", "the player wants to play")
             self.say(self.offer_text())
             return
-        entry = in_words or self.library.find(name)
+        # When the player's words contain the model's pick, trust the pick: in "not noughts and crosses, dots and
+        # boxes instead" the first game named is the one being rejected. Otherwise the words beat the guess.
+        entry = (self.library.find(name) if said_it else None) or in_words or self.library.find(name)
         if entry is None:
             why = f"asked for a game I don't know ({name or text!r}): asking to be taught"
             if st in self.RESTING:

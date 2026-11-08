@@ -137,6 +137,20 @@ def test_unknown_game_asks_to_be_taught(brain):
     assert brain.state == "TEACH" and brain.teacher is not None
 
 
+def test_switch_game_trusts_the_pick_over_the_rejected_game_in_the_words(brain):
+    """While noughts and crosses is being set up, "not noughts and crosses, dots and boxes instead" changes game."""
+    brain.entry = brain.library.find("noughts and crosses")
+    brain.state = "SETUP"
+    brain.busy = True
+    run(brain, "switch_game", "No wait, let's not play noughts and crosses, let's play dots and boxes instead.",
+        name="dots and boxes")
+    assert brain.switch_to is not None and brain.switch_to.name == "dots and boxes"
+    brain.busy = False
+    brain.switch_to = None
+    run(brain, "switch_game", "let's play noughts and crosses", name="noughts and crosses")
+    assert "what we're setting up" in brain.last_said
+
+
 def test_switch_mid_game_waits_for_the_stroke(brain):
     in_grid_game(brain)
     brain.busy = True
