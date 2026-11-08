@@ -1,4 +1,9 @@
-# Buddy: who does what
+# Penny (first called Buddy): who does what
+
+> **Historical planning document, written in the first hour (7 Nov).** The workstreams below name files from the
+> first scaffold (`buddy/bus.py`, `buddy/contracts.py`, `buddy/motion/planner.py`, `tests/test_agent.py`, ...)
+> that were replaced the same evening when Hakim's build became the code base. The current layout is in the
+> [README](../README.md#layout); what was built and measured since is in [STATUS.md](STATUS.md).
 
 Source of truth for the design: [architecture.pdf](architecture.pdf). This file turns it
 into four equal workstreams and the order to do things in. Shared rules first.
