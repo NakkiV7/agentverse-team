@@ -4,10 +4,16 @@ Ollama's native tool calling (POST /api/chat with "tools") is used with the mode
 The model only picks tool names and arguments from buddy/agent/tools.py; the brain (brain.run_tools) checks every
 one against the state, the rules and the reach limits and carries it out. The model never chooses a game move.
 
-plan(text, situation, state) returns a list of ToolCall, or None when the model could not be asked (server down,
-timeout, bad answer) so the caller falls back to the Gemma 3 intent path in llm.py. A plain-text answer with no
+plan(text, situation, state, facts) returns a list of ToolCall, or None when the model could not be asked (server
+down, timeout, bad answer) so the caller falls back to the Gemma 3 intent path in llm.py. A plain-text answer with no
 tool call becomes say(text). One running conversation is kept, like llm.Conversation, so Ollama only has to process
-the newest message; it restarts when it gets long or after a failure.
+the newest message; the oldest exchanges are dropped when it gets long, and it restarts after a failure.
+
+The facts (brain.facts(): the board, the letters tried, the score, the history, the last turns of conversation) ride
+in the newest user message only, under "Facts:", so the system prompt and the worked examples stay a stable,
+cached prefix. Questions are answered with say from those facts; the model is told never to invent one. Gemma 4's
+context here is 4096 tokens and the prefix is about 2560, so the stored history keeps only the player's words and
+the model's calls, never the facts, and at most MAX_TURNS exchanges.
 
 BUDDY_TOOLS=0 in the environment switches the planner off (every call returns None), for comparing the two paths.
 
@@ -31,7 +37,7 @@ MODEL = getattr(C, "TEACH_MODEL", "gemma4")
 ENABLED = os.environ.get("BUDDY_TOOLS", "1") != "0"
 TIMEOUT_S = 20.0
 NUM_PREDICT = 200
-MAX_TURNS = 16
+MAX_TURNS = 4                 # exchanges kept in the running conversation (the facts carry the last eight turns anyway)
 # Ollama caches the prompt prefix, and the tool list is part of it. Offering only the state's tools (tools.schemas)
 # changes the prefix at every state change, so the whole prompt is processed again: measured 5.7 s a call on
 # average over 21 requests, against 1.8 s with the full list every time, with the same 21 of 21 right. So the model
@@ -51,15 +57,24 @@ a game, or asking what there is to play, is list_games.
 themselves named, passed as they said it. If they did not name one, do not call them.
 - A board size is new_board. A level, or playing easier or harder, is set_difficulty. Asking Buddy to hold on is \
 wait. Asking Buddy to say it again is repeat. Saying their turn is done is i_am_done. Stopping or goodbye is stop.
-- Use say only when nothing else fits (small talk, thanks, a question about Buddy): one or two short, warm \
-sentences of plain British English, no emoji."""
+- Use say for small talk, thanks and any QUESTION about the game, the session or the paper: one or two short, \
+warm sentences of plain British English, no emoji.
+
+Questions: the message carries Facts, everything true right now (board, word so far, letters tried right and \
+wrong, misses left, score, level, rating, the moves of this game, games played, the last turns of conversation, what \
+is written on the paper). Answer with say from the Facts only, quoting letters, squares and numbers exactly, up to \
+three sentences. Never invent a fact; if the Facts do not say, say "I don't know" kindly. Questions about what is \
+written on the paper are answered with say, never a drawing tool. "What did I say" is answered from the \
+conversation in the Facts. Use the player's name now and then if the Facts give it. "What's the score", "why did \
+you play that", "give me a hint" and "what are the rules" keep their own tools."""
 
 KNOWN = "Games Buddy knows: noughts and crosses, hangman and dots and boxes."
 
 
-def _seed(situation: str, text: str, *calls: tuple[str, dict]) -> list[dict]:
+def _seed(situation: str, text: str, *calls: tuple[str, dict], facts: str = "") -> list[dict]:
     """One worked example as real conversation turns, so the model answers with native tool calls."""
-    msgs = [{"role": "user", "content": f"Situation: {situation} {KNOWN}\nPlayer said: \"{text}\""},
+    body = f"Situation: {situation} {KNOWN}\n" + (f"Facts:\n{facts}\n" if facts else "") + f"Player said: \"{text}\""
+    msgs = [{"role": "user", "content": body},
             {"role": "assistant", "content": "",
              "tool_calls": [{"function": {"name": n, "arguments": a}} for n, a in calls]}]
     msgs += [{"role": "tool", "tool_name": n, "content": "done"} for n, _ in calls]
@@ -75,6 +90,13 @@ SEEDS = (
             "yes", ("answer", {"yes": True}))
     + _seed("Dots and boxes: it is the player's turn. Buddy last said: Your turn.", "how are you keeping today",
             ("say", {"text": "Very well, thank you. It's lovely to have a game with you."}))
+    + _seed("The player is guessing a hangman word.", "which letters have I tried so far?",
+            ("say", {"text": "You've tried four letters so far, Margaret: E, P, S and T. P and E were right; S and T were wrong."}),
+            facts="Game: hangman, on.\nWord so far: _ P P _ E (5 letters). Letters tried so far: E, P, S, T (4 letters). "
+                  "Right letters: E, P. Wrong letters: S, T.\nMisses: 2 of 6 used, 4 misses left.\nThe player's name is Margaret.")
+    + _seed("A game of noughts and crosses is on; it is the player's turn.", "what's the weather going to do tomorrow?",
+            ("say", {"text": "I don't know, I'm afraid; I can only see our game. Shall we carry on?"}),
+            facts="Game: noughts and crosses, on.\nBoard: top left cross; centre nought.")
 )
 
 
@@ -190,15 +212,28 @@ class Planner:
     def reset(self):
         self.msgs = [{"role": "system", "content": SYSTEM}] + list(SEEDS)
 
-    def plan(self, text: str, situation: str, state: str) -> list[ToolCall] | None:
+    def _trim(self):
+        """Drop the oldest exchanges past MAX_TURNS, keeping the system prompt and the worked examples."""
+        base = 1 + len(SEEDS)
+        while True:
+            starts = [i for i in range(base, len(self.msgs)) if self.msgs[i]["role"] == "user"]
+            if len(starts) <= MAX_TURNS:
+                return
+            end = starts[1] if len(starts) > 1 else len(self.msgs)
+            del self.msgs[starts[0]:end]
+
+    @staticmethod
+    def user_message(text: str, situation: str, facts: str = "") -> str:
+        return f"Situation: {situation}\n" + (f"Facts:\n{facts.strip()}\n" if facts else "") + f"Player said: \"{text}\""
+
+    def plan(self, text: str, situation: str, state: str, facts: str = "") -> list[ToolCall] | None:
         if not ENABLED:
             return None
         if not tools.available(state):          # TEACH and NAME_GAME have their own flows
             return None
         offered = [t.schema() for t in tools.TOOLS] if OFFER_ALL_TOOLS else tools.schemas(state)
-        if len(self.msgs) > len(SEEDS) + 1 + 3 * MAX_TURNS:
-            self.reset()
-        msgs = self.msgs + [{"role": "user", "content": f"Situation: {situation}\nPlayer said: \"{text}\""}]
+        self._trim()
+        msgs = self.msgs + [{"role": "user", "content": self.user_message(text, situation, facts)}]
         body = {"model": self.model, "stream": False, "think": False, "keep_alive": "60m",
                 "tools": offered, "options": {"temperature": 0.0, "num_predict": NUM_PREDICT}, "messages": msgs}
         t0 = time.time()
@@ -213,24 +248,26 @@ class Planner:
         self.seconds = time.time() - t0
         if calls is None:
             return None
-        # remember the exchange: the assistant's calls and a short result for each, so the model keeps context
-        self.msgs = msgs
+        # remember the exchange: the player's words (not the facts or the situation, which are stale next time and
+        # would fill the 4096-token context), the assistant's calls and a short result for each
+        self.msgs = msgs[:-1] + [{"role": "user", "content": f"Player said: \"{text}\""}]
         self.msgs.append({"role": "assistant", "content": message.get("content") or "",
                           **({"tool_calls": message["tool_calls"]} if message.get("tool_calls") else {})})
         for tc in message.get("tool_calls") or []:
             self.msgs.append({"role": "tool", "tool_name": (tc.get("function") or {}).get("name", ""), "content": "done"})
+        self._trim()
         return calls
 
 
 _default: Planner | None = None
 
 
-def plan(text: str, situation: str, state: str) -> list[ToolCall] | None:
+def plan(text: str, situation: str, state: str, facts: str = "") -> list[ToolCall] | None:
     """Module-level convenience with one shared conversation."""
     global _default
     if _default is None:
         _default = Planner()
-    return _default.plan(text, situation, state)
+    return _default.plan(text, situation, state, facts)
 
 
 def last_seconds() -> float:

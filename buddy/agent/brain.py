@@ -119,6 +119,9 @@ class Brain:
         self.planner = Planner()                # Gemma 4 picks tools from what the player said (buddy/agent/toolcall.py)
         self._size_hint = None                  # a dots board size said before the size question (new_board tool)
         self._side_hint = None                  # a side said before the board is drawn (choose_side tool)
+        self.player_name = None                 # "I'm Margaret": remembered for the session and used in replies
+        self.game_started_at = None             # when the current game's play began (set_state), for the facts
+        self.paper = None                       # paper routines (buddy/paper, task B) once the coordinator attaches them
         threading.Thread(target=self._loop, daemon=True, name="brain").start()
         threading.Thread(target=self._watch, daemon=True, name="board-watch").start()
         threading.Thread(target=self._warm_planner, daemon=True, name="planner-warm-up").start()
@@ -127,6 +130,8 @@ class Brain:
     def set_state(self, new: str, why: str):
         if new != self.state:
             self.app.trace("decide", f"{self.state} -> {new}: {why}")
+            if new in self.IN_GAME and self.state not in self.IN_GAME:
+                self.game_started_at = time.time()
             self.state = new
 
     def say(self, text: str, wait: bool = False):
@@ -229,11 +234,238 @@ class Brain:
                             "Do not choose a letter for the player.",
         }.get(st, "") + known
 
-    def facts(self) -> str:
-        """Everything true now, in plain sentences, for the language model to answer from. This is the stub the
-        round-3 conversation task replaces (docs/round3.md); the other tasks may call it already."""
-        recent = "; ".join(ev.text for ev in list(self.events)[-12:] if ev.kind not in ("said", "heard"))
-        return f"{self.situation()} What happened recently: {recent or 'nothing yet'}."
+    # ------------------------------------------------------------------ the facts the language model answers from
+    FACTS_LIMIT = 1500          # characters; the block rides in every planner request, outside the prompt cache
+    GALLOWS = ("the upright post", "the beam", "the rope", "the head", "the body", "the legs")
+
+    def facts(self, current: str | None = None) -> str:
+        """Everything true now, in plain sentences the model can quote: the game and its rules, level, rating and
+        record, whose turn, the board / word / dots position, the move history of this game, the games played this
+        session, the last turns of conversation, Buddy's last words, the time since the game started and what the
+        paper routines wrote. `current` is the player's words being handled now; they are left out of the
+        conversation history so the model answers them instead of echoing them. Kept under FACTS_LIMIT characters
+        by shortening the oldest history first."""
+        lines = [self._facts_game(), self._facts_level()]
+        lines += self._facts_position()
+        moves, chat = self._facts_moves(), self._facts_chat(current)
+        lines.append(self._facts_session())
+        if self.player_name:
+            lines.append(f"The player's name is {self.player_name}.")
+        if self.last_said:
+            lines.append(f'Buddy last said: "{self._short(self.last_said, 160)}"')
+        paper = self._facts_paper()
+        if paper:
+            lines.append(paper)
+        head = "\n".join(l for l in lines if l)
+        # the two histories give way first: moves lose their oldest entries, the chat its oldest turns
+        for n_moves, n_chat in ((8, 8), (6, 8), (6, 6), (4, 6), (4, 4), (3, 4), (2, 4), (2, 3), (1, 3), (0, 3), (0, 2), (0, 1), (0, 0)):
+            text = "\n".join(x for x in (head, self._moves_line(moves, n_moves), self._chat_line(chat, n_chat)) if x)
+            if len(text) <= self.FACTS_LIMIT:
+                return text
+        return text[:self.FACTS_LIMIT]
+
+    @staticmethod
+    def _short(text: str, n: int) -> str:
+        text = " ".join(str(text).split())
+        return text if len(text) <= n else text[:n - 3].rstrip() + "..."
+
+    @staticmethod
+    def _ago(t: float | None) -> str:
+        if not t:
+            return ""
+        d = max(0, time.time() - t)
+        if d < 60:
+            return "less than a minute ago"
+        m = int(d // 60)
+        return "a minute ago" if m == 1 else f"{m} minutes ago"
+
+    def _game_kind(self) -> str:
+        """grid / hangman / dots / none: which position to describe."""
+        if self.hangman is not None and (self.state == "HANGMAN_TURN" or (self.state in ("GAME_OVER", "HANGMAN_SETUP")
+                                                                          and self.entry is not None and self.entry.kind == "hangman")):
+            return "hangman"
+        if self.state in DOTS_STATES or (self.state == "GAME_OVER" and self.entry is not None and self.entry.kind == "dots"
+                                         and self.dots is not None and self.dots.state is not None):
+            return "dots"
+        if self.state in ("PLAYER_TURN", "ROBOT_TURN", "CONFIRM_MARK") or (self.state == "GAME_OVER" and self.player_sym
+                                                                            and any(self.board)):
+            return "grid"
+        return "none"
+
+    def _facts_game(self) -> str:
+        kind = self._game_kind()
+        if kind == "none":
+            return f"No game is on. {self.situation()}"
+        on = "just finished" if self.state == "GAME_OVER" else "on"
+        when = f", started {self._ago(self.game_started_at)}" if self.game_started_at else ""
+        number = f", game {self.games} of this session" if self.games else ""
+        return f"Game: {self.game_name}, {on}{number}{when}. Rules: {self.rules_text()}"
+
+    def _facts_level(self) -> str:
+        d = self.difficulty
+        level = "authentic (adaptive, matched to the player's rating)" if d.level == "adaptive" else d.level
+        out = f"Level: {level}; Buddy plays its best move {100 * d.strength:.0f}% of the time."
+        try:
+            rec = d.rating.player
+            out += f" The player's {self.game_name} rating is {rec.rating:.0f} after {rec.games} rated game{'s' if rec.games != 1 else ''}."
+        except Exception:  # noqa: BLE001
+            pass
+        e = self.entry
+        if e is not None and e.plays:
+            out += (f" Record at {e.name}: {e.plays} played, the player won {e.player_wins}, Buddy won {e.robot_wins}, "
+                    f"{e.draws} drawn.")
+        return out
+
+    def _turn(self) -> str:
+        st = self.state
+        if st in ("PLAYER_TURN", "DOTS_PLAYER_TURN", "HANGMAN_TURN"):
+            return "the player's"
+        if st in ("ROBOT_TURN", "DOTS_ROBOT_TURN"):
+            return "Buddy's"
+        if st == "CONFIRM_MARK":
+            return "the player's; Buddy is asking about their last mark"
+        if st == "GAME_OVER":
+            return "nobody's, the game is over"
+        return "nobody's yet"
+
+    def _facts_position(self) -> list[str]:
+        kind = self._game_kind()
+        out = [f"Whose turn: {self._turn()}."]
+        if kind == "hangman":
+            h = self.hangman
+            tried = sorted(h.guessed)
+            right = sorted(c for c in tried if c in h.word)
+            wrong = sorted(c for c in tried if c not in h.word)
+            found = len(h.word) - h.pattern.count("_")
+            out.append(f"Word so far: {' '.join(h.pattern)} ({len(h.word)} letters, {found} found, "
+                       f"{len(h.word) - found} still blank).")
+            if tried:
+                out.append(f"Letters tried so far: {', '.join(tried)} ({len(tried)} letters). "
+                           f"Right letters: {', '.join(right) or 'none yet'}. Wrong letters: {', '.join(wrong) or 'none yet'}.")
+            else:
+                out.append("Letters tried so far: none yet.")
+            noun = "miss" if h.remaining == 1 else "misses"
+            out.append(f"Misses: {h.misses} of 6 used, {h.remaining} {noun} left. Gallows parts drawn: "
+                       + (", ".join(self.GALLOWS[:h.misses]) if h.misses else "none") + ".")
+            if h.last_guess:
+                out.append(f"Last guess: {h.last_guess}, {'right' if h.last_guess in h.word else 'wrong'}.")
+            if self.state == "GAME_OVER":
+                out.append(f"The word was {h.word}; the player {'found it' if h.result() == 'win' else 'ran out of misses'}.")
+        elif kind == "dots":
+            d, s = self.dots, self.dots.state
+            rows, cols = D.rc(d.n)
+            drawn = bin(s.edges).count("1")
+            mine = [D.box_name(d.n, i) for i, o in enumerate(s.owners) if o == "P"]
+            his = [D.box_name(d.n, i) for i, o in enumerate(s.owners) if o == "B"]
+            left = sum(1 for o in s.owners if not o)
+            out.append(f"Dots board: {rows} by {cols} boxes ({D.n_boxes(d.n)} boxes, {D.n_edges(d.n)} lines). "
+                       f"Lines drawn: {drawn} of {D.n_edges(d.n)}, {D.n_edges(d.n) - drawn} to go.")
+            out.append(f"Score: the player {s.score('P')}, Buddy {s.score('B')}, {left} box{'es' if left != 1 else ''} still open. "
+                       f"The player's boxes: {', '.join(mine) or 'none yet'}. Buddy's boxes: {', '.join(his) or 'none yet'}.")
+            if self.last_choice is not None and s.drawn(self.last_choice.cell):
+                out.append(f"Buddy's last line: {D.edge_name(d.n, self.last_choice.cell)} ({self.last_choice.reason}).")
+        elif kind == "grid":
+            ps, rs = self.player_sym, self.robot_sym
+            cells = [f"{NAMES[i]} {SYM[c]}" for i, c in enumerate(self.board) if c]
+            free = [NAMES[i] for i in range(9) if not self.board[i]]
+            out.append(f"The player is {PLURAL[ps]} ({ps}), Buddy is {PLURAL[rs]} ({rs}). "
+                       f"Board: {'; '.join(cells) if cells else 'empty'}. Free squares: {', '.join(free) or 'none'}.")
+            out.append(f"Marks: the player {self.board.count(ps)}, Buddy {self.board.count(rs)}.")
+            if self.last_choice is not None and self.board[self.last_choice.cell] == rs:
+                out.append(f"Buddy's last move: the {NAMES[self.last_choice.cell]} ({self.last_choice.reason}).")
+            if self.state == "GAME_OVER":
+                w = winner(self.board)
+                out.append("Result: " + (f"{'the player' if w[0] == ps else 'Buddy'} won with three in a row" if w else "a draw") + ".")
+        return out
+
+    def _this_game_events(self) -> list:
+        """Events since this game began (after the last game_over / game_start)."""
+        evs = list(self.events)
+        start = 0
+        for i, ev in enumerate(evs):
+            if ev.kind == "game_start":
+                start = i
+            elif ev.kind == "game_over" and self.state != "GAME_OVER":
+                start = i + 1          # a finished game keeps its moves while Buddy is still talking about it
+        return evs[start:]
+
+    def _facts_moves(self) -> list[str]:
+        kinds = ("move", "guess", "line", "box", "switch")
+        out = []
+        for ev in self._this_game_events():
+            if ev.kind == "guess" and "letter" in ev.data:        # the letters line already has the pattern and count
+                out.append(f"the player guessed {ev.data['letter']}: {'right' if ev.data.get('correct') else 'wrong'}")
+            elif ev.kind in kinds:
+                out.append(ev.text)
+        return out
+
+    @staticmethod
+    def _moves_line(moves: list[str], n: int) -> str:
+        if not moves:
+            return "Moves this game: none yet."
+        if n <= 0:
+            return f"Moves this game: {len(moves)} so far."
+        shown = moves[-n:]
+        earlier = len(moves) - len(shown)
+        head = f"Moves this game, in order{f' (after {earlier} earlier)' if earlier else ''}: "
+        return head + "; ".join(f"{earlier + i + 1}. {m}" for i, m in enumerate(shown)) + "."
+
+    def _facts_chat(self, current: str | None) -> list[str]:
+        turns = [ev for ev in self.events if ev.kind in ("heard", "said")]
+        if current is not None and turns and turns[-1].kind == "heard" and turns[-1].text == current:
+            turns = turns[:-1]
+        return [f"{'Player' if ev.kind == 'heard' else 'Buddy'}: \"{self._short(ev.text, 70)}\"" for ev in turns]
+
+    @staticmethod
+    def _chat_line(chat: list[str], n: int) -> str:
+        if not chat or n <= 0:
+            return ""
+        shown = chat[-n:]
+        return f"Conversation so far, oldest first (last {len(shown)} turns): " + " | ".join(shown)
+
+    def _facts_session(self) -> str:
+        done = [ev for ev in self.events if ev.kind == "game_over"]
+        if not done and self._game_kind() == "none":
+            return "Games this session: none yet."
+        words = {"win": "the player won", "loss": "Buddy won", "draw": "a draw"}
+        played = "; ".join(f"game {i + 1}: {ev.data.get('game', 'a game')}, {words.get(ev.data.get('result'), 'ended')}"
+                           for i, ev in enumerate(done))
+        n = len(done)
+        if self._game_kind() != "none" and self.state != "GAME_OVER":
+            return (f"Games this session: {n} finished ({played}); this {self.game_name} is game {n + 1}, still going."
+                    if n else f"Games this session: this {self.game_name} is the first, still going.")
+        return f"Games this session: {n} finished ({played})."
+
+    def _facts_paper(self) -> str:
+        paper = getattr(self, "paper", None)
+        if paper is None:
+            return ""
+        try:
+            return str(paper.describe() or "")
+        except Exception as e:  # noqa: BLE001
+            return f"(the paper routines could not be described: {e})"
+
+    NAME_STOP = {"buddy", "fine", "good", "done", "ready", "sorry", "here", "not", "going", "playing", "back", "afraid",
+                 "sure", "okay", "ok", "happy", "glad", "thinking", "just", "still", "trying", "stuck", "winning",
+                 "losing", "tired", "well", "right", "wrong", "guessing", "listening", "crosses", "noughts", "all",
+                 "so", "very", "quite", "really", "a", "an", "the", "no", "yes", "it", "that", "this", "finished",
+                 "waiting", "confused", "lost", "new", "old", "first", "next", "me", "in", "on", "out", "up", "down",
+                 "better", "worse", "bored", "hopeless", "rubbish", "terrible", "bad", "great", "lovely", "pleased"}
+
+    def _note_name(self, text: str):
+        """"I'm Margaret", "my name is Arthur", "call me Peg": remember the name for the facts and the replies."""
+        m = re.search(r"\b(?:my name is|my name's|call me|you can call me|i am|i'm|im|it's|this is)\s+([A-Za-z][a-z'\-]{1,20})\b",
+                      text, re.I)
+        if not m:
+            return
+        name = m.group(1).strip("'-")
+        strong = m.group(0).lower().startswith(("my name", "call me", "you can call me"))
+        if name.lower() in self.NAME_STOP or (not strong and not name[0].isupper()):
+            return
+        name = name[0].upper() + name[1:]
+        if name != self.player_name:
+            self.player_name = name
+            self.app.trace("decide", f"the player's name is {name}")
 
     def _worker(self, fn, *args):
         def run():
@@ -266,6 +498,7 @@ class Brain:
         self.app.transcript_add("Player", text)
         self.last_heard = text
         self.emit("heard", "player", text)
+        self._note_name(text)
         if self.state == "TEACH":
             if any(w in text.lower() for w in CANCEL_WORDS):
                 self.spec = None
@@ -1013,6 +1246,9 @@ class Brain:
             return
         self._hangman_strokes = dashes
         self.games += 1
+        self.emit("game_start", "buddy", f"game {self.games} of hangman started: a {len(self.hangman.word)}-letter word, "
+                  f"level {self.difficulty.level}", game="hangman", number=self.games, player_symbol="",
+                  level=self.difficulty.level)
         self.set_state("HANGMAN_TURN", "the camera checked the word dashes")
         self.say("The dashes are ready. Say one letter whenever you are ready.")
 
@@ -1097,12 +1333,9 @@ class Brain:
         if self.state == "DOTS_SIZE" and self.dots is not None and self.dots.parse_size_text(text) is not None:
             self.app.trace("understand", f"tools: new_board(size={text!r}) (a size answer wins; no model call)")
             return [ToolCall("new_board", {"size": text})]
-        full = sit + f" Rules of {self.game_name}: {self.rules_text()}"
-        if self.dots is not None and self.dots.state is not None and self.state in DOTS_STATES:
-            full += " " + self.dots._score_line()
-        if self.last_said:
-            full += f' Buddy last said: "{self.last_said}"'
-        calls = self.planner.plan(text, full, self.state)
+        # the rules, the dots score and Buddy's last words used to be appended here; the facts block carries them
+        # now, and the 4096-token context is tight (toolcall.py)
+        calls = self.planner.plan(text, sit, self.state, facts=self.facts(current=text))
         if calls is None:
             self.app.trace("understand", f"tools: no answer from {self.planner.model} ({self.planner.seconds:.1f} s); using the intent path")
             return None
@@ -1456,4 +1689,4 @@ class Brain:
 
     def _tool_say(self, args, text):
         reply_text = str(args.get("text") or "").strip().strip('"')
-        self.say(reply_text[:300] if reply_text else "I'm listening.")
+        self.say(reply_text[:500] if reply_text else "I'm listening.")
