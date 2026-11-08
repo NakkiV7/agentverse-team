@@ -200,7 +200,7 @@ async function tick() {
   try { s = await (await fetch("state.json", { cache: "no-store" })).json(); } catch (e) { return; }
   S = s;
   document.getElementById("state").textContent = s.state;
-  if (s.game) document.getElementById("gamename").textContent = s.game.name + (s.game.level && s.game.level !== "adaptive" ? ` · ${s.game.level}` : "");
+  if (s.game) document.getElementById("gamename").textContent = s.game.name + ` · ${s.game.level || "adaptive"} · rating ${s.game.rating ?? "-"}`;
   if (s.game && s.game.known) document.getElementById("gamename").title = "Buddy knows: " + s.game.known.join(", ");
   document.getElementById("nexthint").innerHTML = NEXT[s.state] || "";
   const legal = (s.game && s.game.legal) || [], turn = s.state === "PLAYER_TURN";

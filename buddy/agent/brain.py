@@ -129,6 +129,7 @@ class Brain:
         self.entry = entry
         self.spec = entry.spec
         self.solver = analyse(entry.spec)[0] if entry.spec is not None else None
+        self.difficulty.select_game(entry.name)
 
     def _offer_taught(self, entry):
         self._select(entry)
@@ -468,6 +469,7 @@ class Brain:
     def start_game(self, player_sym: str):
         self.player_sym, self.robot_sym = player_sym, other(player_sym)
         self.games += 1
+        self.app.trace("decide", "difficulty: " + self.difficulty.start_game(self.game_name, self.rng))
         self.app.trace("decide", f"game {self.games} ({self.game_name}): player {SYM[player_sym]}es, Buddy "
                                  f"{SYM[self.robot_sym]}s, level {self.difficulty.level}, Buddy plays the best move "
                                  f"{100 * self.difficulty.strength:.0f}% of the time")
