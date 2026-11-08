@@ -51,6 +51,20 @@ def context_from(brain):
     dots = getattr(brain, "dots", None)
     if dots is not None and dots.state is not None:
         out.update(score_player=dots.state.score("P"), score_buddy=dots.state.score("B"))
+    # Event history is part of brain state too. Supply the last move/line and
+    # a completed result without carrying facts across a game boundary.
+    for ev in reversed(list(getattr(brain, "events", ()))):
+        if ev.kind in ("switch", "game_start"):
+            break
+        if ev.kind == "game_over":
+            if getattr(brain, "state", None) == "GAME_OVER" and ev.data.get("game") == out["game"]:
+                if "result" in ev.data:
+                    out.setdefault("result", ev.data["result"])
+            break
+        if ev.kind == "move" and dots is None and hangman is None and "cells" in ev.data:
+            out.setdefault("cells", ev.data["cells"])
+        if ev.kind == "line" and dots is not None and "name" in ev.data:
+            out.setdefault("name", ev.data["name"])
     return out
 
 
@@ -182,6 +196,8 @@ class Paper:
             return item_id in self._missing
 
     def on_event(self, ev):
+        if self._closed:
+            return
         # Our own progress announcement must not recursively trigger a
         # standing "when Buddy says something, write ..." instruction.
         if ev.kind == "said" and threading.current_thread() is self._thread:
@@ -210,7 +226,18 @@ class Paper:
         return False
 
     def _wait_idle(self):
-        while self.brain.busy or getattr(getattr(self.app, "ctl", None), "busy", False):
+        def game_pending():
+            state = getattr(self.brain, "state", "")
+            if state in ("ROBOT_TURN", "DOTS_ROBOT_TURN"):
+                return True
+            dots = getattr(self.brain, "dots", None)
+            # Dots commits its state and emits a line before its last camera
+            # look and the robot worker launch. Respect that reserved turn.
+            return (state == "DOTS_PLAYER_TURN" and dots is not None and dots.state is not None
+                    and dots.state.to_move == "B")
+
+        while (self.brain.busy or getattr(getattr(self.app, "ctl", None), "busy", False)
+               or game_pending()):
             if self._closed or not getattr(self.app, "running", True):
                 raise ValueError("the drawing session has stopped")
             time.sleep(.02)

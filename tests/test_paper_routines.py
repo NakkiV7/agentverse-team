@@ -173,3 +173,42 @@ def test_a_said_rule_failure_does_not_generate_another_said_event(paper):
     wait(lambda: not paper.pending)
     assert "template {name}" in paper.last_error
     assert not paper.said and not paper.items
+
+
+@pytest.mark.parametrize("op", ["underline", "circle", "tick"])
+def test_other_annotations_target_each_matching_character(paper, op):
+    assert write(paper, "ABA") is None
+    assert paper.run([{"op": op, "target": {"id": "alphabet", "chars": "A"}}]) is None
+    assert [c.marks for c in paper.items["alphabet"].characters] == [{op}, set(), {op}]
+    assert paper.draws[-1][0] == f"paper {op}: A"
+
+
+def test_unsupported_operation_is_refused_without_ink(paper):
+    assert "cannot erase" in paper.run([{"op": "erase_item", "id": "alphabet"}]).lower()
+    assert not paper.draws
+
+
+def test_context_has_last_move_and_result_but_does_not_cross_game_boundaries(paper):
+    b = paper.brain
+    b.hangman, b.game_name, b.state = None, "noughts and crosses", "PLAYER_TURN"
+    b.events = [event(kind="game_start"), event(kind="move", cells=[4])]
+    assert context_from(b)["cells"] == [4]
+    b.events.append(event(kind="switch"))
+    assert "cells" not in context_from(b)
+    b.state = "GAME_OVER"
+    b.events.append(event(kind="game_over", game=b.game_name, result="draw"))
+    assert context_from(b)["result"] == "draw"
+    b.state = "PLAYER_TURN"
+    assert "result" not in context_from(b)
+
+
+def test_a_reserved_robot_turn_is_not_mistaken_for_an_idle_worker(paper):
+    assert write(paper) is None
+    paper.add_rule(rule())
+    paper.brain.state = "DOTS_ROBOT_TURN"
+    paper.on_event(event(letter="B", correct=False))
+    time.sleep(.05)
+    assert not paper.items["alphabet"].characters[1].marks
+    paper.brain.state = "DOTS_PLAYER_TURN"
+    wait(lambda: not paper.pending)
+    assert paper.items["alphabet"].characters[1].marks == {"cross_out"}
