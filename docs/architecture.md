@@ -1,10 +1,10 @@
-# Buddy: architecture and tech stack
+# Penny: architecture and tech stack
 
 *Working title. Agentverse 2026, Robotics track. Planning document, 7 November 2026.*
 
 ## What it does
 
-Buddy is a robot arm that plays pen-and-paper games with older adults. The player says "Buddy, let's play a game?". The arm answers, offers tic-tac-toe, draws the grid on a blank A4 sheet while it explains the rules, then plays: it reads the player's marks with its camera and draws its own. Everything runs in MuJoCo on one laptop, with no network.
+Penny is a robot arm that plays pen-and-paper games with older adults. The player says "Penny, let's play a game?". The arm answers, offers tic-tac-toe, draws the grid on a blank A4 sheet while it explains the rules, then plays: it reads the player's marks with its camera and draws its own. Everything runs in MuJoCo on one laptop, with no network.
 
 ## Design rules
 
@@ -16,7 +16,7 @@ Buddy is a robot arm that plays pen-and-paper games with older adults. The playe
 
 ## System diagram
 
-```mermaid title="Buddy: one process, three layers"
+```mermaid title="Penny: one process, three layers"
 flowchart TB
   subgraph DEL["Deliberate layer (seconds)"]
     VIN["Speech in<br/>Silero VAD + whisper.cpp"] --> AGENT["Agent<br/>state machine + Gemma 3 4B"]
@@ -139,7 +139,7 @@ Plan: pen at most 3 to 4 cm past the fingertips, grid 12 to 15 cm (cells of 4 to
 
 ## Conversation and game flow
 
-States: IDLE (listening for "Buddy") → GREET → CHOOSE_GAME → SETUP (draws the grid while explaining the rules) → PLAYER_TURN ↔ ROBOT_TURN → GAME_OVER → GREET or IDLE.
+States: IDLE (listening for "Penny") → GREET → CHOOSE_GAME → SETUP (draws the grid while explaining the rules) → PLAYER_TURN ↔ ROBOT_TURN → GAME_OVER → GREET or IDLE.
 
 Events that can interrupt any state:
 

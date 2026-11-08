@@ -129,15 +129,35 @@ Sources: Gardiner et al., University of Sheffield ([White Rose 160982](https://e
 Our story leads with entertainment and nostalgia, not loneliness. If it comes up in questions: "Loneliness is
 common in care homes, and we don't claim a robot fixes it. Penny gives people something to do and something to share."
 
+## 10. Figures checked from the team's notes
+
+| Claim as written in the notes | Verdict | Use |
+|---|---|---|
+| "1 in 3 seniors experience social isolation" | **Corrected:** WHO says about **1 in 4** older people are socially isolated ([WHO](https://www.who.int/activities/reducing-social-isolation-and-loneliness-among-older-people)) | "1 in 4 older people are socially isolated" |
+| "Social isolation increases mortality risk by up to 29%" | **Checks out:** Holt-Lunstad et al. (2015), 70 studies, 3.4 million people; it's 29% higher *odds* ([BYU](https://scholarsarchive.byu.edu/facpub/7516)) | "linked with 29% higher odds of early death" |
+| "Adults over 50 using digital/gaming tech show less cognitive decline" | **Checks out, observational:** Benge and Scullin, *Nature Human Behaviour* (2025), 411,430 adults, lower odds of cognitive impairment (OR 0.42); about digital technology generally, not games | "linked with lower odds of cognitive impairment" |
+| "Mentor/teacher roles reduce depression" | **Partly:** volunteering is linked with lower depression and longer life (Jenkinson et al., *BMC Public Health* 2013), mostly cohort studies ([PMC](https://pmc.ncbi.nlm.nih.gov/articles/PMC3766013)) | "volunteering and mentoring are linked with…"; supports residents teaching Penny |
+| "Like smoking 15 cigarettes a day" | A popular comparison, loosely based on Holt-Lunstad (2010) | Avoid |
+| "Lack of mental exercise raises dementia risk by 25%" | **No source found** | Don't use |
+| "Lonely seniors are 50% more likely to use A&amp;E, 40% more doctor visits" | **No source found**; studies are mixed | Don't use |
+| "32–40% of older adults use games to fight boredom" | **No source found** | Don't use |
+| "Mobile games lose over 80% of seniors after week one" | **No source found** | Don't use |
+| "Over 40% of lonely retirees feel no longer needed" | **No source found** | Don't use |
+| "38% of over-50s want AI companions" | **No source found** | Don't use |
+
+Unsourced figures can go back in only with the original source attached.
+
 ---
 
 ## The five numbers for the slides
 
 1. **~280,000** people over 65 live in care homes in England and Wales (ONS, 2021).
 2. **About half** of residents' waking time is inactive or dozing (University of Kent, *Ageing & Society*).
-3. **111,000** unfilled posts in adult social care in England, 2024/25 (Skills for Care).
-4. **2.4 million** older people (19%) barely use the internet (Age UK, 2025).
-5. **~40%** of stroke survivors have lasting arm problems; **4–6%** of over-65s have essential tremor.
+3. **1 in 4** older people are socially isolated (WHO), linked with **29% higher odds of early death**
+   (Holt-Lunstad et al., 2015).
+4. **111,000** unfilled posts in adult social care in England, 2024/25 (Skills for Care).
+5. **2.4 million** older people (19%) barely use the internet (Age UK, 2025).
+6. **~40%** of stroke survivors have lasting arm problems; **4–6%** of over-65s have essential tremor.
 
 ## Before using any of these
 
