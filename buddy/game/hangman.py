@@ -6,7 +6,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 
-# Familiar nouns, four to seven letters. This is also the allowed dictionary.
+# Familiar nouns, four to seven letters. Keep the original medium hint dictionary.
 WORDS = tuple(sorted("""
 apple apron basket beach beans bedroom bicycle biscuit blanket bottle bread
 bridge broom butter button cabbage candle carrot carpet castle chair cheese
@@ -22,6 +22,36 @@ tree tulip turtle uncle valley village violin wallet water window winter
 DICTIONARY = frozenset(WORDS)
 
 
+WORDS_BY_LEVEL = {
+    "easy": tuple(w for w in WORDS if 4 <= len(w) <= 5),
+    "medium": WORDS,
+    "hard": tuple(w for w in WORDS if 6 <= len(w) <= 7),
+    # Seven letters meet the hardest level and still fit the existing paper layout.
+    "impossible": ("AXOLOTL", "AZIMUTH", "JACAMAR", "QUETZAL", "XYLITOL", "ZEPHYRS", "ZYZZYVA"),
+}
+_ALL_WORDS = frozenset(w for words in WORDS_BY_LEVEL.values() for w in words)
+
+
+def level_for_difficulty(level, strength: float | None = None) -> str:
+    """Resolve a level name or brain.difficulty without changing its rating.
+
+    Pass the difficulty object for adaptive play so its current strength is used.
+    A bare adaptive/authentic name uses medium until a strength is available.
+    """
+    strength = getattr(level, "strength", .6 if strength is None else strength)
+    name = getattr(level, "level", level)
+    if name in ("adaptive", "authentic"):
+        return "easy" if strength < .4 else "medium" if strength < .7 else "hard" if strength < .9 else "impossible"
+    if name not in WORDS_BY_LEVEL:
+        raise ValueError(f"Unknown hangman difficulty: {name}")
+    return name
+
+
+def word_for_level(level, rng) -> str:
+    """Choose locally; level may be a fixed name or brain.difficulty."""
+    return rng.choice(WORDS_BY_LEVEL[level_for_difficulty(level)])
+
+
 def letter(value: str | None) -> str | None:
     """Return one ASCII capital, or None. Do not guess a letter from a phrase."""
     if not isinstance(value, str):
@@ -32,14 +62,23 @@ def letter(value: str | None) -> str | None:
 
 @dataclass
 class Hangman:
-    word: str = field(default_factory=lambda: random.choice(WORDS))
+    word: str = "APPLE"
+    level: str = "medium"
     guessed: set[str] = field(default_factory=set, init=False)
     max_misses: int = field(default=6, init=False)
+    last_guess: str | None = field(default=None, init=False)
 
     def __post_init__(self):
         self.word = self.word.upper()
-        if self.word not in DICTIONARY:
+        self.level = level_for_difficulty(self.level)
+        if self.word not in _ALL_WORDS:
             raise ValueError("Choose a word from the built-in dictionary.")
+
+    @classmethod
+    def for_difficulty(cls, difficulty, rng=random) -> "Hangman":
+        """Start with the brain's chosen level; keep that word through drawing retries."""
+        level = level_for_difficulty(difficulty)
+        return cls(word_for_level(level, rng), level=level)
 
     @property
     def misses(self) -> int:
@@ -63,6 +102,7 @@ class Hangman:
             raise ValueError("Say one unused letter from A to Z while the game is on.")
         c = letter(value)
         self.guessed.add(c)
+        self.last_guess = c
         return tuple(i for i, got in enumerate(self.word) if got == c)
 
     def result(self) -> str | None:
@@ -73,15 +113,25 @@ class Hangman:
             return "loss"
         return None
 
-    def hint(self) -> str | None:
-        """Most frequent unused letter among words fitting the public clues.
+    def hint(self, difficulty=None) -> str | None:
+        """A letter, a vowel/consonant category, or no hint at the chosen level.
 
-        Each word votes once per letter. Ties use alphabetical order. The secret
-        word is used only for its already revealed pattern, never to pick a hint.
+        Medium keeps the original public-clue frequency hint. Easy names a letter
+        in the answer; hard gives only a category; impossible offers no hints.
+        An optional brain.difficulty applies a spoken level change immediately.
         """
         if self.result() is not None:
             return None
-        candidates = [w for w in WORDS if len(w) == len(self.word)
+        level = level_for_difficulty(self.level if difficulty is None else difficulty)
+        if level == "impossible":
+            return None
+        if level == "easy":
+            return min(set(self.word) - self.guessed)
+        vocabulary = WORDS if level == "medium" else _ALL_WORDS
+        candidates = [w for w in vocabulary if len(w) == len(self.word)
                       and "".join(c if c in self.guessed else "_" for c in w) == self.pattern]
         counts = Counter(c for w in candidates for c in set(w) - self.guessed)
-        return min(counts, key=lambda c: (-counts[c], c)) if counts else None
+        hint = min(counts, key=lambda c: (-counts[c], c)) if counts else None
+        if hint is not None and level == "hard":
+            return "a vowel" if hint in "AEIOU" else "a consonant"
+        return hint

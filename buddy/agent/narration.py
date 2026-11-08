@@ -10,6 +10,7 @@ import re
 
 from ..game import dotsboxes as dots
 from ..game import rules, tictactoe
+from ..game.hangman import level_for_difficulty
 
 
 _GRID_STATES = {"PLAYER_TURN", "ROBOT_TURN", "CONFIRM_MARK"}
@@ -185,7 +186,12 @@ def hint_text(brain) -> str:
         return "It's my turn just now, so let's look at your next move afterwards."
     if kind == "hangman":
         game = getattr(brain, "hangman", None)
-        hint = game.hint() if game is not None else None
+        difficulty = getattr(brain, "difficulty", None)
+        if game is not None and game.result() is not None:
+            return "That game is finished, so there isn't another letter to suggest."
+        if game is not None and level_for_difficulty(difficulty if difficulty is not None else game.level) == "impossible":
+            return "There are no hints on impossible, but you can ask for an easier level."
+        hint = game.hint(difficulty) if game is not None else None
         return f"You could try {hint}, if you like." if hint else "I haven't a letter to suggest just now."
     if kind == "dots":
         play = getattr(brain, "dots", None)
