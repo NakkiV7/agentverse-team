@@ -37,6 +37,8 @@ MODEL = getattr(C, "TEACH_MODEL", "gemma4")
 ENABLED = os.environ.get("BUDDY_TOOLS", "1") != "0"
 TIMEOUT_S = 20.0
 NUM_PREDICT = 160             # a tool call or three short sentences; the 4096-token context is shared with the prompt
+NUM_CTX = 8192                # Ollama's default context is 4096 and the facts block took the prompt to 3660 tokens before the
+                              # custom_request tool joined the list; a per-request window twice that leaves room (measured: same speed)
 MAX_TURNS = 3                 # exchanges kept in the running conversation (the facts carry the last eight turns anyway):
                               # measured in the simulator, prefix 3126 + facts and situation up to ~600 + history ~70 each
 # Ollama caches the prompt prefix, and the tool list is part of it. Offering only the state's tools (tools.schemas)
@@ -242,7 +244,7 @@ class Planner:
         self._trim()
         msgs = self.msgs + [{"role": "user", "content": self.user_message(text, situation, facts)}]
         body = {"model": self.model, "stream": False, "think": False, "keep_alive": "60m",
-                "tools": offered, "options": {"temperature": 0.0, "num_predict": NUM_PREDICT}, "messages": msgs}
+                "tools": offered, "options": {"temperature": 0.0, "num_predict": NUM_PREDICT, "num_ctx": NUM_CTX}, "messages": msgs}
         t0 = time.time()
         try:
             r = _post(body, TIMEOUT_S)
