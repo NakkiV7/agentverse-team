@@ -2,6 +2,44 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov, 13:00: the demo page redesigned around the conversation (task U5-ui, branch `ui/clean`)
+
+- **Layout** (`buddy/ui/index.html`, now with `style.css` and `app.js` beside it; `server.py` serves the three
+  from disk on every request, no build step, nothing from a CDN). Header: the game name (hover for the games Buddy
+  knows), the state in words a person understands ("Your turn" in green, "Buddy is drawing", "Buddy is thinking",
+  "Learning your game", "Buddy has a question", red "Arm frozen: hand over the paper"), the level, and three status
+  dots (voice, mic, safety) with the text on hover; the old sensor chips (arm, pen force, sheet pose, strength,
+  rating, sim time) sit in one muted line at the bottom of the trace panel. Three columns from 1180 px:
+  **the conversation** (17 px bubbles, Buddy's latest line at 19 px with an accent bar and "speaking" while the
+  voice runs, one "Now" line above the input saying what to do next per state, a hearing strip with a level
+  meter, the 18 px input with Say, Mute mic), **what Buddy sees** (the straightened paper with the drawing pad as
+  the main image, green outline and a drawing hint only while drawing is possible; the overhead camera and the arm
+  view half-size beneath it with one-line captions; the nine squares only during a grid game, taken squares show
+  their mark, legal squares are green), and **How Buddy decided** (a collapsible panel, open on wide screens,
+  collapsed with the last step in its header on narrow ones; All / See / Plan / Decide / Say filters; the legend
+  is the tooltip on every badge and filter) above **Test it** (the scene buttons with one sentence on what they
+  are for). Two columns between 860 and 1180 px, one below. Light and dark follow the system; the header button
+  or `?theme=light` overrides (remembered in the browser).
+- **Hearing**: the page reads `hearing = {active, partial, level}` from `state.json` when present: the partial
+  transcript shows greyed inside the empty input (the placeholder hides), or as "Hearing: ..." in the strip while
+  the player types, with the level meter beside it; it clears when a Player line lands in the transcript, when
+  `active` turns false, or when the typed text is sent. Without the field the strip falls back to `mic.level`
+  (scaled as before) and "Listening..." / "Microphone muted".
+- **Kept unchanged**: every POST (`say`, `scene`, `draw`, `mic`), the pad's mapping to sheet millimetres
+  (891 x 630 px = 297 x 210 mm, origin at the centre, y up), the legal-cell gating and its warnings, the mute
+  button, polling at 500 ms for state and images and none while the tab is hidden (one fetch per image in flight
+  at most). Images live in boxes with a fixed aspect ratio (297:210 and 4:3), so a new frame never moves the page.
+- **Verified**: headless Chrome 156 screenshots at 1440 x 900 (light and dark), 1920 x 1080 and 900 wide, idle
+  on the live demo (`python -m buddy --no-voice --no-mic --port 8861`) and against a mock `state.json` for a
+  grid game on the player's turn with legal cells, the dots-and-boxes turn, and the safety freeze. Driven over the
+  DevTools protocol on the mock: a mouse stroke from 25%,25% of the sheet posted `draw` starting at
+  (-74.25, 52.5) mm; a green square posted `player_mark 3`, a grey one only showed the warning; Enter and the Say
+  button both posted `say` and cleared the input; Mute posted `mic false`; the See filter left the 4 see / check /
+  sense / safety rows of 13; "Slide the sheet" posted `scene slide`; the panel folds and shows its last step;
+  3 `state.json` fetches in 1.5 s; no horizontal scroll at 1440, Test it and the sensor line inside the viewport.
+  On the live demo, typing "buddy" showed Buddy's greeting in the chat, "Chatting" in the header and the CHAT
+  hint; all three images loaded live at their natural sizes. `pytest -q tests`: **411 passed in 61 s** (the page has no tests of its own; the suite proves the server import still works).
+
 ## 8 Nov, 12:10: Buddy learns dots and boxes from the player, from scratch (demo mode)
 
 - **What it does**: `python -m buddy` now starts with dots and boxes hidden (`BUDDY_HIDE_GAMES`, default "dots and
