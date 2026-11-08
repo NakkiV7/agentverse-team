@@ -3,8 +3,8 @@
 Measured on 8 November 2026, on an Apple M5 with 24 GB RAM.
 **Passed under the coordinator's updated acceptance rules:** 128/134 (95.52%) with text
 names accepted, versus 118/134 (88.06%) native-only. Stop, named switches and letters
-all passed. Measured p95 was 4.967 seconds under contention; idle latency remains for
-the coordinator to measure.
+all passed. Measured p95 was 4.967 seconds under contention. On the merged branch with the other agents
+finished: 129/134 (96.27%) accepted, 119/134 (88.81%) native-only; p50 0.482 s, p95 2.968 s, max 3.954 s.
 
 ## Run it
 

@@ -2,6 +2,37 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov, 04:30: ask Buddy for anything, merged (branch `agent/tools`, round 2 of three agents)
+
+- **What is in**: the three round-2 branches merged onto `agent/tools` on top of `games/integration`:
+  `agent/toolcall` (B2, Claude: Gemma 4 picks tools, the brain checks and runs them), `agent/tool-eval` (C2, GPT-6:
+  the spoken tool descriptions, a 134-case evaluation) and `agent/narration` (D2, GPT-6: score / why / hint text,
+  `App.redraw_last`, hangman word pools by level). Conflicts were only in this file, both sides kept.
+- **Wired after the merge** (the two hooks D2 left unused): hangman now asks the difficulty for its strength first
+  and picks the word with `Hangman.for_difficulty`, so easy gets 4-5 letters, hard 6-7, impossible the rare seven;
+  "do that line again" replays the saved strokes through `app.redraw_last` with live sheet tracking.
+- **Two bugs the scripted games caught on the merged code**: (1) "no wait, let's not play noughts and crosses,
+  let's play dots and boxes instead", said while the grid was being drawn, stayed on noughts and crosses: the
+  executor let the first game named in the sentence override the model's `switch_game('dots and boxes')`. The
+  model's pick now wins when the player's words contain it. (2) The hangman dry run asserted on a seeded word
+  that the adaptive level now draws past; the script forces APPLE itself.
+- **Measured on the merged branch** (M5, other agents finished, load average falling from 10):
+  `.venv/bin/python -m pytest -q tests` **197 passed**. Scripted games, all passing: `tool_dry_run.py` 12 of 12 tool
+  picks (with another simulator running, 4 to 15 s a call), `dry_run.py` 137 s, `menu_dry_run.py` 96 s,
+  `hangman_dry_run.py` APPLE win 191 s, `dots_full_dry_run.py` 3x2 with spoken line, short line finished and a
+  scribble restored 476 s, `switch_dry_run.py` noughts and crosses -> dots and boxes mid-draw -> hangman mid-turn
+  -> stop 500 s, `teach_full_dry_run.py --new` Chains taught, named, played and remembered 168 s.
+  `tools/tool_eval.py` (134 cases): **129/134 = 96.3% with text names, 119/134 = 88.8% native only; p50 0.48 s,
+  p95 2.97 s, max 3.95 s**. Stop 8/8, named switches 15/15, letters 14/14. The five misses: "That's my line done"
+  and "Your turn now" (no tool chosen; the brain's camera check still ends the turn when the line is seen), "Let me
+  teach you a game my dad made up" from the menu (no tool; the old intent path and the teach-word check still catch
+  it), "Join the first two dots along the top row" (right tool, the argument named a different edge), and
+  "Something easier than this" mid-game (set_difficulty instead of a reply; arguably fine).
+- **Run it**: `OLLAMA_MAX_LOADED_MODELS=2 ollama serve`, then `.venv/bin/python -m buddy`, open
+  http://localhost:8860, say "Buddy" and ask in your own words. `BUDDY_TOOLS=0` turns the tool layer off.
+- **Next**: few-shot examples per state in the planner prompt for the "done" phrasings; a spoken confirmation
+  before costly actions (fresh sheet, switch mid-game); rule knobs to widen the teachable family beyond grid games.
+
 ## 8 Nov 2026: game narration, faint-stroke redraw and hangman difficulty (task D2-narration)
 
 - `narration.py` supplies pure `score_text`, `explain_last_move` and `hint_text` helpers for checked grid,
