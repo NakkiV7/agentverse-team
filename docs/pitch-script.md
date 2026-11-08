@@ -3,148 +3,149 @@
 *Word-for-word script, Agentverse 2026 Robotics track. About 700 spoken words, roughly 140 a minute. Read it out
 loud with a timer and cut anything that runs over.*
 
+**Tagline:** *Some games were never written down.*
+
 **Roles:** **P** = presenter (Elias). **D** = demo driver at the laptop. **H** = helper who makes the live scene
 change (slides the sheet, reaches in).
 
-Lines marked **[if built]** depend on work still in progress; use the **[fallback]** line if it isn't on `main` by
-13:00.
+Lines marked **[if built]** depend on work not yet on `main`; read the **[fallback]** line instead if it isn't
+working by 13:00. The code may still call her "Buddy": if the rename hasn't landed, the wake word in the demo is
+"Buddy".
+
+**Live speech is slow with the demo running** (about 9 s per answer, up to 25 s). Keep live spoken exchanges to one
+or two, and let the video carry the main demo.
 
 ---
 
-## 0:00–0:40 · The afternoon *(slide 1: a photo-style title, "Penny")*
+## 0:00–0:30 · Ask the room *(slide 1: "Some games were never written down.")*
 
-**P:** It's three o'clock on a Tuesday in a care home. Lunch is over, the staff are busy, and Margaret is sitting
-in the lounge with nothing to do.
+**P:** Before we start, think of a game you played as a kid. Not one from a shop. Something your family made up,
+or played on the back of an envelope.
 
-Research in English care homes found residents spend around **half their waking time inactive or dozing**.
-Not because they don't want to do anything. Because there's nobody free to do it with.
+*(pause, two seconds)*
 
-Margaret used to love paper games. Her hands shake now, so she can't hold a pen steadily. And the game she loved
-most, one her family played when she was a girl, isn't in any app. It was never written down.
+Could you find it online today? Probably not. Some games were never written down. They live in people's memories.
 
-So we built her a partner. This is **Penny**.
+## 0:30–1:05 · The afternoon *(slide 2: a care home lounge, the statistic)*
 
-*(slide 2: Penny's three jobs: she plays, she learns, she shares)*
+**P:** It's three o'clock in a care home. Lunch is over. Priya, the carer, has fifteen residents and no spare hour.
+Margaret, who's eighty-four, is sitting in the lounge with nothing to do.
 
-## 0:40–1:10 · Why it needs a body *(slide 2)*
+Research in English care homes found residents spend around **half their waking time inactive or dozing**. Not
+because they don't want to do anything, but because there's nobody free to do it with.
 
-**P:** Penny is a robot arm with a pen and a camera. She plays pen-and-paper games on real paper.
+Margaret loved paper games all her life. Her hand trembles now, so she can't write steadily. And her favourite
+game is one her family made up. You won't find it anywhere.
+
+*Margaret, Priya and Arthur are a composite of the residents and carers we read about, not real people.*
+
+## 1:05–1:30 · Meet Penny *(slide 3: plays · learns · shares)*
+
+**P:** So we built Penny: a robot arm with a pen and a camera that plays paper games, on real paper.
+
+She comes knowing the classics: noughts and crosses, hangman, dots and boxes. She remembers your name and how you
+play. When your hand isn't steady, she writes your moves for you. And if your favourite game isn't on her list,
+you teach it to her.
 
 Why not a tablet? Because Margaret doesn't want a screen. She wants paper, a pen, and someone across the table.
-Penny draws the board, reads Margaret's moves with her camera, and when Margaret's hand isn't steady, Penny writes
-the move for her. She is Margaret's hands.
 
-## 1:10–2:40 · Watch her play *(live demo, or the video if the live run fails)*
+## 1:30–2:45 · Watch her play *(the video; live only if it ran clean twice this morning)*
 
-**D** starts the demo page. **P** narrates.
+**P** narrates over the one-minute video (or **D** runs it live).
 
-**P:** Margaret asks for a game.
+**P:** This is Penny mid-game. On the left is what her camera sees: she's found the sheet and read every square,
+with how sure she is about each one.
 
-**D (speaks):** "Penny, let's play a game." **[fallback while the rename isn't in: "Buddy, let's play a game."]**
+Margaret says her move. Penny repeats it before she draws, because ink can't be rubbed out. Every decision comes
+from what Penny sees on the paper, and you can watch it happen in this timeline.
 
-**P:** Penny finds the sheet with her camera. You can see it outlined here, measured to under a millimetre. She
-lowers the pen until she *feels* the paper with a touch sensor, then draws the board.
+Now real life gets messy. Someone knocks the paper while she's drawing.
 
-*(wait for the grid; point at the overlay)*
-
-**P:** Margaret says where she wants to go. Penny repeats it before she draws, because ink is permanent.
-
-**D:** "Top left."
-
-**P:** Every decision Penny makes comes from what she sees on the paper. Here's her reading of each square, with
-how sure she is. Now she replies.
-
-*(Penny draws her move)*
-
-**P:** Real life is messy. Watch what happens when someone moves the paper while she's drawing.
-
-**H** slides the sheet mid-stroke.
+*(the sheet slides in the video)*
 
 **P:** She lifts the pen, waits for the paper to settle, finds where it went, and finishes the line in the right
 place. And if a hand comes over the paper…
 
-**H** reaches in.
+*(the hand reaches in)*
 
-**P:** …she freezes immediately, and carries on once it's clear.
+**P:** …she freezes at once, and carries on when it's clear.
 
-## 2:40–3:20 · When she isn't sure, she asks *(slide 3: the critical failure mode)*
+## 2:45–3:15 · When she isn't sure, she asks *(slide 4: the unclear mark)*
 
-**P:** The worst thing Penny could do is count a move that isn't one. Ink can't be erased, and a confused player
-shouldn't be told they've played somewhere they didn't mean to.
+**P:** The worst thing Penny could do is count a move that isn't one.
 
-**[if built]** So if Penny sees a mark she can't read, like this, *(show the "8" on screen)* she asks an open
-question: "Was that meant to be your move?" If Margaret says no, Penny leaves that square out and carries on. And
-no answer can ever turn an illegal move into a legal one.
+**[if built]** So when she sees a mark she can't read, like this squiggle, she asks: "Was that meant to be your
+move?" If Margaret says no, Penny leaves that square out and carries on. No answer can ever turn an illegal move
+into a legal one.
 
-**[fallback]** So whenever Penny can't read a mark, she asks rather than guesses, and we're tightening that so a
-"yes" can never turn an illegal move into a legal one.
+**[fallback]** So when she can't read a mark, she asks rather than guesses, and we're tightening it so a "yes" can
+never turn an illegal move into a legal one.
 
-**P:** The language model understands what people say. A solver plays the game. The camera keeps everyone honest.
-The language model never chooses a move.
+**P:** The language model understands what people say. A solver plays the game. The camera checks everything. The
+language model never chooses a move.
 
-## 3:20–4:00 · Teach her your game *(slide 4: Footsteps)*
+## 3:15–4:00 · Teach her your game *(slide 5: the Footsteps board)*
 
-**P:** Now the part we're proudest of. Margaret can teach Penny her own game.
+**P:** Now the part we love. Margaret teaches Penny her game, in her own words. Penny asks about anything she's
+missing, *"Next to the last mark, or any mark?"*, reads the rules back, and draws the board.
 
-**[if built: play the teaching clip]** She explains it in her own words. Penny asks what she's missing, *"Is it
-next to the last mark, or any mark?"*, reads the rules back, draws the board, and then she thinks.
-
-**P:** For Footsteps, the little game we use as our test, Penny worked out by herself that the first player can always
-win, but only by starting in a corner or the middle. Nobody told her that. She found it by searching every
+Then she thinks. For Footsteps, the simple game we use to show teaching, Penny worked out on her own that the
+first player can always win, but only by starting in a corner or the middle. Nobody told her. She searched every
 possible game.
 
-**[if built]** And she remembers it. Next week, when Arthur asks what games she knows, she says: *"Margaret
-taught me this one. Would you like to learn it?"*
+**[if built]** A week later, Arthur down the hall asks what games she knows. *"Margaret taught me this one. Would
+you like to learn it?"*
 
-**[fallback]** Every game she learns is saved in her library, so next week she can offer Margaret's game to
-Arthur down the hall.
+**[fallback]** Every game she learns goes into her library, so next week she can offer Margaret's game to Arthur
+down the hall.
 
-**P:** That's what Penny is really for. Games that only lived in one person's memory start spreading around the
-care home again.
+**P:** Games that lived in one person's memory start spreading around the home again.
 
-## 4:00–4:30 · It runs on the robot *(slide 5: the numbers)*
+## 4:00–4:25 · It runs on the robot *(slide 6: the numbers)*
 
-**P:** Everything you've seen runs offline on one laptop: speech recognition, the language model, the vision, the
-solver and the voice. No cloud, no personal data leaving the room. *(read two or three measured numbers from the
-slide: e.g. hand to freeze, Penny's reply time, how long a game takes)*
+**P:** Everything runs offline on one laptop: speech, the language model, vision, the solver and the voice. Nothing
+leaves the room. *(read three numbers from the slide, measured on the demo laptop: e.g. hand to freeze, questions
+answered correctly, how long she takes to reply with the demo running)*
 
-## 4:30–5:00 · What's next, and the close *(slide 6)*
+## 4:25–5:00 · Limits and the close *(slide 7)*
 
-**P:** Penny is a simulation today, built on an open-source arm, the SO-101, that you can buy as a kit. She
-plays square grid games, in English, and a carer still has to load fresh paper. Next: a paper roll so residents
-who can't move can play game after game, more kinds of games, and the real arm.
+**P:** Penny is a simulation today, of a real open-source arm, the SO-101. She plays grid and paper games, in
+English. She can't rub anything out, she takes her time replying, and a carer still loads the paper. Next: faster
+replies, a paper roll, and the real arm.
 
-*(slide 7: back to the opening image)*
+*(slide 8: back to slide 1)*
 
-**P:** It's three o'clock in the care home. The staff are still busy. But Margaret's teaching her childhood game
-to a robot, and next week Arthur's going to learn it too.
+**P:** It's three o'clock in the care home. Priya's still busy. But Margaret's game is in Penny's library now, and
+Arthur's learning it on Thursday.
 
-Thank you. We're happy to take questions.
+Some games were never written down. Penny remembers them.
+
+Thank you.
 
 ---
 
-## Slides (7, keep them almost empty)
+## Slides (8, keep them almost empty)
 
 | # | Slide | On it |
 |---|---|---|
-| 1 | Penny | Name, one-line description, team names |
-| 2 | Plays, learns, shares | Three icons, one word each; "Her hands when yours won't" |
-| 3 | When she isn't sure, she asks | The open question, a screenshot of the unclear mark, "LLM understands · solver plays · camera checks" |
-| 4 | Teach her your game | Footsteps board with the winning start squares shaded (from `docs/games/footsteps.pdf`), "Margaret taught me this one" |
-| 5 | Runs on the robot | Hardware, offline, 4–5 measured latencies from the demo laptop |
-| 6 | Limits and next | Simulation, square grids, English, paper loading → paper roll, more games, real SO-101 |
-| 7 | Back to the afternoon | Same image as slide 1, "Thank you" |
-
-The live demo (or the video) replaces slides between 1:10 and 2:40.
+| 1 | Some games were never written down | Tagline only, big |
+| 2 | The afternoon | Care home lounge image, "about half of residents' waking time is spent inactive or dozing" with the source |
+| 3 | Meet Penny | "Plays · learns · shares", the game list (noughts and crosses, hangman, dots and boxes, + yours), "her hands when yours won't" |
+| — | Video | The one-minute take |
+| 4 | When she isn't sure, she asks | Screenshot of the unclear-mark question; "language model understands · solver plays · camera checks" |
+| 5 | Teach her your game | Footsteps board with the winning start squares shaded (`docs/games/footsteps.pdf`); "Margaret taught me this one" |
+| 6 | Runs on the robot | Hardware, offline, three measured numbers from the demo laptop |
+| 7 | Limits and next | Simulation, grid and paper games, English, slow replies, paper loading → faster replies, paper roll, real SO-101 |
+| 8 | Some games were never written down | Same as slide 1, "Thank you", team names |
 
 ## Before 13:00, decide
 
-- [ ] Live demo or the video? (Recommend: video ready as backup, live only if it ran clean twice this morning.)
-- [ ] Which [if built] lines are real on `main`; delete the rest.
-- [ ] The measured numbers for slide 5 (from the demo laptop).
-- [ ] Check the inactivity figure's wording against the University of Kent paper ("Being occupied", Ageing &
-      Society) and cite it on slide 1.
-- [ ] Rehearse twice with a timer, including the demo hand-offs between P, D and H.
+- [ ] Video or live for 1:30–2:45 (recommend the video; live only if it ran clean twice).
+- [ ] Which [if built] lines are real on `main`; delete the others.
+- [ ] Whether the wake word is "Penny" or still "Buddy" in the demo.
+- [ ] Three numbers for slide 6, measured on the demo laptop with the demo running.
+- [ ] The inactivity figure checked against the University of Kent paper ("Being occupied", Ageing & Society).
+- [ ] Two timed rehearsals, including the hand-offs between P, D and H.
 
 ## Likely questions
 
@@ -152,8 +153,9 @@ The live demo (or the video) replaces slides between 1:10 and 2:40.
 |---|---|
 | Why not a tablet app? | Paper is familiar, touchscreens are hard with a tremor, and Penny writes the moves for you. |
 | Does the AI decide the moves? | No. The language model only handles language. A solver chooses moves, and the camera checks every move on the paper. |
-| What if a resident can't move at all? | Penny writes every move; they only need to say the square. A carer loads paper today; a paper roll is the next step. |
-| Isn't this replacing human contact? | It's a game partner when nobody's free, and it spreads games between residents, so it gives them something to share. |
+| Why does she take so long to answer? | The simulator, vision and voice share one laptop's GPU with the language model. On an idle machine she answers in under 2 s; with everything running it's several seconds. A real robot would have its own compute. |
+| Isn't this replacing human contact? | She's a game partner when nobody's free, and she passes games between residents, so she gives them something to share. |
+| What if a resident can't move at all? | Penny writes every move; they only need to say it. A carer loads paper today; a paper roll is the next step. |
 | Privacy? | Everything runs on the device. No camera images are kept after a game. No face recognition. |
-| Would this work on a real robot? | The simulation uses a calibrated model of the SO-101, a real open-source arm, with real contact physics for the pen. Sim-to-real is the next step, not a redesign. |
-| What can't it do yet? | Only square grid games with X and O style marks, English only, and someone loads the paper. |
+| Would this work on a real robot? | The simulation uses a model of the SO-101, a real open-source arm, with contact physics for the pen. Moving to the real arm is the next step, not a redesign. |
+| What can't she do yet? | Grid and paper games only, English only, she can't rub out or draw pictures, and someone loads the paper. |
