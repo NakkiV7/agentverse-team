@@ -99,9 +99,20 @@ TOOLS: list[Tool] = [
          "and 'pick a good corner'. Do not draw or choose any move yourself.", states=GAME_ON),
     Tool("repeat", "Say the last thing again; the player did not catch it."),
     Tool("say", "Speak through this tool for small talk, thanks, or one question when unsure. Memories about games "
-         "are conversation. Use specific tools for clear requests, including spoken letter names in hangman. "
+         "are conversation. Questions ABOUT the paper ('what have you written in the corner', 'which letters are "
+         "crossed out') are say; requests to change or keep marking the paper are custom_request. "
+         "Use specific tools for clear requests, including spoken letter names in hangman. "
          "All replies must be native tool calls; put conversation in this tool's text argument.",
          {"text": {"type": "string", "description": "One or two short, warm sentences in plain British English, no emoji. Ask when unsure."}}, ("text",)),
+    Tool("custom_request", "The player asks Buddy to write, draw, mark or keep doing something on the paper "
+         "that is not a game move or an existing tool: write the alphabet and cross out wrong letters, keep a "
+         "tally, write the score, underline letters, write a name, or stop crossing letters out. Pass even "
+         "unsupported drawing requests for the paper compiler to check. Questions ABOUT what is already "
+         "written or crossed out are say. A chosen game square/line/letter, faint stroke, pause or new board "
+         "uses its existing tool. Stopping a paper rule is custom_request; stopping play is stop.",
+         {"request": {"type": "string", "description": "Copy the player's complete words verbatim, including all requested actions and timing. Do not summarise or rephrase."}},
+         ("request",), GAME_ON + ("CHAT", "CHOOSE_GAME", "ASK_LEVEL", "ASK_SIDE", "OFFER_TAUGHT", "WAIT_SHEET",
+                                 "SETUP", "DOTS_SIZE", "DOTS_SETUP", "HANGMAN_SETUP", "GAME_OVER")),
 ]
 
 BY_NAME = {t.name: t for t in TOOLS}
