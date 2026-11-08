@@ -270,6 +270,15 @@ Only these places: """ + json.dumps(PLACES) + "\nOnly these templates in text or
     json.dumps({"request": request, "facts": facts, "answer": answer}, ensure_ascii=False)
     for request, facts, answer in EXAMPLES
 )
+SYSTEM += """
+Before returning your answer, check these exact requirements:
+1. A routine has ONLY say, now, rules, cancel. A refusal has ONLY reason, say: NEVER include now, rules or cancel in a refusal.
+2. Do NOT fill runtime placeholders yourself. Even if wrong letters are E T, all-wrong-letter chars MUST be "{wrong}", not "ET". Keep score placeholders too.
+3. For USED vowels, intersect the guessed letters with AEIOU. Guessed A E P T means chars "AE", NEVER "AEIOU". Unused vowels must stay unmarked.
+4. A tick beside a WRITTEN NAME is supported: target its item id. Refuse a tick beside a GAME BOX only. Read the actual target; do not copy the box refusal for other tick requests.
+5. append_text has id and text directly, NEVER target. Mark operations have target. Check every closing bracket; cancel belongs inside the same root object.
+6. Return the JSON object only.
+"""
 
 
 def _chat(request: str, facts: str, state: str) -> str:
