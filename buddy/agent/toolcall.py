@@ -36,8 +36,9 @@ from . import tools
 MODEL = getattr(C, "TEACH_MODEL", "gemma4")
 ENABLED = os.environ.get("BUDDY_TOOLS", "1") != "0"
 TIMEOUT_S = 20.0
-NUM_PREDICT = 200
-MAX_TURNS = 4                 # exchanges kept in the running conversation (the facts carry the last eight turns anyway)
+NUM_PREDICT = 160             # a tool call or three short sentences; the 4096-token context is shared with the prompt
+MAX_TURNS = 3                 # exchanges kept in the running conversation (the facts carry the last eight turns anyway):
+                              # measured in the simulator, prefix 3126 + facts and situation up to ~600 + history ~70 each
 # Ollama caches the prompt prefix, and the tool list is part of it. Offering only the state's tools (tools.schemas)
 # changes the prefix at every state change, so the whole prompt is processed again: measured 5.7 s a call on
 # average over 21 requests, against 1.8 s with the full list every time, with the same 21 of 21 right. So the model

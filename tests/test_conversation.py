@@ -350,7 +350,8 @@ def test_history_keeps_the_words_not_the_facts_and_trims(monkeypatch):
     assert not any("FACTS" in m.get("content", "") for m in history)
     users = [m for m in history if m["role"] == "user"]
     assert len(users) == toolcall.MAX_TURNS
-    assert users[0]["content"] == 'Player said: "question 3"' and users[-1]["content"] == 'Player said: "question 6"'
+    first = 7 - toolcall.MAX_TURNS
+    assert users[0]["content"] == f'Player said: "question {first}"' and users[-1]["content"] == 'Player said: "question 6"'
     assert p.msgs[:base] == toolcall.Planner().msgs[:base]
 
 
