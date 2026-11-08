@@ -2,6 +2,30 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov, 13:10: Penny: a quicker female voice, the redesigned page with live transcript and resizable columns
+
+- **Name**: the robot is now Penny everywhere the player sees or hears it (page, speech, tools, tests); wake words
+  penny, penni, peny, pennie, penney, penn, with buddy still accepted; the box it wins gets a P. The Python
+  package keeps the name `buddy`.
+- **Voice** (task V5, Claude, then finished here): Piper is the default engine, with Kokoro and macOS `say`
+  selectable (`TTS_ENGINE`). Penny's voice is Piper `en_GB-jenny_dioco-medium` (British, female) at length scale 0.9,
+  10% quicker than the voice's own pace: **46 ms to synthesise an 8-word sentence, 87 ms for 18 words** (Kokoro was
+  1.5 to 4.1 s inside the running demo). Kokoro uses `bf_emma` at speed 1.1, `say` uses Flo at 190 wpm.
+  `PIPER_VOICE` and `PIPER_LENGTH_SCALE` override in the environment. A sample: `runtime/penny_voice_sample.wav`.
+- **Live transcript**: whisper.cpp stays loaded (pywhispercpp, Metal); while the player speaks, base.en
+  transcribes the audio so far every 0.7 s and the page shows it greyed in the input box; small.en gives the final
+  text when the utterance ends. `state.json` field `hearing = {active, partial, level}`; level is the raw RMS like
+  `mic.level`.
+- **Page** (task U5, Claude): the conversation first with large text and a "Now" line, the straightened paper with
+  the drawing pad as the main picture and the two cameras beneath, a collapsible "How Penny decided" trace with
+  filters, "Test it" scene buttons, a header with the state in words and three status dots, light and dark. Split
+  into `index.html`, `style.css`, `app.js`. New: **drag the dividers between the three columns** to give any
+  column more room; widths are remembered in the browser, double-click a divider to reset (wide screens only).
+- **Verified**: 430 tests pass; the demo starts with Piper in 0.7 s; in the browser the dividers resize the columns
+  (624/480/432 px to 444/660/432), the widths survive a reload and reset on double-click; the hearing strip showed
+  live partial text from the room's microphone. Not re-run after the voice merge: the scripted simulator games
+  (they run with voice off, so the change does not reach them).
+
 ## 8 Nov, 13:00: the demo page redesigned around the conversation (task U5-ui, branch `ui/clean`)
 
 - **Layout** (`buddy/ui/index.html`, now with `style.css` and `app.js` beside it; `server.py` serves the three

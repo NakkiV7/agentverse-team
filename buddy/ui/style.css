@@ -63,8 +63,17 @@ main { display: grid; gap: var(--gap); padding: var(--gap); max-width: 2100px; m
 .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; font-weight: 650; }
 .cap { color: var(--muted); font-size: 14px; margin: 8px 0 0; line-height: 1.35; }
 
+.gutter { display: none; }
 @media (min-width: 1180px) {
-  main { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 0.9fr); height: calc(100vh - var(--head)); }
+  /* three columns with a draggable divider between each pair (app.js: drag to resize, double-click to reset) */
+  main { grid-template-columns: minmax(0, var(--w1, 1.3fr)) 10px minmax(0, var(--w2, 1fr)) 10px minmax(0, var(--w3, 0.9fr));
+         column-gap: 3px; height: calc(100vh - var(--head)); }
+  .gutter { display: block; cursor: col-resize; border-radius: 5px; position: relative; touch-action: none; }
+  .gutter::after { content: ""; position: absolute; left: 4px; top: 50%; width: 2px; height: 44px; margin-top: -22px;
+                   border-radius: 1px; background: var(--line); transition: background .15s, height .15s; }
+  .gutter:hover::after, .gutter.drag::after { background: var(--accent); height: 88px; margin-top: -44px; }
+  body.resizing { cursor: col-resize; user-select: none; }
+  body.resizing img, body.resizing canvas { pointer-events: none; }
   .col { overflow-y: auto; min-height: 0; }
   .chatcard { height: 100%; display: flex; flex-direction: column; }
   #chat { flex: 1; min-height: 200px; }

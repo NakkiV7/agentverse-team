@@ -271,3 +271,36 @@ $("theme").addEventListener("click", () => {
   try { localStorage.setItem("buddy-theme", theme); } catch (e) { /* fine without */ }
   applyTheme();
 });
+
+
+// ---------------------------------------------------------------- resizable columns (wide screens only)
+// Drag a divider to give a column more or less room; widths are remembered in this browser. Double-click resets.
+(() => {
+  const main = document.querySelector("main"), cols = [...main.querySelectorAll(":scope > section.col")];
+  const MIN = 260, KEY = "penny-cols";
+  const apply = w => w.forEach((v, i) => main.style.setProperty(`--w${i + 1}`, v ? `${v}fr` : ""));
+  try { const saved = JSON.parse(localStorage.getItem(KEY) || "null"); if (Array.isArray(saved) && saved.length === 3) apply(saved); }
+  catch (e) { /* no saved widths */ }
+  document.querySelectorAll(".gutter").forEach(g => {
+    const i = +g.dataset.i;
+    g.addEventListener("pointerdown", e => {
+      e.preventDefault();
+      const start = e.clientX, widths = cols.map(c => c.getBoundingClientRect().width);
+      g.setPointerCapture(e.pointerId); g.classList.add("drag"); document.body.classList.add("resizing");
+      const move = ev => {
+        const pair = widths[i] + widths[i + 1];
+        const left = Math.max(MIN, Math.min(pair - MIN, widths[i] + ev.clientX - start));
+        const w = widths.slice(); w[i] = left; w[i + 1] = pair - left;
+        apply(w.map(Math.round));
+      };
+      const up = () => {
+        g.removeEventListener("pointermove", move); g.removeEventListener("pointerup", up);
+        g.classList.remove("drag"); document.body.classList.remove("resizing");
+        try { localStorage.setItem(KEY, JSON.stringify(cols.map(c => Math.round(c.getBoundingClientRect().width)))); }
+        catch (e) { /* fine without */ }
+      };
+      g.addEventListener("pointermove", move); g.addEventListener("pointerup", up);
+    });
+    g.addEventListener("dblclick", () => { apply([null, null, null]); try { localStorage.removeItem(KEY); } catch (e) { /* */ } });
+  });
+})();
