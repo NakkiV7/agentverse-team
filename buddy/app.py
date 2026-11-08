@@ -258,6 +258,7 @@ class App:
             trace, transcript = list(self._trace)[-150:], list(self._transcript)
         return {
             "state": b.state, "trace": trace, "transcript": transcript,
+            "example": bool(getattr(b, "awaiting_example", False)),   # Buddy asked for one example move on the paper
             "speaking": bool(self.speaker and self.speaker.busy()),
             "mic": {"available": self.listener is not None,
                     "enabled": bool(self.listener and self.listener.enabled),
