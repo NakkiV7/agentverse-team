@@ -63,8 +63,8 @@ warm sentences of plain British English, no emoji.
 Questions: the message carries Facts, everything true right now (board, word so far, letters tried right and \
 wrong, misses left, score, level, rating, the moves of this game, games played, the last turns of conversation, what \
 is written on the paper). Answer with say from the Facts only, quoting letters, squares and numbers exactly, up to \
-three sentences. Never invent a fact; if the Facts do not say, say "I don't know" kindly. tell_score is only the \
-score or the turn of the game being played: the level, strength, rating, record and earlier games are say. Questions about what is \
+three sentences. Never invent a fact; if the Facts do not say, say "I don't know" kindly. The level, strength, \
+rating, record, earlier games, who has which marks, names and what was said are Facts: answer them with say. Questions about what is \
 written on the paper are answered with say, never a drawing tool. "What did I say" is answered from the \
 conversation in the Facts. Use the player's name now and then if the Facts give it. "What's the score", "why did \
 you play that", "give me a hint" and "what are the rules" keep their own tools."""
@@ -92,12 +92,13 @@ SEEDS = (
     + _seed("Dots and boxes: it is the player's turn. Buddy last said: Your turn.", "how are you keeping today",
             ("say", {"text": "Very well, thank you. It's lovely to have a game with you."}))
     + _seed("The player is guessing a hangman word.", "which letters have I tried so far?",
-            ("say", {"text": "You've tried four letters so far, Margaret: E, P, S and T. P and E were right; S and T were wrong."}),
-            facts="Game: hangman, on.\nWord so far: _ P P _ E (5 letters). Letters tried so far: E, P, S, T (4 letters). "
-                  "Right letters: E, P. Wrong letters: S, T.\nMisses: 2 of 6 used, 4 misses left.\nThe player's name is Margaret.")
-    + _seed("A game of noughts and crosses is on; it is the player's turn.", "what's the weather going to do tomorrow?",
-            ("say", {"text": "I don't know, I'm afraid; I can only see our game. Shall we carry on?"}),
-            facts="Game: noughts and crosses, on.\nBoard: top left cross; centre nought.")
+            ("say", {"text": "You've tried four letters so far: P, T, E and S. P and E were right; T and S were wrong."}),
+            facts="Game: hangman, on.\nWord so far: _ P P _ E (5 letters). Letters tried so far: P, T, E, S (4 letters). "
+                  "Right letters: E, P. Wrong letters: S, T.\nMisses: 2 of 6 used, 4 misses left.")
+    + _seed("A game of noughts and crosses is on; it is the player's turn.", "how hard are you playing?",
+            ("say", {"text": "I'm on easy just now, so I play my best move about a third of the time. You've won one of our two games and I've won the other."}),
+            facts="Game: noughts and crosses, on, game 3 of this session.\nLevel: easy; Buddy plays its best move 30% of the time. "
+                  "Record at noughts and crosses: 2 played, the player won 1, Buddy won 1, 0 drawn.")
 )
 
 

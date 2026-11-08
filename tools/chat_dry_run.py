@@ -105,6 +105,9 @@ def player():
     try:
         wait(lambda: app.tracker.track is not None, "camera to find the sheet")
         say("Buddy, let's play hangman.")
+        t_level = time.time()        # the level question comes from a worker, a moment after the reply
+        while time.time() - t_level < 20 and b.state in ("CHAT", "CHOOSE_GAME", "IDLE"):
+            time.sleep(0.1)
         if b.state == "ASK_LEVEL":
             say("authentic please")
         wait(lambda: b.state == "HANGMAN_TURN" and not b.busy, "the checked dashes")
@@ -125,7 +128,9 @@ def player():
         ask("what's the word so far?", [("P", letter("P"), True), ("E", letter("E"), True), ("APPLE", re.compile("APPLE", re.I), False)],
             accept_tools=("tell_score",))
         ask("how many games have we played?", [("1 / first", re.compile(r"\b(?:1|one|first)\b", re.I), True), ("2", number(2, "two"), False)])
-        ask("what did I say a minute ago?", [("something I said", re.compile(r"fruit|\bS\b|\bE\b|letters|wrong|misses", re.I), True)])
+        # any of the player's earlier turns is a right answer: the letters, the fruit remark or one of the questions above
+        ask("what did I say a minute ago?", [("something I said", re.compile(r"fruit|\bS\b|\bE\b|letters|wrong|misses|word|games", re.I), True),
+                                            ("my own question back", re.compile(r"minute ago\W*$", re.I), False)])
         ask("what's my name?", [("Margaret", re.compile("Margaret"), True)])
         ask("what's the score?", [("misses left", re.compile(r"misses left", re.I), True)], accept_tools=("tell_score",))
     except Exception as e:  # noqa: BLE001
