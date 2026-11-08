@@ -2,6 +2,54 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov 2026: C3 paper request compiler (implementation in; acceptance pending)
+
+- Added `buddy.agent.requests.compile(request, facts, state) -> Routine | Refusal`: local Gemma 4 via
+  `config.TEACH_MODEL`, Ollama chat, think off, temperature 0, no format grammar, eight worked examples,
+  strict Python validation and a 25 s deadline. Unknown operations, places, templates, event/data keys,
+  invalid types, duplicate JSON keys, malformed/prose-wrapped output and mixed refusal/action objects refuse.
+  `Routine` has `say`, `now`, `rules`, `cancel`; cancellation accepts rule names, `{"op":"cross_out"}` and
+  `{"kind":"guess"}`. Newlines are advisory. Unsupported game-box ticks suggest a tally or a written-item mark.
+- Appended one `custom_request` Tool and three fixed planner cases (137 total). Updated only the authorised
+  say/custom_request descriptions. The compiler corpus has 32 cases, eight expected refusals; its evaluator
+  checks exact operations, places, event keys/values, templates, cancellation and selected literal content.
+- **Final full tool regression:** 130/137 (94.89%) accepted; 117/137 (85.40%) native; command
+  `.venv/bin/python tools/tool_eval.py --output /tmp/c3-tool-eval-final.json` exits **0**.
+  Gates: stop 8/8, switch_game 15/15, say_letter 14/14. p50 **2.137 s**, p95 **14.651 s**, max **19.039 s**,
+  warm-up **7.508 s**, summed scored time **591.030 s**. Remaining misses: line-05, done-02, done-04, teach-01, tricky-09, tricky-11, custom-request-01.
+- **One full request run:** **24/32 = 75.00%**, below the 85% aim, exit 1; p50 **9.267 s**, p95 **16.841 s**,
+  max **25.160 s**, total **318.592 s**, one timeout. Results: 20 routines, 12 refusals; 7/8 expected refusals
+  correctly shaped. A final prompt check fixed six of the eight failures in the focused follow-up (**6/8**, exit 1):
+  p50 **9.916 s**, p95 **12.265 s**, max **12.730 s**, total **68.473 s**, no malformed output or timeouts.
+  The player's exact alphabet request passed in **11.400 s**, with `{wrong}` now and `{letter}` in its future
+  rule. Two paraphrases still used literal wrong letters or omitted the immediate cross-out. No final full
+  request accuracy is inferred from this selected subset; the user requested only one full request run.
+- **Shared load:** the full request run's 1/5/15-minute load averages went **7.25/4.48/3.50 -> 19.05/12.25/7.26**;
+  focused follow-up **19.06/13.84/8.45 -> 11.10/12.46/8.35**. Two other agents and a simulator shared Ollama,
+  with this branch's planner evaluation and part of pytest also overlapping. Latency never gates acceptance.
+- **Earlier planner measurements, all retained:** first full **129/137 (94.16%) accepted**, **117/137 (85.40%)
+  native**, p50 **0.924 s**, p95 **12.052 s**, max **28.525 s**, warm-up **3.736 s**, total **506.695 s**;
+  failed the letter gate (13/14; stop 8/8, named switches 15/15), with custom input verbatim in 1/3.
+  A Why/Y focus check passed in **16.831 s**. Two known-failing planner attempts stopped at **28/29**
+  (warm-up **17.304 s**, total **203.567 s**, max **24.607 s**) and **67/69** (warm-up **5.387 s**, total
+  **204.349 s**, max **15.796 s**). Letter category candidate: **13/14**, p50 **1.614 s**, p95 **5.230 s**,
+  max **8.535 s**, warm-up **17.582 s**, total **31.039 s**. Final letter category: **14/14**, p50 **0.680 s**,
+  p95 **3.807 s**, max **5.617 s**, warm-up **8.756 s**, total **18.166 s**. Both category scores were the same
+  natively and with accepted text calls. The final custom subset selected the tool in 3/3 but copied exactly
+  **2/3**: p50 **7.476 s**, p95 **9.264 s**, max **9.463 s**, warm-up **8.473 s**, total **18.050 s**.
+- Direct full-tool-list questions about paper: **1/2** successful, one no-call result at **20.083 s** and one
+  correct say answer in **17.914 s**. Initial compiler smoke: valid literal-letter alphabet routine in **8.231 s**.
+  The local setup check passed with MuJoCo **3.17.0**. See `docs/requests.md` for reports, hashes and limitations.
+- **Tests:** offline saved-response/validation checks **128 passed in 0.67 s** (earlier clean check **0.09 s**).
+  `.venv/bin/python -m pytest -q tests`: **325 passed, 6 failed in 164.18 s**. The six unchanged rating fixtures
+  construct `Brain.__new__` without `events`/`listeners`, so the base round-3 emit hook fails. Isolated reproduction:
+  one failure, 20 deselected, **3.48 s**. These files are outside C3 ownership; the coordinator must fix the
+  fixtures and rerun. No brain, toolcall, dots brain, narration, paper, app or marks code was changed.
+- **Handoff:** call `compile(request=player_words, facts=brain.facts(), state=brain.state)` using the original
+  utterance: the planner can still shorten its argument. On Routine, speak `say`, apply `cancel`, run `now`
+  through the checked paper worker and register `rules` after successful setup. On Refusal, speak `say` and
+  trace `reason`. The coordinator still owns wiring and the inherited fixture correction.
+
 ## 8 Nov, 04:30: ask Buddy for anything, merged (branch `agent/tools`, round 2 of three agents)
 
 - **What is in**: the three round-2 branches merged onto `agent/tools` on top of `games/integration`:
