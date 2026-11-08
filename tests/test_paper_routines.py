@@ -212,3 +212,13 @@ def test_a_reserved_robot_turn_is_not_mistaken_for_an_idle_worker(paper):
     paper.brain.state = "DOTS_PLAYER_TURN"
     wait(lambda: not paper.pending)
     assert paper.items["alphabet"].characters[1].marks == {"cross_out"}
+
+
+def test_full_item_refuses_append_with_a_workable_place_for_another_note(paper):
+    assert write(paper, "A") is None
+    item = paper.items["alphabet"]
+    item.region = item.characters[0].box
+    before = len(paper.draws)
+    error = paper.run([{"op": "append_text", "id": "alphabet", "text": "B"}])
+    assert "would work for a new note" in error
+    assert item.text == "A" and len(paper.draws) == before

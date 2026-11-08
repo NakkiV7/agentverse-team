@@ -341,6 +341,19 @@ class Paper:
         suggestion = f"the {other} would work" if other else "please move the sheet closer or ask for less text"
         raise ValueError(f"There isn't enough free space within reach in the {place}; {suggestion}")
 
+    def _append_refusal(self, item, text, pose, why):
+        for place, regions in self._regions(pose).items():
+            for region in regions:
+                try:
+                    cells = L.layout_text(text, region, item.size_mm)
+                    self._reachable(pose, [s for cell in cells for s in cell.strokes()])
+                except ValueError:
+                    continue
+                return ValueError(f"I cannot append to {item.id} because {why}; "
+                                  f"the {place} would work for a new note")
+        return ValueError(f"I cannot append to {item.id} because {why}; "
+                          "please move the sheet closer or use a fresh sheet")
+
     @staticmethod
     def glyph_ink(look, app, cell):
         rect = rectify(look.rgb, app.cam, look.track.pose)
@@ -434,15 +447,21 @@ class Paper:
                     return
                 if not item.complete:
                     raise ValueError(f"{item_id} was not completely written, so I cannot append safely")
-                cells = L.layout_text(item.text + text, item.region, item.size_mm)
+                try:
+                    cells = L.layout_text(item.text + text, item.region, item.size_mm)
+                except ValueError as exc:
+                    raise self._append_refusal(item, text, look.track.pose, str(exc)) from exc
                 start = len(item.characters)
                 if any(a.box != b.box for a, b in zip(item.characters, cells)):
-                    raise ValueError("appending would move earlier writing; please start another item")
+                    raise self._append_refusal(item, text, look.track.pose, "that would move earlier writing")
                 obstacles = L.footprint(self.brain) + [c.box for key, other in self.items.items() if key != item_id
                                                     for c in other.characters]
                 if any(c.box.overlaps(r) for c in cells[start:] for r in obstacles):
-                    raise ValueError("there isn't free space to append without touching another drawing")
-                self._reachable(look.track.pose, [s for c in cells[start:] for s in c.strokes()])
+                    raise self._append_refusal(item, text, look.track.pose, "that would touch another drawing")
+                try:
+                    self._reachable(look.track.pose, [s for c in cells[start:] for s in c.strokes()])
+                except ValueError as exc:
+                    raise self._append_refusal(item, text, look.track.pose, str(exc)) from exc
                 with self._lock:
                     if generation != self._generation:
                         raise ValueError("the sheet changed before I could append")
