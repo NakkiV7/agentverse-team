@@ -17,6 +17,9 @@ from dataclasses import dataclass, field
 from buddy import config as C
 from buddy.game.rules import ENDS, PLACEMENTS, GameSpec
 
+NUM_CTX = 8192   # the same context size as the planner (toolcall.NUM_CTX): Ollama reloads a model whenever a request asks
+                 # for a different one, which cost several seconds between a teaching call and a planner call
+
 TEACH_MODEL = getattr(C, "TEACH_MODEL", "gemma4")
 MAX_QUESTIONS = 3
 
@@ -101,7 +104,7 @@ class Teacher:
 
     def _chat(self) -> str:
         body = {"model": self.model, "messages": self.msgs, "stream": False, "think": False, "keep_alive": "30m",
-                "options": {"temperature": 0.0, "num_predict": 160}}
+                "options": {"temperature": 0.0, "num_predict": 160, "num_ctx": NUM_CTX}}
         req = urllib.request.Request(f"{C.OLLAMA_URL}/api/chat", data=json.dumps(body).encode(),
                                      headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=120) as r:
@@ -152,7 +155,7 @@ def warm_up(model: str = TEACH_MODEL) -> float:
     """Load the teaching model once at start-up so the first lesson is not slowed by a cold start (~6 s)."""
     t0 = time.perf_counter()
     body = {"model": model, "messages": [{"role": "user", "content": "hi"}], "stream": False, "think": False,
-            "keep_alive": "30m", "options": {"num_predict": 1}}
+            "keep_alive": "30m", "options": {"num_predict": 1, "num_ctx": NUM_CTX}}
     req = urllib.request.Request(f"{C.OLLAMA_URL}/api/chat", data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=120):

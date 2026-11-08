@@ -23,7 +23,9 @@ Updated after every big change. Newest first. Numbers are measured on Nakkiv's M
 - **Measured on the merged branch** (M5, other agents finished, one simulator running):
   `pytest`: **399 passed**. `tools/question_eval.py` (46 live questions over hangman, grid and dots):
   **45/46 = 97.8%** (21/46 without the facts), p50 1.4 to 2.0 s, prompt 3660 tokens, so the planner now asks for an
-  8192-token context (Ollama's default is 4096). `tools/request_eval.py` (32 requests): **27/32 = 84.4%**, p50 2.5 s;
+  8192-token context (Ollama's default is 4096; `ollama ps` still shows 4096 for gemma4's MLX runner, which ignores
+  `num_ctx`, yet it processed 4149-token prompts in the alphabet run without truncation, so the window is not a
+  hard limit there; every gemma4 call now asks for the same size so no reload is ever triggered). `tools/request_eval.py` (32 requests): **27/32 = 84.4%**, p50 2.5 s;
   the misses are paraphrases of the alphabet request that name the wrong letters literally instead of `{wrong}`
   (they still work for the letters wrong at that moment). `tools/tool_eval.py` with the new tool in the list:
   **130/137 = 94.9%**, critical cases 100%. `tools/alphabet_dry_run.py` (the sentence above, typed, in the
