@@ -2,6 +2,49 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov, 06:00: Buddy answers any question from the live facts (task A3-conversation, branch `agent/conversation`)
+
+- **What is in**: `brain.facts()` is the whole picture in plain sentences the model can quote: the game and its
+  rules, level, strength, rating and record, whose turn, the board square by square / the hangman pattern with the
+  letters tried in guess order, right ones, wrong ones, misses used and left and the gallows parts drawn / the dots
+  board size, lines drawn, boxes owned and score, Buddy's last move or line with its reason, the move history of this
+  game (from `brain.events`), the games finished this session with their results, the last eight turns of
+  conversation (the turn being answered is left out, so the model answers it instead of echoing it), Buddy's last
+  words, the time since the game started, the player's name and `brain.paper.describe()` when a paper routine is
+  attached. Kept under 1500 characters (measured 886 to 1465 across the test scenes) by shortening the move history
+  and the conversation first. The planner (`toolcall.plan`) gets the facts under `Facts:` in the newest user message
+  only; the system prompt and worked examples stay a cached prefix. The prompt says: answer questions with `say` from
+  the Facts only, up to three sentences, "I don't know" when the facts do not say; level, rating, record, earlier
+  games, names, who has which marks and what was said are facts for `say`; questions about what is written on the
+  paper are `say`, never a drawing tool; the exact-question tools keep their questions. Two worked examples (letters
+  tried; the level and record). `say` keeps 500 characters. The brain remembers a name ("I'm Margaret", "call me Peg")
+  and the prompt tells the model to use it now and then.
+- **Context budget (matters for anyone touching the prompt)**: Gemma 4 runs with a 4096-token context on this
+  Ollama; the prefix is 3126 tokens, the facts plus situation up to about 600, each kept exchange about 70. So the
+  stored history keeps the player's words and the model's calls only (never the facts or the situation), at most three
+  exchanges, and the answer is capped at 160 tokens. Measured in the simulator: 3781 to 3800 prompt tokens with the
+  earlier four-exchange history; the trace now prints the prompt tokens next to the seconds of every planner call.
+- **Measured** (M5, the two other round-3 agents and the coordinator sharing Ollama, load average 5 to 16):
+  `tools/question_eval.py`, 46 cases over hangman (mid-game with a name and a paper routine; a fresh hard game), grid
+  (mid-game; just won) and dots (2x2 mid-game; 3x2 early): **45/46 = 97.8%** with the facts, twice in a row
+  (the miss: "how hard are you playing?" answered with Buddy's own "I'm playing gently" line instead of the level);
+  the same requests without the facts block **21/46 = 45.7%**. Latency back to back under the same load: p50 1.83 s
+  with the facts and 1.83 s without, mean 2.81 s against 3.73 s, so the facts add nothing measurable at the median
+  (410 more prompt tokens; prompt p50 3597, max 3640 of 4096 with no history). Earlier prompt versions scored 39/46
+  and 38/46: naming `tell_score` in the guidance made the model pick it more, and a name in a worked example was
+  told back to a nameless player, so the guidance names no tool and the examples carry no name.
+  `tools/chat_dry_run.py` (part of a hangman game by typed text in the simulator, APPLE forced, "authentic please",
+  "I'm Margaret", P T E S, then eight questions): **8/8** on the final code (193 s wall, 4.4 to 4.9 s a question, prompt up to 3808 tokens). Four earlier runs scored 7/8 with a different single miss each time, and each became a fix: the level question not waited for (script), 'what did I say' judged too narrowly (script), the model picking `repeat` for 'what did I say' (the repeat tool now answers that from the heard events), and a 27 s planner call past the 20 s timeout under load, whose Gemma 3 fallback read the question as a letter (an information question with no planner answer now gets 'I lost my train of thought, could you ask me that again?' instead). `tests`: `.venv/bin/python -m pytest -q tests` **228 passed** in 139 s (25 new in tests/test_conversation.py).
+  `tools/tool_eval.py` on the unchanged tool descriptions (its own prompt, re-run whole as asked): **127/134 = 94.8%** with text names, 119/134 native only; stop 8/8, switch_game 15/15, say_letter 14/14; p50 0.97 s, p95 13.5 s with two simulators sharing Ollama (129/134 at the last idle measurement; the two extra misses were tricky-04 and -05 argument text, and this eval does not use the planner prompt at all, so the number is load noise, not a regression).
+  `tools/tool_dry_run.py`: **12/12** expected tools, final state IDLE, 320 s wall, model 7.8 s a request (max 18.2 s, two simulators on Ollama, close to the planner's 20 s timeout). `tools/hangman_dry_run.py`: **ok**, APPLE won, minimum stroke coverage 1.0, saved record 1 play 1 win, 360 s wall.
+- **Fixed on the way**: a Brain built without `__init__` (tests/test_rating.py) gets its event log lazily in
+  `emit()`, which the round-3 base's `say -> emit` had broken (6 failures); hangman now emits `game_start` like the
+  grid games; `plan()` keeps its three-argument signature (the brain hands the facts over as `planner.facts`).
+- **For the coordinator**: attach the paper routines as `brain.paper` (anything with `describe()`), and the facts
+  include it. Nothing in `app.py`, `tools.py`, `requests.py` or `buddy/paper` was touched. The level, rating and
+  record answers come from `brain.difficulty` and the library entry; the dots facts need `brain.dots.state`.
+  Open: "how hard are you playing" sometimes gets a warm non-answer; a seed for it would cost ~100 prefix tokens.
+
 ## 8 Nov, 04:30: ask Buddy for anything, merged (branch `agent/tools`, round 2 of three agents)
 
 - **What is in**: the three round-2 branches merged onto `agent/tools` on top of `games/integration`:
