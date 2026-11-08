@@ -292,7 +292,7 @@ class DotsPlay:
         self.b._worker(self.setup, self.state)
 
     # -- spoken lines ------------------------------------------------------------------------------
-    def parse_edge(self, text: str):
+    def parse_edge(self, text: str, include_drawn: bool = False):
         """'the top of the top left box', 'left side of the centre', 'bottom row, second box, right side'."""
         t = re.sub(r"[^a-z0-9 ]+", " ", text.lower())
         t = re.sub(r"\bsquare\b", "box", t)
@@ -300,7 +300,7 @@ class DotsPlay:
             t = re.sub(rf"\b{w}\b", str(v), t)
         best, best_score = None, 0
         for e in range(D.n_edges(self.n)):
-            if self.state.edges >> e & 1:
+            if self.state.edges >> e & 1 and not include_drawn:
                 continue
             words = [w for w in re.sub(r"[^a-z0-9 ]+", " ", D.edge_name(self.n, e).lower()).split() if w not in ("the", "of", "side", "box", "in")]
             if all(re.search(rf"\b{w}\b", t) for w in words):
@@ -317,6 +317,21 @@ class DotsPlay:
         self.app.trace("decide", f"the player asked me to draw {D.edge_name(self.n, e)} for them")
         self.say(f"{D.edge_name(self.n, e).capitalize()}. Here it comes.")
         self.b._worker(self._draw_for_player, e)
+
+    def finish_started(self) -> bool:
+        """'Finish my line': complete the line the player started, if the camera sees one. False when there is none."""
+        _, rect, res = self.look()
+        if res is None:
+            self.say("I can't see the paper clearly just now.")
+            return False
+        known = self.state.edges
+        started = [(r.coverage, e) for e, r in enumerate(res) if not known >> e & 1 and not r.drawn and r.coverage >= 0.15]
+        if not started:
+            self.say("I don't see a line that's been started. Draw it, or tell me which one and I'll draw it for you.")
+            return False
+        cov, e = max(started)
+        self._finish_short(e, cov)
+        return True
 
     # -- Buddy's turn ----------------------------------------------------------------------------------
     def robot_turn(self):

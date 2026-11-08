@@ -48,6 +48,9 @@ from .teach import Teacher
 from ..game.hangman import Hangman, WORDS, letter as hangman_letter
 from .dots_brain import STATES as DOTS_STATES, DotsPlay
 from copy import deepcopy
+from ..game import dotsboxes as D
+from . import tools
+from .toolcall import Planner, ToolCall
 
 if TYPE_CHECKING:
     from ..app import App
@@ -98,8 +101,12 @@ class Brain:
         self._setup_after_level = None
         self._hangman_strokes = []
         self._hangman_pending = None
+        self.planner = Planner()                # Gemma 4 picks tools from what the player said (buddy/agent/toolcall.py)
+        self._size_hint = None                  # a dots board size said before the size question (new_board tool)
+        self._side_hint = None                  # a side said before the board is drawn (choose_side tool)
         threading.Thread(target=self._loop, daemon=True, name="brain").start()
         threading.Thread(target=self._watch, daemon=True, name="board-watch").start()
+        threading.Thread(target=self._warm_planner, daemon=True, name="planner-warm-up").start()
 
     # ------------------------------------------------------------------ helpers
     def set_state(self, new: str, why: str):
@@ -156,6 +163,8 @@ class Brain:
     def rules_text(self) -> str:
         if self.entry is not None and self.entry.kind == "hangman":
             return self.entry.describe()
+        if self.entry is not None and self.entry.kind == "dots":
+            return D.describe(self.dots.n) if self.dots is not None else self.entry.describe()
         return self.spec.describe() if self.spec else RULES
 
     def situation(self) -> str:
@@ -231,6 +240,10 @@ class Brain:
                 self._teach(text)
             return
         sit = self.situation()
+        calls = self._plan_tools(text, sit)      # Gemma 4 picks tools; None = model off or unsure, use the old path
+        if calls is not None:
+            self.run_tools(calls, text)
+            return
         u = self.conv.understand(text, sit)
         extra = f", cell={NAMES[u.cell]}" if u.cell is not None else ""
         self.app.trace("understand", f"Gemma 3 4B: intent={u.intent}" + (f", game={u.game}" if u.game != "none" else "")
@@ -545,7 +558,8 @@ class Brain:
     def _start_setup(self, why: str):
         if self.entry is not None and self.entry.kind == "dots":
             self.dots = DotsPlay(self)
-            if self.dots.take_size(self.last_heard):
+            said, self._size_hint = self._size_hint, None
+            if self.dots.take_size(said or self.last_heard):
                 self.say(f"Lovely, {self.dots.n[1] if isinstance(self.dots.n, tuple) else self.dots.n} across. Let me have a look at the paper.")
                 self._worker(self.dots.setup)
             else:
@@ -627,11 +641,17 @@ class Brain:
         self.gstate = State.start(self.spec) if self.spec else None
         if self._maybe_switch():
             return
+        if self._side_hint:                              # the player already said crosses or noughts
+            sym, self._side_hint = self._side_hint, None
+            self.say("There we are.")
+            self.start_game(sym, inline=True)
+            return
         self.say("There we are. Would you like to be crosses or noughts?" + (" Crosses go first." if not self.spec else ""))
         self.set_state("ASK_SIDE", "the board is drawn and checked")
 
     # ------------------------------------------------------------------ the game
-    def start_game(self, player_sym: str):
+    def start_game(self, player_sym: str, inline: bool = False):
+        """inline: already inside a worker (the setup), so Buddy's first move runs here rather than in a new one."""
         self.player_sym, self.robot_sym = player_sym, other(player_sym)
         self.games += 1
         self.app.trace("decide", "difficulty: " + self.difficulty.start_game(self.game_name, self.rng))
@@ -648,7 +668,10 @@ class Brain:
         else:
             self.set_state("ROBOT_TURN", f"the player chose {SYM[player_sym]}es; Buddy goes first")
             self.say(f"{PLURAL[player_sym].capitalize()} for you, so I'll start.")
-            self._worker(self._robot_move)
+            if inline:
+                self._robot_move()
+            else:
+                self._worker(self._robot_move)
 
     def _watch(self):
         """Turn-taking: in PLAYER_TURN, watch the board the camera reads until a new mark has been steady for
@@ -993,3 +1016,370 @@ class Brain:
             found = f"{c} is in the word. " if c in candidate.word else ""
             noun = "miss" if candidate.remaining == 1 else "misses"
             self.say(f"{found}{candidate.remaining} {noun} left. Say another letter.")
+
+    # ------------------------------------------------------------------ tools: the player asks in their own words
+    # Gemma 4 (buddy/agent/toolcall.py) turns what the player said into tool calls from buddy/agent/tools.py. Nothing
+    # here trusts the model: every tool is checked against the state it was offered in, then against the live state,
+    # the board, the rules and the reach checks by the same methods the intent path uses. The model never picks a
+    # move: draw_my_mark / draw_my_line / say_letter only carry what the player named, and _voice_move / _spoken_line /
+    # _hangman_act check it.
+    IN_GAME = ("PLAYER_TURN", "ROBOT_TURN", "CONFIRM_MARK", "DOTS_PLAYER_TURN", "DOTS_ROBOT_TURN", "HANGMAN_TURN")
+    RESTING = ("IDLE", "CHAT", "CHOOSE_GAME", "GAME_OVER", "OFFER_TAUGHT")
+    SETTING_UP = ("ASK_LEVEL", "SETUP", "WAIT_SHEET", "ASK_SIDE", "DOTS_SIZE", "DOTS_SETUP", "HANGMAN_SETUP")
+
+    def _warm_planner(self):
+        """Process the planner's instructions once at start-up so the first real request is quick."""
+        try:
+            self.planner.plan("hello", "Buddy is starting up.", "CHAT")
+            self.planner.reset()
+            self.app.trace("system", f"tool planner ready ({self.planner.model} via Ollama, warmed up in {self.planner.seconds:.1f} s)")
+        except Exception as e:  # noqa: BLE001
+            self.app.trace("system", f"tool planner not available ({e}); using the intent path")
+
+    def _plan_tools(self, text: str, sit: str):
+        """Ask the planner. A size answer to the size question wins without a model call (the old precedence rule)."""
+        if self.state in ("TEACH", "NAME_GAME"):
+            return None
+        if self.state == "DOTS_SIZE" and self.dots is not None and self.dots.parse_size_text(text) is not None:
+            self.app.trace("understand", f"tools: new_board(size={text!r}) (a size answer wins; no model call)")
+            return [ToolCall("new_board", {"size": text})]
+        full = sit + f" Rules of {self.game_name}: {self.rules_text()}"
+        if self.dots is not None and self.dots.state is not None and self.state in DOTS_STATES:
+            full += " " + self.dots._score_line()
+        if self.last_said:
+            full += f' Buddy last said: "{self.last_said}"'
+        calls = self.planner.plan(text, full, self.state)
+        if calls is None:
+            self.app.trace("understand", f"tools: no answer from {self.planner.model} ({self.planner.seconds:.1f} s); using the intent path")
+            return None
+        self.app.trace("understand", "tools: " + ", ".join(str(c) for c in calls) + f" ({self.planner.seconds:.1f} s)")
+        return calls
+
+    def _u(self, intent: str, **kw) -> Understanding:
+        """A synthetic Understanding, to reuse the state machine's own handling of yes / no / done / a letter."""
+        return Understanding(intent, "none", "none", None, 0.0, **kw)
+
+    def run_tools(self, calls, text: str = ""):
+        """Carry out the planner's choices in order. Availability is checked against the state the request came
+        in (the one the model was told about); each action then checks the live state and the board itself."""
+        shown = self.state
+        offered = {t.name for t in tools.available(shown)}
+        for call in calls:
+            name, args = call.name, dict(call.args or {})
+            if name not in tools.BY_NAME:
+                self.app.trace("decide", f"tool {name}: not one of mine, ignored")
+                continue
+            if name not in offered and not (name == "answer" and shown == "CHAT"):
+                self.app.trace("decide", f"tool {name}: does not fit {shown}, refused")
+                self.say(self._refusal(name))
+                continue
+            fn = getattr(self, f"_tool_{name}")
+            try:
+                fn(args, text)
+            except Exception as e:  # noqa: BLE001
+                self.app.trace("decide", f"tool {name}: error: {e}")
+                self.say("I'm sorry, I couldn't do that just now.")
+
+    def _refusal(self, name: str) -> str:
+        st = self.state
+        if name == "answer":
+            return {"PLAYER_TURN": "It's your turn: draw your mark, or tell me the square and I'll draw it.",
+                    "DOTS_PLAYER_TURN": "It's your line. Draw it, or tell me which one, like the left side of the top right box.",
+                    "HANGMAN_TURN": "Say a letter whenever you're ready."}.get(st, "Alright.")
+        if st in self.RESTING:
+            return "There's no game on just now. Shall we start one?"
+        if st in self.SETTING_UP:
+            return "Let me get the board ready first."
+        if st in ("ROBOT_TURN", "DOTS_ROBOT_TURN"):
+            return "Let me finish my go first."
+        return "I can't do that just now."
+
+    # -- choosing what to play
+    def _tool_switch_game(self, args, text):
+        name = str(args.get("name") or "").strip()
+        entry = self.library.find(name) or self.library.find(text)
+        st = self.state
+        if entry is None:
+            why = f"asked for a game I don't know ({name or text!r}): asking to be taught"
+            if st in self.RESTING:
+                self.start_teaching(why)
+            else:
+                self.request_switch("teach", why)
+            return
+        if entry is self.entry:
+            if st in self.SETTING_UP:
+                self.say(f"Yes, {entry.name} is what we're setting up." + (" " + self.last_said if st in ("ASK_SIDE", "ASK_LEVEL", "DOTS_SIZE") else ""))
+                return
+            if st in self.IN_GAME or st == "GAME_OVER":
+                self._tool_start_again(args, text)
+                return
+        if st in self.RESTING:
+            self._select(entry)
+            self.start_setup(f"the player chose {entry.name}")
+        else:
+            self.request_switch(entry, f"the player asked for {entry.name}")
+
+    def _tool_teach_game(self, args, text):
+        if self.state in self.RESTING:
+            self.start_teaching("the player wants to teach me a game")
+        else:
+            self.request_switch("teach", "the player wants to teach me a game")
+
+    def _tool_list_games(self, args, text):
+        self.say(f"I know {self.library.spoken_list()}, and you can teach me a new one. Which would you like?")
+        if self.state in ("CHAT", "GAME_OVER"):
+            self.set_state("CHOOSE_GAME", "listed the games")
+
+    def _tool_set_difficulty(self, args, text):
+        level = str(args.get("level") or "").strip().lower()
+        level = {"authentic": "adaptive", "adapt": "adaptive", "realistic": "adaptive", "adaptive": "adaptive"}.get(level, level)
+        if level not in (*LEVELS, "adaptive"):
+            self.say("Easy, medium, hard, impossible, or authentic?")
+            return
+        words = self.difficulty.set_level(level)
+        self.level_asked = True
+        self.app.trace("decide", f"difficulty set to {level} (strength {100 * self.difficulty.strength:.0f}%)")
+        if self.state == "ASK_LEVEL":
+            self.say(f"Alright, {words}.")
+            why, self._setup_after_level = self._setup_after_level, None
+            self._start_setup(why or "the level is chosen")
+            return
+        self.say(f"Alright, {words}." + (" " + self.last_said if self.state in ("CHOOSE_GAME", "ASK_SIDE") else ""))
+
+    def _tool_new_board(self, args, text):
+        size = str(args.get("size") or "").strip()
+        st = self.state
+        dots_entry = self.library.find("dots and boxes")
+        if st == "DOTS_SIZE" and self.dots is not None:
+            said = size if self.dots.parse_size_text(size) is not None else text
+            if self.dots.parse_size_text(said) is None:
+                self.say("How many boxes across and down? Two by two is the usual.")
+            elif self.dots.take_size(said):               # says why when the size does not fit
+                self.say(f"{D.size_words(self.dots.n).capitalize()} it is.")
+                self._worker(self.dots.setup)
+            return
+        self._size_hint = size or text
+        if st in ("DOTS_PLAYER_TURN", "DOTS_ROBOT_TURN"):
+            self._tool_start_again(args, text)              # a new size mid-game: a fresh board of that size
+        elif st in self.RESTING or self.entry is not dots_entry:
+            self._select(dots_entry)
+            self.start_setup("the player wants a dots and boxes board")
+        # otherwise the size is kept for when the setup starts (for example after the level question)
+
+    def _tool_start_again(self, args, text):
+        entry = self.entry or self.library.find("noughts and crosses")
+        if self.busy or self.state in self.BUSY_STATES:
+            self.request_switch(entry, "the player wants to start again")
+            return
+        if self.dots is not None:
+            self.dots.running = False
+        self.hangman = None
+        self.pending = None
+        self.app.trace("decide", f"the player wants to start {entry.name} again")
+        self.say(f"Another game of {entry.name}, then." if self.state == "GAME_OVER" else "Let's start again.")
+        self.start_setup("the player wants to start again")
+
+    def _tool_stop(self, args, text):
+        if self.state in self.RESTING and not self.busy:
+            self.set_state("IDLE", "the player does not want to play now")
+            self.say("No problem at all. Just say Buddy whenever you fancy a game.")
+        else:
+            self.request_switch("stop", "the player wants to stop")
+
+    # -- answers to Buddy's questions
+    def _tool_answer(self, args, text):
+        yes = args.get("yes", True)
+        if isinstance(yes, str):
+            yes = yes.strip().lower() in ("true", "yes", "1")
+        self._act(self._u("yes" if yes else "no"), text, self.situation())
+
+    def _tool_choose_side(self, args, text):
+        side = str(args.get("side") or "").strip().lower()
+        sym = "X" if "cross" in side or side == "x" else "O" if "nought" in side or side in ("o", "zero", "circle") else None
+        if sym is None:
+            self.say("Crosses or noughts?")
+            return
+        if self.state == "ASK_SIDE" and not self.busy:
+            self.start_game(sym)
+            return
+        self._side_hint = sym
+        self.say(f"{PLURAL[sym].capitalize()} for you, then.")
+
+    def _tool_fresh_sheet_ready(self, args, text):
+        if self.state in ("HANGMAN_SETUP", "GAME_OVER"):
+            self._act(self._u("yes"), text, self.situation())
+        else:
+            self.say("Thank you. Let me have a look.")
+
+    # -- the player's own move, said rather than drawn
+    def _cell_index(self, words: str):
+        t = re.sub(r"[^a-z ]+", " ", words.lower())
+        t = re.sub(r"\bcenter\b", "centre", t)
+        t = re.sub(r"\bmiddle\b", "centre", t) if re.fullmatch(r"\s*(the\s+)?middle\s*(one|square)?\s*", t) else t
+        if t.strip() in tools.CELLS:
+            return tools.CELLS.index(t.strip())
+        rows = {"top": 0, "centre": 1, "middle": 1, "bottom": 2}
+        cols = {"left": 0, "centre": 1, "middle": 1, "right": 2}
+        r = next((v for k, v in rows.items() if re.search(rf"\b{k}\b", t)), None)
+        c = next((v for k, v in cols.items() if re.search(rf"\b{k}\b", t) and not (k in ("centre", "middle") and r == 1 and t.count(k) < 2)), None)
+        if r is None and c is None:
+            return None
+        return 3 * (1 if r is None else r) + (1 if c is None else c)
+
+    def _tool_draw_my_mark(self, args, text):
+        cell = str(args.get("cell") or "").strip().lower()
+        idx = tools.CELLS.index(cell) if cell in tools.CELLS else self._cell_index(cell or text)
+        if idx is None:
+            self.say("Which square? Say the row and the column, like the top left, or the centre.")
+            return
+        if self.state == "CONFIRM_MARK":
+            self.say(self.last_said)
+            return
+        if self.state != "PLAYER_TURN" or self.busy:
+            self.say("Let me finish my go first.")
+            return
+        self._voice_move(idx)                               # checks free and legal, then draws
+
+    def _tool_draw_my_line(self, args, text):
+        if self.state != "DOTS_PLAYER_TURN" or self.dots is None or self.dots.state is None:
+            self.say(self._refusal("draw_my_line"))
+            return
+        if self.busy:
+            self.say("Let me finish this first.")
+            return
+        where = str(args.get("where") or "").strip()
+        if self.dots.parse_edge(where) is None:
+            if self.dots.parse_edge(text) is not None:
+                where = text
+            elif self.dots.parse_edge(where or text, include_drawn=True) is not None:
+                self.say("That line is already drawn. Which other one would you like?")
+                return
+        self.dots._spoken_line(where or text)              # finds the line, checks it is free, then draws
+
+    def _tool_say_letter(self, args, text):
+        if self.state != "HANGMAN_TURN" or self.hangman is None:
+            self.say(self._refusal("say_letter"))
+            return
+        if re.search(r"\b(?:or|and)\b|\b[A-Za-z]\s*[,/]\s*[A-Za-z]\b", text, re.I):
+            self.say("One letter at a time, please. Which would you like?")
+            return
+        self._hangman_act(self._u("say_letter", letter=hangman_letter(str(args.get("letter") or ""))))
+
+    def _tool_finish_my_line(self, args, text):
+        if self.state != "DOTS_PLAYER_TURN" or self.dots is None or self.dots.state is None:
+            self.say(self._refusal("finish_my_line"))
+            return
+        if self.busy:
+            self.say("Let me finish this first.")
+            return
+        self.dots.finish_started()
+
+    def _tool_i_am_done(self, args, text):
+        self._act(self._u("done"), text, self.situation())
+
+    # -- about the drawing
+    def _tool_redraw_last_stroke(self, args, text):
+        last = getattr(self.app, "last_strokes", None)
+        if not last:
+            self.say("There's nothing for me to draw again yet.")
+            return
+        if self.busy:
+            self.say("Let me finish this first, then I'll go over it.")
+            return
+        name, strokes = last
+        self.app.trace("decide", f"drawing {name} again, as the player asked")
+        self.say("Of course. Let me go over that again.")
+        self._worker(self._redraw, name, strokes)
+
+    def _redraw(self, name, strokes):
+        job = self.app.draw(name, strokes)
+        job.done.wait()
+        self._seen = None
+        self._maybe_switch()
+
+    def _tool_wait(self, args, text):
+        self.say("Of course, take your time.")
+
+    # -- talking about the game
+    def _narrate(self, what: str, fallback):
+        """buddy/agent/narration.py (another agent's) when it exists, else a short built-in line."""
+        try:
+            from . import narration
+            fn = getattr(narration, what, None)
+            if fn is not None:
+                out = fn(self)
+                if out:
+                    return out
+        except ImportError:
+            pass
+        except Exception as e:  # noqa: BLE001
+            self.app.trace("decide", f"narration.{what} failed ({e}); using the built-in line")
+        return fallback()
+
+    def _last_move_name(self) -> str | None:
+        ch = self.last_choice
+        if ch is None:
+            return None
+        if self.entry is not None and self.entry.kind == "dots" and self.dots is not None:
+            return D.edge_name(self.dots.n, ch.cell)
+        return "the " + NAMES[ch.cell]
+
+    def _score_fallback(self) -> str:
+        e = self.entry or self.library.find("noughts and crosses")
+        record = (f" Over all our games of {e.name}, you've won {e.player_wins} and I've won {e.robot_wins}." if e.plays else "")
+        if self.dots is not None and self.dots.state is not None and self.state in DOTS_STATES:
+            p, q = self.dots.state.score("P"), self.dots.state.score("B")
+            turn = "your turn" if self.state == "DOTS_PLAYER_TURN" else "my turn"
+            return f"You have {p} box{'es' if p != 1 else ''} and I have {q}. It's {turn}."
+        if self.hangman is not None and self.state == "HANGMAN_TURN":
+            spelled = " ".join("blank" if c == "_" else c for c in self.hangman.pattern)
+            return f"So far the word reads {spelled}, with {self.hangman.remaining} misses left."
+        if self.state in ("PLAYER_TURN", "CONFIRM_MARK"):
+            return "No score yet in this game; it's your turn." + record
+        if self.state == "ROBOT_TURN":
+            return "No score yet in this game; it's my turn." + record
+        return ("There's no game on just now." + record) if not record else record.strip()
+
+    def _tool_tell_score(self, args, text):
+        self.say(self._narrate("score_text", self._score_fallback))
+
+    def _tool_explain_last_move(self, args, text):
+        def fallback():
+            name = self._last_move_name()
+            if name is None:
+                return "I haven't played a move yet this game."
+            return f"I took {name} because it was {self.last_choice.reason}."
+        self.say(self._narrate("explain_last_move", fallback))
+
+    def _hint_fallback(self) -> str:
+        best = Difficulty(level="impossible")
+        if self.hangman is not None and self.state == "HANGMAN_TURN":
+            self._hangman_act(self._u("hangman_hint"))
+            return ""
+        if self.dots is not None and self.dots.state is not None and self.state == "DOTS_PLAYER_TURN":
+            ch = self.dots.solver.choose(self.dots.state, best, self.rng)
+            return f"You could try {D.edge_name(self.dots.n, ch.cell)}."
+        if self.state == "PLAYER_TURN":
+            if self.spec is not None and self.gstate is not None:
+                ch = self.solver.choose(self.gstate, best, self.rng)
+            else:
+                ch = choose(self.board, self.player_sym, best, self.rng)
+            return f"You could try the {NAMES[ch.cell]}."
+        return "I can only give a hint on your turn."
+
+    def _tool_give_hint(self, args, text):
+        out = self._narrate("hint_text", self._hint_fallback)
+        if out:
+            self.say(out)
+
+    def _tool_explain_rules(self, args, text):
+        self.say(self._narrate("rules_text", self.rules_text) + (" Shall we play?" if self.state == "CHAT" else ""))
+        if self.state == "CHAT":
+            self.set_state("CHOOSE_GAME", "explained the rules and offered a game")
+
+    def _tool_repeat(self, args, text):
+        self.say(self.last_said or "I haven't said anything yet.")
+
+    def _tool_say(self, args, text):
+        reply_text = str(args.get("text") or "").strip().strip('"')
+        self.say(reply_text[:300] if reply_text else "I'm listening.")
