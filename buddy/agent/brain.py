@@ -1692,7 +1692,22 @@ class Brain:
             self.set_state("CHOOSE_GAME", "explained the rules and offered a game")
 
     def _tool_repeat(self, args, text):
+        if re.search(r"\bwhat (did|have) i (just )?(say|said|ask|asked|tell|told)\b", text.lower()):
+            self.say(self.what_player_said(text))       # the model sometimes reads "what did I say" as repeat
+            return
         self.say(self.last_said or "I haven't said anything yet.")
+
+    def what_player_said(self, current: str | None = None) -> str:
+        """The player's last turns before the one being handled, from the event log, as a spoken answer."""
+        turns = [ev.text for ev in self.events if ev.kind == "heard"]
+        if current is not None and turns and turns[-1] == current:
+            turns = turns[:-1]
+        if not turns:
+            return "You haven't said anything to me yet."
+        out = f'A moment ago you said "{self._short(turns[-1], 80)}"'
+        if len(turns) > 1:
+            out += f', and before that "{self._short(turns[-2], 80)}"'
+        return out + "."
 
     def _tool_say(self, args, text):
         reply_text = str(args.get("text") or "").strip().strip('"')

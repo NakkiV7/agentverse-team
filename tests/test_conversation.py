@@ -355,6 +355,18 @@ def test_history_keeps_the_words_not_the_facts_and_trims(monkeypatch):
     assert p.msgs[:base] == toolcall.Planner().msgs[:base]
 
 
+def test_what_did_i_say_is_answered_from_the_log_even_through_repeat(brain):
+    hangman_scene(brain)
+    brain.emit("heard", "player", "what did I say a minute ago?")
+    brain.run_tools([ToolCall("repeat", {})], "what did I say a minute ago?")
+    assert brain.last_said == 'A moment ago you said "N", and before that "S".'
+    brain.run_tools([ToolCall("repeat", {})], "say that again please")
+    assert brain.last_said == 'A moment ago you said "N", and before that "S".'   # a real repeat repeats
+    fresh = brain.__class__.__new__(brain.__class__)
+    fresh.app, fresh.events = brain.app, []
+    assert fresh.what_player_said() == "You haven't said anything to me yet."
+
+
 def test_say_keeps_three_sentences(brain):
     long = "One sentence here. " * 40
     brain.run_tools([ToolCall("say", {"text": long})], "")
