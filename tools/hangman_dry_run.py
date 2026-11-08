@@ -46,9 +46,18 @@ def main():
         from buddy.perception.board import rectify
         from buddy.perception.sheet import check_lines
 
+        from buddy.agent import brain as brain_module
+        from buddy.game.hangman import Hangman
+
+        class ScriptedHangman(Hangman):
+            # APPLE whatever level the difficulty picks: two P slots exercise repeated-letter drawing.
+            @classmethod
+            def for_difficulty(cls, difficulty, rng=None):
+                return cls("APPLE", level=difficulty)
+
+        brain_module.Hangman = ScriptedHangman
         app = App(voice=False, mic=False)
         b = app.brain
-        b.rng.seed(184)  # APPLE: two P slots exercise repeated-letter drawing.
         expected = "loss" if args.lose else "win"
         output = C.RUNTIME / f"hangman_{expected}"
         result = {"ok": False, "expected": expected}
