@@ -1,4 +1,9 @@
-# Penny: who does what
+# Penny (first called Buddy): who does what
+
+> **Historical planning document, written in the first hour (7 Nov).** The workstreams below name files from the
+> first scaffold (`buddy/bus.py`, `buddy/contracts.py`, `buddy/motion/planner.py`, `tests/test_agent.py`, ...)
+> that were replaced the same evening when Hakim's build became the code base. The current layout is in the
+> [README](../README.md#layout); what was built and measured since is in [STATUS.md](STATUS.md).
 
 Source of truth for the design: [architecture.pdf](architecture.pdf). This file turns it
 into four equal workstreams and the order to do things in. Shared rules first.
@@ -11,11 +16,11 @@ still contributes is this plan. Run things as the README says: `.venv/bin/python
 `tools/dry_run.py`, `python -m pytest -q tests`.
 
 Verified on Nakkiv's Mac (M5, Homebrew Ollama 0.40): all 6 tests pass (52 s); the scripted whole game
-completes (one Penny win in 78 s wall, one draw in 92 s); Gemma 3 4B intents in 0.9 to 1.5 s; structured
+completes (one Buddy win in 78 s wall, one draw in 92 s); Gemma 3 4B intents in 0.9 to 1.5 s; structured
 output (`format`) works with `gemma3:4b`. Not verified on a second machine: microphone in, Kokoro out.
 
 **Teach-a-game (7 Nov, late evening): working end to end in the simulation.** Say "let me teach you a game";
-Penny runs the interview with Gemma 4 (`buddy/agent/teach.py`), asks when a rule is missing, reads the rules back,
+Buddy runs the interview with Gemma 4 (`buddy/agent/teach.py`), asks when a rule is missing, reads the rules back,
 solves the game (`buddy/game/solver.py`), says what it found ("whoever goes first can always win, but only from a
 corner or the centre"), draws the board, and plays it on the paper with the solver choosing its moves; the camera
 still reads every move. `tools/teach_full_dry_run.py` does the whole thing scripted (Footsteps in about 100 s of
@@ -25,6 +30,7 @@ only for now, so 4x4 games are understood but declined. Measured: Gemma 4 extrac
 time (`tools/teach_eval.py`); Gemma 3 4B guesses missing rules, so it stays on the in-game intents. Solver results
 match `docs/games/footsteps.pdf`. Left here: a rules panel on the demo page, and the "example game drawn on the
 paper" idea from `docs/concept.md`.
+
 
 **Roles** (from who built what; edit if it changes):
 
@@ -126,7 +132,7 @@ Owns the game and the conversation. The minimax and the Gemma client exist; the 
       ROBOT_TURN → GAME_OVER). Player's mark from `bus.percept` via `Game.check_player`; robot's move via
       `Game.robot_move`; `MotionCommand(draw=x_strokes(cell))`; results via `Game.result()`; difficulty via
       `Difficulty.after_game`.
-- [ ] **Hour 7:** a full typed game with Stage's `/say` box (no voice yet). Every line Penny says goes through
+- [ ] **Hour 7:** a full typed game with Stage's `/say` box (no voice yet). Every line Buddy says goes through
       `bus.say` and the transcript. Lines for older players: short sentences, rules repeated on request,
       no time pressure.
 - [ ] **Hour 9:** interrupt table from PDF p.6: hand in area (say why, resume), sheet moved (say, continue),
@@ -149,7 +155,7 @@ Owns everything the audience sees and hears.
 - [ ] **Hour 11, voice out:** Kokoro-82M (`pip install kokoro soundfile sounddevice`), sentence by sentence,
       slightly slower rate, a British voice; `urgent` lines interrupt.
 - [ ] **Hour 11, voice in:** Silero VAD + whisper.cpp `small.en` (`brew install whisper-cpp`), plus a
-      push-to-talk key. Wake word "Penny" can be a plain substring check on the transcript.
+      push-to-talk key. Wake word "Buddy" can be a plain substring check on the transcript.
 - [ ] **Pitch:** 3-minute demo script, the one-page technical summary, screen recording of the stream page.
 
 Files: `buddy/voice/*`, `buddy/ui/*`.
@@ -161,4 +167,4 @@ Files: `buddy/voice/*`, `buddy/ui/*`.
 - **Hour 1:** `uv run python -m buddy.main --seconds 10` runs with every thread alive; `scripts/check_env.py` all OK.
 - **Hour 5:** Arm + Vision: the arm draws the grid, Vision reports `grid_found=True` and nine empty cells.
 - **Hour 7:** Brain + Stage: a typed game end to end on the stream page.
-- **Hour 9:** everyone: slide the sheet mid-stroke, wave the hand in, draw two O's; Penny reacts correctly to each.
+- **Hour 9:** everyone: slide the sheet mid-stroke, wave the hand in, draw two O's; Buddy reacts correctly to each.
