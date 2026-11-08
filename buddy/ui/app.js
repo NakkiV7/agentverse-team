@@ -156,8 +156,8 @@ function hearing(s, newPlayerLine) {
   strip.classList.toggle("gone", !available);
   $("micbtn").classList.toggle("gone", !s.mic.available);
   if (!available) { $("ghost").textContent = ""; return; }
-  // hearing.level is 0..1; mic.level is a raw RMS where 0.07 is loud
-  const level = h ? Math.min(100, Math.round(100 * (h.level || 0))) : Math.min(100, Math.round(1500 * (s.mic.level || 0)));
+  // hearing.level and mic.level are both the raw RMS of the last 32 ms of audio, where 0.07 is loud
+  const level = Math.min(100, Math.round(1500 * ((h ? h.level : s.mic.level) || 0)));
   $("lvl").style.width = (s.mic.available && !s.mic.enabled ? 0 : level) + "%";
   const active = h ? !!h.active : s.mic.enabled;
   if (newPlayerLine || !active) partial = "";          // the final text arrived, or Penny stopped listening

@@ -3,7 +3,9 @@ mujoco>=3.3,<4        # the SO-101 twin is tested on 3.x
 numpy
 opencv-python-headless<5
 # speech
-kokoro>=0.9          # text to speech (Kokoro-82M, Apache 2.0)
+piper-tts>=1.8       # text to speech, the default engine (Piper, en_GB voices fetched to ~/.cache/piper on first use)
+kokoro>=0.9          # text to speech, the optional nicer voice (Kokoro-82M, Apache 2.0): TTS_ENGINE=kokoro
+pywhispercpp>=1.5    # whisper.cpp resident in the process (Metal): live partial text while the player speaks
 silero-vad           # voice activity detection (MIT)
 sounddevice
 soundfile

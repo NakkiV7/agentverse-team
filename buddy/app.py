@@ -1,4 +1,4 @@
-"""Buddy, the whole system in one process.
+"""Penny, the whole system in one process.
 
 Threads
   main        MuJoCo in real time: arm controller 50 Hz, physics 500 Hz, overhead camera 10 Hz while anything moves or
@@ -8,7 +8,8 @@ Threads
   perception  every camera frame: find the sheet and track it (also while the arm draws), read the board with the
               mark classifier when the view is clear, draw the overlays for the demo page while it is open
   brain       conversation + game (buddy/agent/brain.py), with workers for setup and moves
-  voice       Kokoro speaker; microphone listener (Silero VAD + Whisper)
+  voice       speaker (Piper by default, Kokoro or macOS say: config TTS_ENGINE); microphone listener
+              (Silero VAD + whisper.cpp resident: live partial text while the player speaks, small.en at the end)
   web         the demo page at http://localhost:8860
 """
 from __future__ import annotations
@@ -99,10 +100,10 @@ class App:
         self._said_adapt = None
         self.speaker = None
         if voice:
-            self.trace("system", "loading the voice (Kokoro-82M)")
+            self.trace("system", f"loading the voice ({C.TTS_ENGINE})")
             from .voice.tts import Speaker
             self.speaker = Speaker(on_event=self.trace)
-            self.trace("system", f"voice ready ({self.speaker.load_s:.1f} s)")
+            self.trace("system", f"voice ready: {self.speaker.label} ({self.speaker.load_s:.1f} s)")
         self.brain = Brain(self)
         self.listener = None
         if mic:
@@ -110,7 +111,7 @@ class App:
             self.listener = Listener(on_text=lambda t, dt: self.brain.hear(t, "mic", dt),
                                      is_speaking=self._speaking_recently, on_event=self._mic_event)
             self.listener.start()
-            self.trace("system", "microphone on (Silero VAD + Whisper small.en); say 'Buddy' to start")
+            self.trace("system", f"microphone on ({self.listener.label}); say 'Penny' to start")
         threading.Thread(target=self._warm_llm, daemon=True).start()
         threading.Thread(target=self._perception_loop, daemon=True, name="perception").start()
 
@@ -258,11 +259,14 @@ class App:
             trace, transcript = list(self._trace)[-150:], list(self._transcript)
         return {
             "state": b.state, "trace": trace, "transcript": transcript,
-            "example": bool(getattr(b, "awaiting_example", False)),   # Buddy asked for one example move on the paper
+            "example": bool(getattr(b, "awaiting_example", False)),   # Penny asked for one example move on the paper
             "speaking": bool(self.speaker and self.speaker.busy()),
             "mic": {"available": self.listener is not None,
                     "enabled": bool(self.listener and self.listener.enabled),
                     "level": round(self.listener.level, 4) if self.listener else 0.0},
+            # the ears, live: active while the player speaks (until the final text reaches the transcript), the
+            # partial text heard so far (show it greyed in the input box), the microphone level
+            "hearing": self.listener.hearing() if self.listener else {"active": False, "partial": "", "level": 0.0},
             "sheet": None if tr is None else {"x_cm": round(100 * tr.pose[0], 1), "y_cm": round(100 * tr.pose[1], 1) + 0.0,
                                               "rot_deg": round(math.degrees(tr.pose[2]), 1),
                                               "conf": round(tr.confidence, 2), "visible": tr.visible,
