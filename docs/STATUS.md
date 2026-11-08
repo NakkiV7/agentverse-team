@@ -2,6 +2,32 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov, 11:20: faster writing and faster answers, merged (branch `agent/tools` = `games/integration`)
+
+- **What changed**: the paper routines write one arm job per row instead of per letter, with the camera check per
+  job and only failed letters redrawn (task B4, GPT-6); the planner keeps no stored history and the facts are
+  ordered stable-first, so Ollama's prefix cache covers everything but the volatile tail (172 to 262 tokens
+  reprocessed a call instead of 570 to 675), the camera idles at 3 Hz, page images render only while the page
+  fetches them, and the page polls at 500 ms and stops when hidden (task A4, Claude). The compiler gets 60 s and
+  keeps a refusal the model writes as `{"refusal": ...}`.
+- **Measured on the merge** (M5, demo running in real time with the voice loaded, nobody else on the machine):
+  `pytest` **407 passed**. `tools/alphabet_dry_run.py` through the real path: the sentence compiled in 8 s, the
+  alphabet written and the earlier wrong letters crossed in **114 s** (was 893 s), planner calls **0.9 to 1.6 s**
+  during play (were 8 to 12 s), exactly B C D crossed, **4 of 4** questions right, **139 s wall** (was 1006 s).
+  `tools/question_eval.py` with the demo up: **44/46, p50 0.53 s, max 1.07 s** (was 44/46 at p50 8.7 s with the
+  old demo up; the two misses are "what's my rating?" and "how hard are you playing?", both routed to tell_score,
+  which answers with the score instead). `tools/tool_eval.py` **130/137 = 94.9%**, critical cases 100%.
+  `tools/request_eval.py` **28/32 = 87.5%**, above its 85% target for the first time, p50 1.3 s.
+- **Why answers were slow** (A4's finding, from Ollama's own log): every planner call hit the cached 3431-token
+  prefix and then reprocessed the whole user message because the stored history swapped the previous user message
+  for the player's words alone, so the cache match ended at the previous exchange; under the GPU load of other
+  simulators that prefill ran at 150 tokens a second. The demo's own rendering, physics, voice and microphone
+  each cost 10 to 15 percent when measured alone. Five stale browser tabs of the old page, each polling at the
+  old rate, alone put every call at 3 s: close them.
+- **Still open**: the request compiler (about 8 to 20 s a call) blocks the planner while it runs; sensor noise in
+  `world.render_overhead` costs 61 of 93 ms a frame (a pre-drawn noise bank would fix it); Kokoro takes 4 to 8 s a
+  sentence inside the loaded demo against 1 to 2 s alone; "what's my rating" should route to say.
+
 ## 8 Nov 2026: alphabet writing in under three minutes of arm time (B4-paper-speed, `agent/paper`)
 
 - **Changed**: after merging `games/integration`, writing and appending draw one job per row, split at six
