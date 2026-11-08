@@ -154,6 +154,14 @@ main { display: grid; gap: var(--gap); padding: var(--gap); max-width: 2100px; m
 .thumbs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
 .thumbs figure { margin: 0; min-width: 0; }
 .thumbs figcaption { color: var(--muted); font-size: 13.5px; margin-top: 5px; line-height: 1.3; }
+/* click a small view to make it the large one (app.js: VIEWS) */
+.pick { cursor: pointer; border-radius: 10px; }
+.pick .frame { transition: outline-color .15s; outline: 2px solid transparent; outline-offset: 2px; }
+.pick:hover .frame, .pick:focus-visible .frame { outline-color: var(--accent); }
+.pick:hover figcaption::after, .pick:focus-visible figcaption::after { content: " · click to enlarge"; color: var(--accent); }
+.paper.cam { aspect-ratio: 4 / 3; background: color-mix(in srgb, var(--fg) 6%, var(--card)); }
+.paper.cam canvas { display: none; }
+.frame.sheetthumb img { object-fit: contain; background: #fff; }
 
 /* ---------- how Penny decided: collapsible, filterable; legend lives in tooltips */
 details.card { padding: 0; }
