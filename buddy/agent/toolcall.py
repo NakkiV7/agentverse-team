@@ -63,7 +63,8 @@ warm sentences of plain British English, no emoji.
 Questions: the message carries Facts, everything true right now (board, word so far, letters tried right and \
 wrong, misses left, score, level, rating, the moves of this game, games played, the last turns of conversation, what \
 is written on the paper). Answer with say from the Facts only, quoting letters, squares and numbers exactly, up to \
-three sentences. Never invent a fact; if the Facts do not say, say "I don't know" kindly. Questions about what is \
+three sentences. Never invent a fact; if the Facts do not say, say "I don't know" kindly. tell_score is only the \
+score or the turn of the game being played: the level, strength, rating, record and earlier games are say. Questions about what is \
 written on the paper are answered with say, never a drawing tool. "What did I say" is answered from the \
 conversation in the Facts. Use the player's name now and then if the Facts give it. "What's the score", "why did \
 you play that", "give me a hint" and "what are the rules" keep their own tools."""
@@ -207,6 +208,8 @@ class Planner:
     def __init__(self, model: str = MODEL):
         self.model = model
         self.seconds = 0.0            # how long the last plan() took
+        self.facts = ""               # brain.facts() for the next plan() when it is not passed as an argument
+        self.tokens = 0               # prompt tokens of the last call (the context is 4096)
         self.reset()
 
     def reset(self):
@@ -226,11 +229,13 @@ class Planner:
     def user_message(text: str, situation: str, facts: str = "") -> str:
         return f"Situation: {situation}\n" + (f"Facts:\n{facts.strip()}\n" if facts else "") + f"Player said: \"{text}\""
 
-    def plan(self, text: str, situation: str, state: str, facts: str = "") -> list[ToolCall] | None:
+    def plan(self, text: str, situation: str, state: str, facts: str | None = None) -> list[ToolCall] | None:
         if not ENABLED:
             return None
         if not tools.available(state):          # TEACH and NAME_GAME have their own flows
             return None
+        if facts is None:
+            facts, self.facts = self.facts, ""
         offered = [t.schema() for t in tools.TOOLS] if OFFER_ALL_TOOLS else tools.schemas(state)
         self._trim()
         msgs = self.msgs + [{"role": "user", "content": self.user_message(text, situation, facts)}]
@@ -240,6 +245,7 @@ class Planner:
         try:
             r = _post(body, TIMEOUT_S)
             message = r.get("message") or {}
+            self.tokens = int(r.get("prompt_eval_count") or 0)
             calls = parse_message(message, state)
         except Exception:
             self.reset()

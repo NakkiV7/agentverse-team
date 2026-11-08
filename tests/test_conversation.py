@@ -217,7 +217,7 @@ def test_hangman_facts_tell_the_letters_right_wrong_and_misses(brain):
     f = brain.facts()
     assert "Game: hangman, on, game 2 of this session, started 4 minutes ago" in f
     assert "Word so far: _ P P _ E (5 letters, 3 found, 2 still blank)" in f
-    assert "Letters tried so far: E, N, P, S, T (5 letters). Right letters: E, P. Wrong letters: N, S, T." in f
+    assert "Letters tried so far: P, T, E, S, N (5 letters). Right letters: E, P. Wrong letters: N, S, T." in f
     assert "Misses: 3 of 6 used, 3 misses left. Gallows parts drawn: the upright post, the beam, the rope." in f
     assert "Whose turn: the player's." in f
     assert "The player's name is Margaret." in f

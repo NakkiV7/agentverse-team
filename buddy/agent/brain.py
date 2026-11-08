@@ -149,8 +149,11 @@ class Brain:
         """Record an Event and tell the listeners (paper routines, the facts block). Listener errors are traced,
         never raised into the game."""
         ev = Event(kind, who, text, data, time.time())
-        self.events.append(ev)
-        for fn in list(self.listeners):
+        # a Brain built without __init__ (tests do that to avoid the threads) still gets a log
+        events = self.__dict__.setdefault("events", collections.deque(maxlen=400))
+        listeners = self.__dict__.setdefault("listeners", [])
+        events.append(ev)
+        for fn in list(listeners):
             try:
                 fn(ev)
             except Exception as e:
@@ -333,7 +336,9 @@ class Brain:
         out = [f"Whose turn: {self._turn()}."]
         if kind == "hangman":
             h = self.hangman
-            tried = sorted(h.guessed)
+            tried = [ev.data["letter"] for ev in self._this_game_events() if ev.kind == "guess" and "letter" in ev.data]
+            if set(tried) != h.guessed or len(tried) != len(h.guessed):
+                tried = sorted(h.guessed)                       # the events do not cover this game: alphabetical
             right = sorted(c for c in tried if c in h.word)
             wrong = sorted(c for c in tried if c not in h.word)
             found = len(h.word) - h.pattern.count("_")
@@ -1335,11 +1340,13 @@ class Brain:
             return [ToolCall("new_board", {"size": text})]
         # the rules, the dots score and Buddy's last words used to be appended here; the facts block carries them
         # now, and the 4096-token context is tight (toolcall.py)
-        calls = self.planner.plan(text, sit, self.state, facts=self.facts(current=text))
+        self.planner.facts = self.facts(current=text)         # handed over as planner state: plan() keeps its old signature
+        calls = self.planner.plan(text, sit, self.state)
         if calls is None:
             self.app.trace("understand", f"tools: no answer from {self.planner.model} ({self.planner.seconds:.1f} s); using the intent path")
             return None
-        self.app.trace("understand", "tools: " + ", ".join(str(c) for c in calls) + f" ({self.planner.seconds:.1f} s)")
+        self.app.trace("understand", "tools: " + ", ".join(str(c) for c in calls)
+                       + f" ({self.planner.seconds:.1f} s, {self.planner.tokens} prompt tokens)")
         return calls
 
     def _u(self, intent: str, **kw) -> Understanding:
