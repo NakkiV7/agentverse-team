@@ -163,3 +163,13 @@ def test_defer_guess_is_drained_at_character_boundary(paper):
     paper.drawing = False
     paper._boundary(paper._generation)
     assert guesses == ["P"]
+
+
+def test_a_said_rule_failure_does_not_generate_another_said_event(paper):
+    paper.add_rule({"name": "notes on speech", "when": {"kind": "said"},
+                    "do": [{"op": "write_text", "id": "speech", "text": "{name}",
+                            "place": "top right corner"}]})
+    paper.on_event(event(kind="said", who="buddy"))
+    wait(lambda: not paper.pending)
+    assert "template {name}" in paper.last_error
+    assert not paper.said and not paper.items

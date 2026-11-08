@@ -182,6 +182,10 @@ class Paper:
             return item_id in self._missing
 
     def on_event(self, ev):
+        # Our own progress announcement must not recursively trigger a
+        # standing "when Buddy says something, write ..." instruction.
+        if ev.kind == "said" and threading.current_thread() is self._thread:
+            return
         if ev.kind in ("switch", "game_start"):
             self.new_sheet()
         with self._lock:
@@ -249,8 +253,6 @@ class Paper:
                 if failures:
                     request.error = failures[0][0].upper() + failures[0][1:] + "."
                     self.last_error = request.error
-                    if request.rule is not None:
-                        self.brain.say(request.error)
             except Exception as exc:
                 request.error = f"I could not finish the paper routine: {exc}."
                 self.last_error = request.error
