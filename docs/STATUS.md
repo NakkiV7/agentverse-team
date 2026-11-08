@@ -37,8 +37,11 @@ Updated after every big change. Newest first. Numbers are measured on Nakkiv's M
   wanted the digit 4 and is fixed). 1006 s wall. Pictures: `runtime/alphabet_sheet.png`, `runtime/alphabet_overhead.png`.
   B3's own `tools/paper_dry_run.py` (alphabet and a dots score strip) and all earlier scripted games pass.
 - **Known limits**: with the simulator running flat out (scripted runs, `realtime=False`) a planner call took 8 to
-  12 s and one hit the 20 s timeout (the old intent path answered); measure in the live demo, which runs the
-  simulator in real time. Writing is slow (about 20 s a letter) because every letter is its own checked arm job;
+  12 s and one hit the 20 s timeout (the old intent path answered). Measured again with the live demo up (real-time
+  simulator, voice loaded) and a second tester typing into it: `question_eval` still 44/46 but **p50 8.7 s, max 25 s**,
+  against 1.4 to 2.0 s on the idle machine: the answer quality holds, the speed does not. The next thing to fix is
+  the demo's own load on the GPU the model shares (camera rendering every frame, voice synthesis) and the 700
+  uncached facts tokens per call. Writing is slow (about 20 s a letter) because every letter is its own checked arm job;
   Buddy says so first and the player can keep guessing. The paper vocabulary is write, append, cross out,
   underline, circle, tick on written items; it cannot erase, draw pictures, or mark game squares or boxes
   (Buddy says what it can do instead). The request compiler is at 84%, below its 85% target.
