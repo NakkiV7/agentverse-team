@@ -2,6 +2,15 @@
 
 Updated after every big change. Newest first. Numbers are measured on Nakkiv's M5 unless said otherwise.
 
+## 8 Nov: hangman (task C-hangman, branch `games/hangman`)
+
+- Step 1: a built-in dictionary of familiar 4 to 7 letter nouns, single-letter validation,
+  repeated-letter reveals, six misses, and win/loss results. Hints count letter frequency
+  among dictionary words matching the public clues. No model chooses words or hints.
+- Measured: `tests/test_hangman.py`: 4 passing checks for dictionary bounds, input validation,
+  repeated letters, both endings, and hints that do not use the hidden answer.
+- `docs/concept.md` was requested but is absent from this checkout.
+
 ## 7 Nov, night: game menu, memory, difficulty levels (branch `games/menu-memory-difficulty`)
 
 - Buddy now keeps a **game library** (`buddy/game/library.py`): noughts and crosses, Footsteps, backwards noughts
