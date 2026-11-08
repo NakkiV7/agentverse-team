@@ -32,6 +32,57 @@ Updated after every big change. Newest first. Numbers are measured on Nakkiv's M
   parsing. The coordinator confirmed that three workers sharing Ollama were evicting and reloading
   Gemma 4; these checks pass on an idle machine and are outside this task. The isolated retry was stopped
   at the coordinator's request. No teaching code or existing tests were changed to hide the timeouts.
+## 8 Nov: dots and boxes on the paper (branch `games/dots-and-boxes`)
+
+Buddy can set up and play dots and boxes on the sheet: 2x2 boxes (3x3 dots) and 3x3 boxes (4x4 dots). The pieces
+exist and a scripted run plays a whole game with every line read back from the camera; the conversation (brain.py,
+llm.py) is not wired yet, see the handoff below.
+
+- **Rules and solver** (`buddy/game/dotsboxes.py`): edges as a bitmask, box owners, a player who closes a box
+  moves again. The value of a position depends only on the edges left, so it is memoised on the edge mask. 2x2 is
+  searched completely (4,095 positions, 6 ms; checked against an independent brute force: a forced 3-1 win for the
+  first player). 3x3 is searched completely from 14 edges left, before that a depth-limited negamax with alpha-beta,
+  a chain-aware heuristic at the cut-off and a 0.8 s deadline: slowest move 0.81 s (depth 5 from the opening).
+  Among equal edges it picks the one leaving the player the fewest good replies. Reuses `Choice` / `Difficulty`
+  from tictactoe.py, so easy / medium / hard / impossible work; the friendly move never hands over a box.
+  Measured: never loses going first on 2x2; going second (a lost position) it lost 1 of 2,000 games to a random
+  player, the one where random played perfectly. 3x3 against a greedy player: 19 wins in 20.
+- **Marks** (`buddy/game/marks.py`): dot grid of tiny circles, 45 mm apart centred on the sheet for 2x2 (90 mm
+  footprint); for 3x3, 36 mm apart and 10 mm toward the robot (108 mm footprint, far row 25.4 cm in front of the
+  robot). Why: the pen rises 3 cm before and after every stroke, and with the pen upright that height is only
+  reachable up to about 26 cm out (probed with the IK planner; the tic-tac-toe lines never go past 23 cm at the
+  sides). A centred 135 mm grid drew all 16 dots and then could not lift after the last one. `App.dots_reachable`
+  checks every dot at paper, hover and 3 cm before setup. Also an edge stroke stopping 4 mm short of each dot,
+  Buddy's initial B (or a small circle) to claim a box, and the simulated player's wobbly edge and small cross.
+- **Perception** (`buddy/perception/edges.py`): per candidate edge, ink sampled along the segment between the dots
+  (skipping 5 mm at each end) within 2.5 mm across, on the same straightened image as board.py. Ink is anything
+  well darker than the paper's median brightness. Coverage above 0.6 = drawn; confidence = distance from that
+  threshold, so a half line is "unsure" and Buddy can ask. Measured on 40 simulated boards (720 edges, random pose,
+  lighting, noise, four pens, straight and wobbly lines, claimed boxes): no wrong edge on any sheet the tracker
+  accepts; drawn edges read 0.95 or more, empty ones 0.02 or less; 5 ms a board. `read_dots` checks the dots after
+  setup. Two sheets with finder confidence below 0.6 (3 mm pose error) read one edge wrong: the app never reads
+  from such a sighting (tracker MIN_CONF 0.85).
+- **Scripted game** (`tools/dots_dry_run.py`, `--boxes 3`, `--level`, `--first buddy`): Buddy checks the sheet and
+  the reach, says the rules, draws the dots and checks each one from the camera, then the simulated hand draws the
+  player's lines (scene actions `player_edge` / `player_box` in app.py, only accepted in the player's turn), Buddy
+  waits until a new line reads sure on two consecutive looks, replies with its own line, reads it back before it
+  counts, claims boxes with a B, and announces the score. 2x2: 12/12 lines read back, 0 redraws, no unsure look,
+  dots in 21 s, 112 s wall (a 2-2 draw: the player moved first and 2x2 is a first-player win). 3x3: 24/24 lines
+  read back, 0 redraws, no unsure look, 16 dots in 42 s, Buddy 6 boxes to 3, slowest solver move 0.81 s, 287 s
+  wall.
+- Tests: `tests/test_dotsboxes.py` (7) and `tests/test_edges.py` (2, simulator images with a fresh seed). Full
+  suite at commit time: 29 passed, 2 failed; the two are the Gemma 4 teaching tests, which timed out because
+  Gemma 4 was not answering on this machine at all (a one-word prompt got no reply in 300 s while another
+  `python -m buddy` session held Ollama with gemma3). Nothing in this branch touches teach.py.
+
+**Handoff, wiring into the brain** (left out so the two agents working on brain.py / llm.py are not disturbed):
+add `dots and boxes` to the library (an `Entry` whose spec is a marker, or a `kind` field), accept it in
+`CHOOSE_GAME` (llm.py: a `dots_and_boxes` game value or just `game_name` matching), and add states
+`DOTS_SETUP -> DOTS_PLAYER_TURN <-> DOTS_ROBOT_TURN -> DOTS_GAME_OVER` next to the existing ones; the bodies of
+`setup`, `player_turn` (watching for a new sure edge, the extra turn, confirming an unsure edge with the player)
+and `robot_turn` in `tools/dots_dry_run.py` are written to move across as they are. A spoken move needs an edge
+name intent ("the top of the top left box"); `dotsboxes.edge_name` gives the vocabulary. The demo page can show
+`perception.edges.draw_edges` instead of `draw_board` while a dots game is on.
 
 ## 7 Nov, night: game menu, memory, difficulty levels (branch `games/menu-memory-difficulty`)
 
@@ -67,4 +118,6 @@ Updated after every big change. Newest first. Numbers are measured on Nakkiv's M
 
 - Voice end to end on a second machine (Misha is on it; his work must target `buddy/voice/stt.py` + `tts.py`).
 - Dots and boxes, hangman, sudoku, teach-by-example: planned, see TASKS.md.
+- Dots and boxes: pieces built and played in the scripted run (above), not yet in the conversation.
+- Hangman, sudoku, adaptive skill rating, teach-by-example: planned, see TASKS.md.
 - Three pitch deliverables (one-page technical summary, one-take video, five-minute pitch) are unowned.
