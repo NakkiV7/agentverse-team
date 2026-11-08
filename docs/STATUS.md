@@ -10,6 +10,12 @@ Updated after every big change. Newest first. Numbers are measured on Nakkiv's M
 - Measured: `tests/test_hangman.py`: 4 passing checks for dictionary bounds, input validation,
   repeated letters, both endings, and hints that do not use the hidden answer.
 - `docs/concept.md` was requested but is absent from this checkout.
+- Step 2: 26 capital plotter letters (25 mm tall), centred word dashes, and six gallows
+  parts. All strokes fit within the grid area and shoulder reach band. `tools/draw_alphabet.py`
+  drives the actual arm controller and saves `runtime/alphabet_overhead.png`.
+- Measured: 7 rule/geometry tests pass. Alphabet run: 26 letters, 40 strokes, 100% minimum
+  camera segment coverage, 0.81 N median contact pressure, 51.5 s wall. The saved overhead
+  image was visually checked: all capitals are legible. MuJoCo needs macOS graphics access.
 
 ## 7 Nov, night: game menu, memory, difficulty levels (branch `games/menu-memory-difficulty`)
 
