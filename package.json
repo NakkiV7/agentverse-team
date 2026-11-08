@@ -1,0 +1,13 @@
+{
+  "name": "agentverse-penny",
+  "version": "1.0.0",
+  "description": "Penny Robot Assistant UI",
+  "main": "buddy/ui/index.html",
+  "scripts": {
+    "start": "serve buddy/ui -l 3000",
+    "build": "echo 'Build complete'"
+  },
+  "dependencies": {
+    "serve": "^14.2.4"
+  }
+}
