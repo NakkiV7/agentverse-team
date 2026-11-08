@@ -46,6 +46,7 @@ from ..motion.drawing import grid_lines_mm, sheet_to_world
 from ..perception.sheet import check_lines, ink_fraction
 from .llm import Conversation, Understanding, reply
 from .teach import Teacher
+from .residents import load_resident
 from ..game.hangman import Hangman, letter as hangman_letter
 from .dots_brain import STATES as DOTS_STATES, DotsPlay
 from copy import deepcopy
@@ -133,6 +134,9 @@ class Brain:
         self._size_hint = None                  # a dots board size said before the size question (new_board tool)
         self._side_hint = None                  # a side said before the board is drawn (choose_side tool)
         self.player_name = None                 # "I'm Margaret": remembered for the session and used in replies
+        self.resident = None                    # preferences from data/residents, when the name is known
+        self._taught_offer = None
+        self._taught_ready = None
         self.game_started_at = None             # when the current game's play began (set_state), for the facts
         self.paper = None                       # paper routines (buddy/paper, task B) once the coordinator attaches them
         self.relearn = None                     # an interview about a hidden game the player is explaining (relearn.py)
@@ -193,11 +197,13 @@ class Brain:
 
     def offer_text(self) -> str:
         usual = (self.entry or self.library.find("noughts and crosses")).name
-        return (f"I'd love to. I know {self.library.spoken_list()}. Shall we play {usual}, or another one? "
+        return (f"I'd love to. I know {self.library.spoken_list(credits=True)}. Shall we play {usual}, or another one? "
                 "You can also teach me a new game, and say easy, hard or impossible at any time.")
 
     def _select(self, entry):
         """Make a library entry the current game."""
+        if entry is not getattr(self, "entry", None):
+            self._taught_offer = self._taught_ready = None
         self.entry = entry
         self.spec = entry.spec
         self.solver = analyse(entry.spec)[0] if entry.spec is not None else None
@@ -205,12 +211,47 @@ class Brain:
 
     def _offer_taught(self, entry):
         self._select(entry)
+        self._taught_offer = entry
+        if entry.taught_by:
+            self.set_state("OFFER_TAUGHT", f"offering {entry.name}, taught by {entry.taught_by}")
+            self.say("Your game! Shall we play it?" if entry.taught_by == self.player_name else
+                     f"{entry.taught_by} taught me this one. Would you like to learn it?")
+            return
         _, a = analyse(entry.spec)
         self.app.trace("plan", f"solved {entry.name}: {a.nodes} positions in {a.seconds * 1000:.0f} ms, outcome with "
                                f"perfect play: {a.outcome}" + (", winning first squares: "
                                + ", ".join(NAMES[c] for c in a.winning_first_moves) if a.winning_first_moves else ""))
         self.set_state("OFFER_TAUGHT", f"ready to play {entry.name}")
         self.say("Let me think... " + a.speak(entry.spec) + f" Shall we play {entry.name}?")
+
+    def _taught_before_setup(self) -> bool:
+        """Offer a credited game once; accepting it reads the rules before any board setup."""
+        entry = self.entry
+        if entry is None or not entry.taught_by:
+            return False
+        key = (entry.name, self.player_name)
+        if self.state == "OFFER_TAUGHT" and self._taught_offer is entry:
+            self._taught_offer = None
+            self._taught_ready = key
+            if entry.taught_by != self.player_name:
+                self.say(self.rules_text(), wait=True)
+        elif self._taught_ready != key:
+            self._offer_taught(entry)
+            return True
+        return False
+
+    def _answer_taught_offer(self, text: str) -> bool:
+        """A yes to 'would you like to learn it?' is acceptance, not a request to teach Penny."""
+        if self.state != "OFFER_TAUGHT" or self._taught_offer is None:
+            return False
+        words = text.strip().lower().replace("’", "'")
+        yes = re.fullmatch(r"(?:yes|yeah|yep|sure|okay|ok)(?:[,\s]+(?:please|thanks|thank you|"
+                           r"i'?d (?:like|love) to (?:learn|play)(?: it)?|let'?s (?:play|learn)(?: it)?|go on))*[.!?]*", words)
+        no = re.fullmatch(r"(?:no(?:,? (?:thanks|thank you))?|not now)[.!?]*", words)
+        if not yes and not no:
+            return False
+        self._act(self._u("yes" if yes else "no"), text, self.situation())
+        return True
 
     def rules_text(self) -> str:
         if self.entry is not None and self.entry.kind == "hangman":
@@ -239,7 +280,8 @@ class Brain:
             "CHOOSE_GAME": "Penny asked which game they would like to play, or whether they want to teach it one.",
             "ASK_LEVEL": "Penny asked how hard it should play: easy, medium, hard, impossible, or authentic (adaptive: it learns the player's level over a few games). Their answer is a choose_difficulty with the level; 'authentic', 'realistic', 'match me' mean adaptive.",
             "TEACH": "The player is teaching Penny a new game.",
-            "OFFER_TAUGHT": f"Penny learned the player's game and asked whether they want to play it. It said: {self.last_said}",
+            "OFFER_TAUGHT": f"Penny offered {self.game_name} and asked whether the player wants to learn or play it. "
+                            f"A yes accepts the offer; the player is not teaching Penny. It said: {self.last_said}",
             "WAIT_SHEET": f"Penny is waiting for a usable sheet of paper. It said: {self.last_said}",
             "SETUP": f"Penny is drawing the board for {self.game_name} on the paper.",
             "ASK_SIDE": "The board is drawn. Penny asked: crosses or noughts? Crosses go first.",
@@ -271,6 +313,10 @@ class Brain:
         lines = [self._facts_game(), self._facts_level(), self._facts_session()]
         if self.player_name:
             lines.append(f"The player's name is {self.player_name}.")
+        if self.resident:
+            lines.append(self.resident.facts())
+        if self.entry and self.entry.taught_by:
+            lines.append(f"{self.entry.taught_by} taught Penny {self.entry.name}.")
         tail = self._facts_position()
         if self.last_said:
             tail.append(f'Penny last said: "{self._short(self.last_said, 160)}"')
@@ -478,19 +524,47 @@ class Brain:
                  "better", "worse", "bored", "hopeless", "rubbish", "terrible", "bad", "great", "lovely", "pleased"}
 
     def _note_name(self, text: str):
-        """"I'm Margaret", "my name is Arthur", "call me Peg": remember the name for the facts and the replies."""
+        """Remember an introduction, or a bare name in answer to Penny's name question."""
+        text = text.replace("’", "'")
         m = re.search(r"\b(?:my name is|my name's|call me|you can call me|i am|i'm|im|it's|this is)\s+([A-Za-z][a-z'\-]{1,20})\b",
                       text, re.I)
-        if not m:
-            return
-        name = m.group(1).strip("'-")
-        strong = m.group(0).lower().startswith(("my name", "call me", "you can call me"))
-        if name.lower() in self.NAME_STOP or (not strong and not name[0].isupper()):
-            return
+        asking_name = bool(re.search(r"(?:your name|who (?:am i|is penny|i am) (?:talking|speaking) to|"
+                                    r"who (?:are you|is this)|what (?:shall|should|can) i call you)", self.last_said, re.I))
+        bare = re.fullmatch(r"\s*([A-Za-z][A-Za-z'\-]{1,20})[.!?]?\s*", text) if asking_name else None
+        if not m and not bare:
+            return False
+        name = (m or bare).group(1).strip("'-")
+        resident = load_resident(name)
+        strong = bare is not None or m.group(0).lower().startswith(("my name", "call me", "you can call me"))
+        if name.lower() in self.NAME_STOP or (not resident and not strong and not name[0].isupper()):
+            return False
         name = name[0].upper() + name[1:]
-        if name != self.player_name:
-            self.player_name = name
+        if name != self.player_name or resident != self.resident:
+            self.player_name = resident.name if resident else name
+            self.resident = resident
+            self._taught_offer = self._taught_ready = None
             self.app.trace("decide", f"the player's name is {name}")
+            if resident:
+                self.difficulty.set_level(resident.difficulty)
+                self.level_asked = True
+                speaker = getattr(self.app, "speaker", None)
+                if speaker is not None:
+                    speaker.set_length_scale(resident.length_scale)
+                self.app.trace("decide", f"resident {resident.name}: {resident.way_to_play}, level {resident.level}, "
+                                        f"voice {resident.voice_speed} (length scale {resident.length_scale})")
+        return resident is not None
+
+    def _greet_resident(self):
+        resident = self.resident
+        favourite = self.library.find(resident.favourite_game)
+        if favourite is not None:
+            self._select(favourite)
+            greeting = resident.greeting()
+        else:
+            greeting = (f"Hello {resident.name}. Shall we choose a game, or would you like to teach me "
+                        f"{resident.favourite_game}?")
+        self.set_state("CHOOSE_GAME", f"welcoming {resident.name}")
+        self.say(greeting)
 
     def _worker(self, fn, *args):
         def run():
@@ -530,7 +604,11 @@ class Brain:
             return
         self.last_heard = text
         self.emit("heard", "player", text)
-        self._note_name(text)
+        if self._note_name(text) and self.state in ("CHAT", "CHOOSE_GAME", "GAME_OVER"):
+            self._greet_resident()
+            return
+        if self._answer_taught_offer(text):
+            return
         if self.state == "TEACH":
             if any(w in text.lower() for w in CANCEL_WORDS):
                 self.spec = None
@@ -622,7 +700,7 @@ class Brain:
                 self.say("Easy, medium, hard, impossible, or authentic?")
             return
         if intent == "list_games":
-            self.say(f"I know {self.library.spoken_list()}, and you can teach me a new one. Which would you like?")
+            self.say(f"I know {self.library.spoken_list(credits=True)}, and you can teach me a new one. Which would you like?")
             if st in ("CHAT", "GAME_OVER"):
                 self.set_state("CHOOSE_GAME", "listed the games")
             return
@@ -654,7 +732,7 @@ class Brain:
             name = (u.game_name or re.sub(r"[^A-Za-z0-9' -]+", "", text)).strip()[:40]
             if intent in ("no", "stop") or not name:
                 name = ""
-            entry = self.library.remember(self.pending_spec, name)
+            entry = self.library.remember(self.pending_spec, name, taught_by=self.resident.name if self.resident else None)
             self.pending_spec = None
             self.app.trace("decide", f"remembered the game as {entry.name!r} ({self.library.path})")
             self.say(f"{entry.name}. I'll remember it.")
@@ -870,7 +948,7 @@ class Brain:
             return
         self.say(turn.say, wait=True)                      # "Let me make sure I have it. ..."
         if spec.name:
-            entry = self.library.remember(spec, spec.name)
+            entry = self.library.remember(spec, spec.name, taught_by=self.resident.name if self.resident else None)
             self.app.trace("decide", f"remembered the game as {entry.name!r} ({self.library.path})")
             self._offer_taught(entry)
             return
@@ -928,13 +1006,16 @@ class Brain:
 
     def _offer_relearned(self, entry):
         """The explained game joins the menu (library.reveal) and Penny offers to play it with its usual engine."""
-        self.library.reveal(entry)
+        self.library.reveal(entry, taught_by=self.resident.name if self.resident else None)
         self.relearn = None
         self._select(entry)
         self.emit("learned", "buddy", f"Penny learned {entry.name} from the player's explanation", game=entry.name)
         self.app.trace("decide", f"{entry.name} learned from the player: on the menu from now on")
         self.set_state("OFFER_TAUGHT", f"ready to play {entry.name}")
-        self.say(f"Thank you, I've learned {entry.name}. Shall we play it?")
+        if entry.taught_by:
+            self._offer_taught(entry)
+        else:
+            self.say(f"Thank you, I've learned {entry.name}. Shall we play it?")
 
     # ------------------------------------------------------------------ setup: find the sheet, draw the board
     LEVEL_QUESTION = ("How hard shall I play? Easy, medium, hard or impossible. Or say authentic, and I'll learn your "
@@ -943,6 +1024,8 @@ class Brain:
     def start_setup(self, why: str):
         """Every game starts here. The first time in a session Penny asks how hard to play, unless a level was
         already chosen; then the game's own setup runs."""
+        if self._taught_before_setup():
+            return
         if not self.level_asked:
             self._setup_after_level = why
             self.set_state("ASK_LEVEL", "asking how hard to play before the first game")
@@ -1563,7 +1646,7 @@ class Brain:
             self.request_switch("teach", "the player wants to teach me a game")
 
     def _tool_list_games(self, args, text):
-        self.say(f"I know {self.library.spoken_list()}, and you can teach me a new one. Which would you like?")
+        self.say(f"I know {self.library.spoken_list(credits=True)}, and you can teach me a new one. Which would you like?")
         if self.state in ("CHAT", "GAME_OVER"):
             self.set_state("CHOOSE_GAME", "listed the games")
 

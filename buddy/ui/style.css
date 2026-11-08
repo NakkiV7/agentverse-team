@@ -5,7 +5,7 @@
   /* trace stages */
   --hear: #2f6fd6; --understand: #8248c9; --decide: #d07a12; --see: #2a8f4b; --plan: #128a8a; --act: #cf3f2f;
   --sense: #c2387f; --check: #2f7d32; --say: #55554f; --adapt: #b8860b; --safety: #e0152f; --system: #8a8a84;
-  --head: 60px; --gap: 16px; --radius: 12px;
+  --head: 60px; --caption: 54px; --gap: 16px; --radius: 12px;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -55,6 +55,12 @@ b { font-weight: 650; }
 .dot.off { background: transparent; border-color: var(--muted); }
 @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 50%, transparent); } 50% { box-shadow: 0 0 0 6px transparent; } }
 .theme { padding: 2px 8px; font-size: 16px; line-height: 1.4; margin-left: 6px; color: var(--muted); }
+#context-caption {
+  box-sizing: border-box; height: var(--caption); margin: 0; padding: 9px var(--gap);
+  font-size: clamp(18px, 1.5vw, 28px); font-weight: 650; line-height: 36px;
+  color: var(--fg); background: var(--buddy); border-bottom: 1px solid var(--line);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 /* ---------- three columns on a wide screen, two on a medium one, one on a phone */
 main { display: grid; gap: var(--gap); padding: var(--gap); max-width: 2100px; margin: 0 auto; }
@@ -67,7 +73,7 @@ main { display: grid; gap: var(--gap); padding: var(--gap); max-width: 2100px; m
 @media (min-width: 1180px) {
   /* three columns with a draggable divider between each pair (app.js: drag to resize, double-click to reset) */
   main { grid-template-columns: minmax(0, var(--w1, 1.3fr)) 10px minmax(0, var(--w2, 1fr)) 10px minmax(0, var(--w3, 0.9fr));
-         column-gap: 3px; height: calc(100vh - var(--head)); }
+         column-gap: 3px; height: calc(100vh - var(--head) - var(--caption)); }
   .gutter { display: block; cursor: col-resize; border-radius: 5px; position: relative; touch-action: none; }
   .gutter::after { content: ""; position: absolute; left: 4px; top: 50%; width: 2px; height: 44px; margin-top: -22px;
                    border-radius: 1px; background: var(--line); transition: background .15s, height .15s; }

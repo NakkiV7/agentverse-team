@@ -253,12 +253,16 @@ class App:
 
     # ------------------------------------------------------------------ demo page state
     def state(self) -> dict:
+        from .agent.residents import context_caption
         tr = self.tracker.track
         b, snap = self.brain, self.board_snap
+        resident = getattr(b, "resident", None)
         with self._lock:
             trace, transcript = list(self._trace)[-150:], list(self._transcript)
         return {
             "state": b.state, "trace": trace, "transcript": transcript,
+            "resident": resident.public_state() if resident else None,
+            "caption": context_caption(b),
             "example": bool(getattr(b, "awaiting_example", False)),   # Penny asked for one example move on the paper
             "speaking": bool(self.speaker and self.speaker.busy()),
             "mic": {"available": self.listener is not None,

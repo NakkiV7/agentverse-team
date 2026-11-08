@@ -1,0 +1,11 @@
+{
+  "name": "Doreen",
+  "age": 91,
+  "way_to_play": "mix",
+  "level": "fair",
+  "voice_speed": "normal",
+  "favourite_game": "hangman",
+  "taught_games": [],
+  "captions": false,
+  "short_sessions": true
+}
